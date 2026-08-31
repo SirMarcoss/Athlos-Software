@@ -1,0 +1,16 @@
+# Ambienti virtuali
+.venv/
+venv/
+env/
+
+# PyCharm e IDE
+.idea/
+.vscode/
+
+# File di ambiente (CRITICO: non pushare mai il .env!)
+.env
+
+# Cache di Python
+__pycache__/
+*.pyc
+.pytest_cache/
