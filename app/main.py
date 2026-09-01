@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1.endpoints import auth
+from app.api.v1.endpoints import auth, parents, children
 
 
 app = FastAPI(
@@ -14,6 +14,8 @@ app = FastAPI(
 
 
 app.include_router(auth.router, prefix="/auth", tags=["Autenticazione"])
+app.include_router(parents.router, prefix="/parent", tags=["Genitore"])
+app.include_router(children.router, prefix="/child", tags=["Figlio"])
 
 
 @app.get("/") # the function right below is in charge of handling requests that go to: the path (/)
