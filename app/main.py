@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-#from app.api.v1.endpoints import auth
+from app.api.v1.endpoints import auth
 
 
 app = FastAPI(
@@ -11,6 +11,9 @@ app = FastAPI(
 #Semantic versioning: 0 -> not in production project (instable project)
 #                     1 -> first version that works
 #                     0: no patch realized
+
+
+app.include_router(auth.router, prefix="/auth", tags=["Autenticazione"])
 
 
 @app.get("/") # the function right below is in charge of handling requests that go to: the path (/)

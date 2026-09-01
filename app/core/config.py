@@ -9,8 +9,6 @@ class Settings(BaseSettings):
     SECRET_KEY : str = Field(..., min_length=32)
     ALGORITHM : str
     ACCESS_TOKEN_EXPIRE_MINUTES : int = 30
-    STRIPE_SECRET_KEY : str = Field(..., min_length=32)
-    STRIPE_WEBHOOK_SECRET: str = Field(default="whsec_dummy_for_dev_test")
 
     @field_validator('SECRET_KEY')
     @classmethod
