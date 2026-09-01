@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from sqlalchemy import Enum as SAEnum, DateTime, String, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.functions import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql.schema import Index
@@ -8,6 +8,12 @@ from datetime import datetime
 import enum
 import uuid
 from app.models.base import Base
+
+
+if TYPE_CHECKING:
+    from app.models.club import Club
+    from app.models.child import Child
+    from app.models.parent import Parent
 
 
 class UserRoleEnum(enum.Enum):
@@ -48,6 +54,10 @@ class User(Base):
         nullable=False,
     )
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relazioni
+    clubs: Mapped[list["Club"]] = relationship("Club", back_populates="user")
+    parents: Mapped[list["Parent"]] = relationship("Parent", back_populates="user")
 
 
     def __repr__(self) -> str:

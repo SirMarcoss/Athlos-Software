@@ -12,3 +12,6 @@
 
 from app.models.base import Base
 from app.models.user import User
+from app.models.child import Child
+from app.models.club import Club
+from app.models.parent import Parent
