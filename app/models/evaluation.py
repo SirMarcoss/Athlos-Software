@@ -52,7 +52,5 @@ class Evaluation(Base):
 
     # i cascade non vanno dalla parte dei figli ma solo da quella dei genitori
 
-
-
-
-
+    def __repr__(self) -> str:
+        return f"<Evaluation(id={self.id!r}, child_id={self.child_id!r}, course_id={self.course_id!r})>"

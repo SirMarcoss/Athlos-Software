@@ -12,7 +12,6 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.club import Club
-    from app.models.child import Child
     from app.models.parent import Parent
 
 

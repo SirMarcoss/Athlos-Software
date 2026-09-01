@@ -24,11 +24,11 @@ class Child(Base):
         nullable=False
     )
 
-    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    first_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(255), nullable=False)
     date_of_birth: Mapped[date] = mapped_column(DATE, nullable=False)
     gender : Mapped[str] = mapped_column(String(10), nullable=False)
-    sport : Mapped[str] = mapped_column(String(100), nullable=False)
+    sport : Mapped[str] = mapped_column(String(255), nullable=False)
     skills : Mapped[List[str]] = mapped_column(ARRAY(String), nullable=False)
     fiscal_code: Mapped[str] = mapped_column(String(16), nullable=False)
     medical_notes : Mapped[str] = mapped_column(String(255), nullable=True)

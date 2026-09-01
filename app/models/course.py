@@ -34,3 +34,6 @@ class Course(Base):
 
     evaluations : Mapped[list["Evaluation"]] = relationship("Evaluation", back_populates="courses",
                                       cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<Course(id={self.id!r}, name={self.name!r}, club_id={self.clubs_id!r})>"

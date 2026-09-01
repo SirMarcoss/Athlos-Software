@@ -48,6 +48,3 @@ class Parent(Base):
             f"last_name = {self.last_name!r}"
             f"phone_number = {self.phone_number!r}"
         )
-
-
-
