@@ -1,21 +1,28 @@
-from passlib.context import CryptContext
+import bcrypt
 from jose import jwt, ExpiredSignatureError
 from jose.exceptions import JWTError
 from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
+# --- NUOVA GESTIONE BCRYPT (Senza passlib) ---
 
 def hash_password(password: str) -> str:
-    hashed_password = pwd_context.hash(password)
-    return hashed_password
-
+    # 1. Convertiamo in byte
+    pwd_bytes = password.encode('utf-8')
+    # 2. Creiamo il "sale" (salt) crittografico e hash
+    salt = bcrypt.gensalt()
+    hashed_bytes = bcrypt.hashpw(pwd_bytes, salt)
+    # 3. Ritorniamo come stringa per salvarlo nel database
+    return hashed_bytes.decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    # 1. Convertiamo entrambe in byte
+    plain_bytes = plain_password.encode('utf-8')
+    hashed_bytes = hashed_password.encode('utf-8')
+    # 2. bcrypt fa il confronto sicuro
+    return bcrypt.checkpw(plain_bytes, hashed_bytes)
 
+# --- IL RESTO RIMANE UGUALE (JWT Token) ---
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
@@ -25,9 +32,9 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode.update({
-        "sub": str(data.get("sub")), # User ID
-        "iat": datetime.now(timezone.utc),   # Quando è stato emesse issued at
-        "exp": expire               # Quando scade
+        "sub": str(data.get("sub")),
+        "iat": datetime.now(timezone.utc),
+        "exp": expire
     })
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 

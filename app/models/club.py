@@ -36,8 +36,7 @@ class Club(Base):
 
     logo_url: Mapped[str] = mapped_column(String(255), nullable=True)
 
-    user : Mapped["User"] = relationship("User", back_populates="clubs",
-                                       cascade="all, delete-orphan")
+    user : Mapped["User"] = relationship("User", back_populates="clubs")
 
     courses : Mapped[list["Course"]] = relationship("Course",
                                                     back_populates="clubs",

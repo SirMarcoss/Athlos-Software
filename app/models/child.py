@@ -34,8 +34,7 @@ class Child(Base):
     medical_notes : Mapped[str] = mapped_column(String(255), nullable=True)
     info : Mapped[str] = mapped_column(String(255), nullable=True)
 
-    parents: Mapped["Parent"] = relationship("Parent", back_populates="children",
-                                      cascade="all, delete-orphan")
+    parents: Mapped["Parent"] = relationship("Parent", back_populates="children")
 
     evaluations : Mapped[list["Evaluation"]] = relationship("Evaluation", back_populates="children",
                                       cascade="all, delete-orphan")

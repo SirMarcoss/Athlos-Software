@@ -4,7 +4,7 @@ from app.api.v1.endpoints import auth
 
 
 app = FastAPI(
-    title='Atlhos API',
+    title='Athlos API',
     version="0.1.0"
 )
 

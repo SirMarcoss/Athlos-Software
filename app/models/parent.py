@@ -37,8 +37,7 @@ class Parent(Base):
     children : Mapped[list["Child"]] = relationship("Child", back_populates="parents",
                                       cascade="all, delete-orphan")
 
-    user: Mapped["User"] = relationship("User", back_populates="parents",
-                                      cascade="all, delete-orphan")
+    user: Mapped["User"] = relationship("User", back_populates="parents")
 
 
     def __repr__(self) -> str:
