@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  db:
+    # L'immagine ufficiale di PostgreSQL ottimizzata
+    image: postgres:15-alpine
+    container_name: athlos_db
+    # Mappa la porta 5432 del container alla porta 5432 del tuo Mac
+    ports:
+      - "5432:5432"
+    environment:
+      # Le credenziali super-segrete (per ora) del nostro DB locale
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: athlos_db
+    volumes:
+      # Salva i dati fisicamente sul tuo Mac, così se spegni il container non perdi le carte!
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+  
