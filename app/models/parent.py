@@ -25,14 +25,18 @@ class Parent(Base):
     )
 
     first_name : Mapped[str] = mapped_column(String(100), nullable=False)
-    last_name : Mapped[str] = mapped_column(String(100), nullable=False)
-    phone_number : Mapped[str] = mapped_column(String(20), nullable=False)
-    fiscal_code : Mapped[str] = mapped_column(String(16), nullable=False)
-    info: Mapped[str] = mapped_column(String(255), nullable=True)
 
+    last_name : Mapped[str] = mapped_column(String(100), nullable=False)
+
+    phone_number : Mapped[str] = mapped_column(String(20), nullable=False)
+
+    fiscal_code : Mapped[str] = mapped_column(String(16), nullable=False)
+
+    info: Mapped[str] = mapped_column(String(255), nullable=True)
 
     children : Mapped[list["Child"]] = relationship("Child", back_populates="parents",
                                       cascade="all, delete-orphan")
+
     user: Mapped["User"] = relationship("User", back_populates="parents",
                                       cascade="all, delete-orphan")
 
