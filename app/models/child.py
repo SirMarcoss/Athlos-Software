@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.models.parent import Parent
     from app.models.evaluation import Evaluation
 
+
 class Child(Base):
     __tablename__ = "children"
 
@@ -38,6 +39,7 @@ class Child(Base):
 
     evaluations : Mapped[list["Evaluation"]] = relationship("Evaluation", back_populates="children",
                                       cascade="all, delete-orphan")
+
 
     def __repr__(self) -> str:
         return (

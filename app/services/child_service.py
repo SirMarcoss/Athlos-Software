@@ -4,9 +4,11 @@ from app.models.child import Child
 from app.schemas.child import ChildCreate, ChildUpdate
 import uuid
 
+
 class ChildService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
 
     async def create_child(self, child_in: ChildCreate, parent_id: uuid.UUID) -> Child:
         """Crea un bambino."""
@@ -31,6 +33,7 @@ class ChildService:
 
     async def get_children_by_parent(self, parent_id: uuid.UUID) -> list[Child]:
         """Restituisce i figli dato un parent_id."""
+
         stmt = select(Child).where(Child.parent_id == parent_id)
         child = await self.db.execute(stmt)
         return list(child.scalars().all())
@@ -43,8 +46,10 @@ class ChildService:
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
+
     async def update_child(self, child_id: uuid.UUID, child_in: ChildUpdate, parent_id: uuid.UUID) -> Child:
         """Aggiorna i dati di un bambino."""
+
         # 1. Trova il bambino (e verifica che sia del genitore)
         db_child = await self.get_child_by_id_and_parent(child_id, parent_id)
         if not db_child:
