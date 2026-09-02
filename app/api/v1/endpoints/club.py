@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.user import User
-from app.api.deps import get_current_user
+from app.models.user import User, UserRoleEnum
+from app.api.deps import require_role
 from app.core.database import get_db
 from app.schemas.club import ClubCreate, ClubResponse, ClubUpdate
 from app.services.club_service import ClubService
@@ -12,7 +12,7 @@ router = APIRouter()
 async def create_my_club(
     payload: ClubCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
 ):
     """Crea un nuovo Club associato all'utente loggato."""
 
@@ -29,7 +29,7 @@ async def create_my_club(
 @router.get("/me", response_model=ClubResponse)
 async def get_my_club(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
 ):
     """Restituisce il Club dell'utente loggato."""
 
@@ -46,7 +46,7 @@ async def get_my_club(
 async def update_my_club(
     payload: ClubUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
 ):
     """Aggiorna parzialmente il Club dell'utente loggato."""
 
@@ -66,7 +66,7 @@ async def update_my_club(
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_my_club(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
 ):
     """Elimina il Club dell'utente loggato (e i suoi corsi associati)."""
 

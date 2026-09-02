@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models.user import User
+from app.models.user import User, UserRoleEnum
 from app.schemas.user import UserCreate
 from app.core.security import hash_password, verify_password
 
@@ -43,7 +43,7 @@ class UserService:
         return result.scalars().first()
 
 
-    async def create_user(self, user_in: UserCreate) -> User:
+    async def create_user(self, user_in: UserCreate, role: UserRoleEnum = UserRoleEnum.PARENT) -> User:
         """
         Crea un nuovo utente.
         Implementa la validazione logica (email duplicata) e l'hashing della password.
@@ -69,8 +69,8 @@ class UserService:
             email=user_in.email,
             password_hash=hashed_pwd,
             first_name=user_in.first_name,
-            last_name=user_in.last_name
-            # Il campo 'role' non viene passato, quindi PostgreSQL userà il server_default ('parent')
+            last_name=user_in.last_name,
+            role = role
         )
 
         # 4. Persistenza: Transazione asincrona

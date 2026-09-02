@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import verify_access_token
+from app.models.user import User, UserRoleEnum
 
 
 # Questo è il "segugio" di FastAPI.
@@ -42,3 +43,25 @@ async def get_current_user(
     if not user:
         raise credentials_exception
     return user
+
+
+def require_role(*allowed_roles: UserRoleEnum):
+    """
+    Dipendenza riutilizzabile per proteggere gli endpoint in base al ruolo.
+    Uso: Depends(require_role(UserRoleEnum.PARENT))
+    """
+
+    async def role_checker(current_user: User = Depends(get_current_user)) -> User:
+        # Se l'utente è un ADMIN, lo lasciamo passare sempre (superpoteri!)
+        if current_user.role == UserRoleEnum.ADMIN:
+            return current_user
+
+        # Se il suo ruolo non è tra quelli ammessi, blocchiamo la richiesta
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Accesso negato. Questa azione richiede uno dei seguenti ruoli: {[r.value for r in allowed_roles]}"
+            )
+        return current_user
+
+    return role_checker

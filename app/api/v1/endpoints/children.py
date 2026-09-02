@@ -1,10 +1,9 @@
 from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
-from app.models.user import User
-from app.api.deps import get_current_user
+from app.models.user import User, UserRoleEnum
+from app.api.deps import require_role
 from app.core.database import get_db
 from app.schemas.child import ChildCreate, ChildResponse, ChildUpdate
 from app.services.child_service import ChildService
@@ -17,7 +16,8 @@ router = APIRouter()
 async def add_child(
         payload: ChildCreate,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        # ADESSO (controlla che sia loggato E che sia un PARENT o ADMIN!)
+        current_user: User = Depends(require_role(UserRoleEnum.PARENT))
 ):
 
     parent_service = ParentService(db)
@@ -36,7 +36,7 @@ async def add_child(
 @router.get("/", response_model=List[ChildResponse])
 async def list_my_children(
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(require_role(UserRoleEnum.PARENT))
 ):
 
     parent_service = ParentService(db)
@@ -56,7 +56,7 @@ async def update_my_child(
         child_id: UUID,  # L'ID arriva dall'URL!
         payload: ChildUpdate,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(require_role(UserRoleEnum.PARENT))
 ):
     parent_service = ParentService(db)
     child_service = ChildService(db)
@@ -79,7 +79,7 @@ async def update_my_child(
 async def delete_my_child(
         child_id: UUID,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(require_role(UserRoleEnum.PARENT))
 ):
     """Il codice 204 significa 'Eliminato con successo, non ho dati da restituirti'"""
 

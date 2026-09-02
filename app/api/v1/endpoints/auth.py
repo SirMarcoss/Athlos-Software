@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.user import User
+from app.models.user import User, UserRoleEnum
 from app.api.deps import get_current_user
 from app.schemas.user import UserCreate, UserResponse
 from app.services.user_service import UserService
@@ -80,3 +80,14 @@ async def get_current_user_profile(
     pagina dal front-end in modo tale da autenticare l'utente
     """
     return current_user
+
+
+@router.post("/register-club", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register_club_user(payload: UserCreate, db: AsyncSession = Depends(get_db)):
+    """Registra un account aziendale per una società sportiva."""
+    user_service = UserService(db)
+    try:
+        user = await user_service.create_user(payload, role=UserRoleEnum.CLUB)
+        return user
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

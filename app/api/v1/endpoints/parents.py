@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.user import User
-from app.api.deps import get_current_user
+from app.models.user import User, UserRoleEnum
+from app.api.deps import require_role
 from app.core.database import get_db
 from app.schemas.parent import ParentCreate, ParentResponse, ParentUpdate
 from app.services.parent_service import ParentService
@@ -12,7 +12,7 @@ router = APIRouter()
 async def create_my_profile(
     payload: ParentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRoleEnum.PARENT))
 ):
     """Crea il profilo Genitore per l'utente attualmente loggato."""
 
@@ -30,7 +30,7 @@ async def create_my_profile(
 @router.get("/me", response_model=ParentResponse)
 async def get_my_profile(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRoleEnum.PARENT))
 ):
     """Restituisce il profilo Genitore dell'utente attualmente loggato."""
 
@@ -48,7 +48,7 @@ async def get_my_profile(
 async def update_my_profile(
     payload: ParentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRoleEnum.PARENT))
 ):
     """Aggiorna parzialmente il profilo del genitore loggato."""
 
@@ -66,7 +66,7 @@ async def update_my_profile(
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_my_profile(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRoleEnum.PARENT))
 ):
     """Elimina il profilo del genitore loggato (e a cascata i suoi figli)."""
 
