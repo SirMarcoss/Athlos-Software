@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     SECRET_KEY : str = Field(..., min_length=32)
     ALGORITHM : str
     ACCESS_TOKEN_EXPIRE_MINUTES : int = 30
+    GEMINI_API_KEY: str = Field(...)
+
 
     @field_validator('SECRET_KEY')
     @classmethod
