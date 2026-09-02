@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.parent import Parent
-from app.schemas.parent import ParentCreate
+from app.schemas.parent import ParentCreate, ParentUpdate
 import uuid
 
 class ParentService:
@@ -38,3 +38,30 @@ class ParentService:
         await self.db.commit()
         await self.db.refresh(db_parent)
         return db_parent
+
+
+    async def update_parent(self, parent_in: ParentUpdate, user_id: uuid.UUID) -> Parent:
+        """Aggiorna i dati del genitore loggato."""
+
+        parent  = await self.get_parent_by_user_id(user_id)
+        if not parent:
+            raise ValueError("Profilo genitore non trovato")
+
+        update_data = parent_in.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(parent, key, value)
+
+        await self.db.commit()
+        await self.db.refresh(parent)
+        return parent
+
+
+    async def delete_parent(self, user_id: uuid.UUID) -> None:
+        """Elimina il profilo genitore collegato all'utente."""
+
+        parent = await self.get_parent_by_user_id(user_id)
+        if not parent:
+            raise ValueError("Profilo genitore non trovato")
+
+        await self.db.delete(parent)
+        await self.db.commit()
