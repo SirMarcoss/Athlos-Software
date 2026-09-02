@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.club import Club
-from app.schemas.club import ClubCreate
+from app.schemas.club import ClubCreate, ClubUpdate
 import uuid
 
 
@@ -43,3 +43,31 @@ class ClubService:
         await self.db.refresh(club_db)
 
         return club_db
+
+
+    async def update_club(self, club_in: ClubUpdate, user_id: uuid.UUID) -> Club:
+        """Aggiorna i dati del Club loggato."""
+
+        # NOTA: model_dump trasforma automaticamente l'Address in dizionario, quindi per SQLAlchemy va benissimo!)
+        club = await self.get_club_by_user_id(user_id)
+        if not club:
+            raise ValueError("Club non trovato")
+
+        update_data = club_in.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(club, key, value)
+
+        await self.db.commit()
+        await self.db.refresh(club)
+        return club
+
+
+    async def delete_club(self, user_id: uuid.UUID) -> None:
+        """Elimina il Club loggato."""
+
+        club = await self.get_club_by_user_id(user_id)
+        if not club:
+            raise ValueError("Club non trovato")
+
+        await self.db.delete(club)
+        await self.db.commit()

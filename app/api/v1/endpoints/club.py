@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.schemas.club import ClubCreate, ClubResponse
+from app.schemas.club import ClubCreate, ClubResponse, ClubUpdate
 from app.services.club_service import ClubService
 
 router = APIRouter()
@@ -40,3 +40,41 @@ async def get_my_club(
             status_code=status.HTTP_404_NOT_FOUND,
         detail="Club non esistente.")
     return club
+
+
+@router.patch("/me", response_model=ClubResponse)
+async def update_my_club(
+    payload: ClubUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Aggiorna parzialmente il Club dell'utente loggato."""
+
+    club_service = ClubService(db)
+
+    try:
+        club = await club_service.update_club(payload, current_user.id)
+        return club
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_club(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Elimina il Club dell'utente loggato (e i suoi corsi associati)."""
+
+    club_service = ClubService(db)
+
+    try:
+        await club_service.delete_club(current_user.id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
