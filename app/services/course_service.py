@@ -32,7 +32,8 @@ class CourseService:
             clubs_id=club_id,
             name=course_in.name,
             min_age=course_in.min_age,
-            max_age=course_in.max_age
+            max_age=course_in.max_age,
+            coach_id=course_in.coach_id
         )
         self.db.add(db_course)
         await self.db.commit()
@@ -44,6 +45,12 @@ class CourseService:
         """Restituisce tutti i corsi appartenenti a un club specifico."""
 
         stmt = select(Course).where(Course.clubs_id == club_id)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_courses_by_coach(self, coach_id: uuid.UUID) -> list[Course]:
+        """Restituisce tutti i corsi assegnati a un determinato allenatore."""
+        stmt = select(Course).where(Course.coach_id == coach_id)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

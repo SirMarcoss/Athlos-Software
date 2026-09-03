@@ -6,6 +6,7 @@ import uuid
 from app.models.evaluation import Evaluation
 from app.models.course import Course
 from app.models.child import Child
+from app.models.user import User, UserRoleEnum
 from app.schemas.evaluation import EvaluationCreate
 from app.services.ai_service import AIService
 
@@ -19,16 +20,26 @@ class EvaluationService:
         eval_in: EvaluationCreate,
         course_id: uuid.UUID,
         child_id: uuid.UUID,
-        club_id: uuid.UUID
+        user: User,
+        club_id: uuid.UUID | None = None
     ) -> Evaluation:
-        """Verifica le ownership, interroga Gemini e archivia la valutazione."""
+        """Verifica le ownership (Club o Coach assegnato), interroga Gemini e archivia la valutazione."""
 
-        # 1. VERIFICA CORSO: Il corso esiste ed appartiene al club loggato?
-        stmt_course = select(Course).where(Course.id == course_id).where(Course.clubs_id == club_id)
+        # 1. VERIFICA CORSO E PERMESSI
+        stmt_course = select(Course).where(Course.id == course_id)
         res_course = await self.db.execute(stmt_course)
         course = res_course.scalars().first()
         if not course:
-            raise ValueError("Corso non trovato o non appartenente alla tua società")
+            raise ValueError("Corso non trovato")
+
+        if user.role == UserRoleEnum.CLUB:
+            if course.clubs_id != club_id:
+                raise ValueError("Corso non appartenente alla tua società sportiva")
+        elif user.role == UserRoleEnum.COACH:
+            if course.coach_id != user.id:
+                raise ValueError("Non sei l'allenatore assegnato a questo corso")
+        elif user.role != UserRoleEnum.ADMIN:
+            raise ValueError("Non autorizzato a valutare")
 
         # 2. VERIFICA ATLETA: Il bambino esiste nel database?
         stmt_child = select(Child).where(Child.id == child_id)

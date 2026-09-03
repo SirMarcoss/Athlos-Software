@@ -65,6 +65,17 @@ async def list_my_club_courses(
     return await course_service.get_courses_by_club(club.id)
 
 
+@router.get("/assigned", response_model=List[CourseResponse])
+async def list_my_assigned_courses(
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(require_role(UserRoleEnum.COACH))
+):
+    """Restituisce i corsi a cui l'allenatore loggato è assegnato."""
+    course_service = CourseService(db)
+    return await course_service.get_courses_by_coach(current_user.id)
+
+
+
 @router.patch("/{course_id}", response_model=CourseResponse)
 async def update_my_course(
         course_id: UUID,

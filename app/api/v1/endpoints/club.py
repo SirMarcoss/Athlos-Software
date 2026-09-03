@@ -4,7 +4,9 @@ from app.models.user import User, UserRoleEnum
 from app.api.deps import require_role
 from app.core.database import get_db
 from app.schemas.club import ClubCreate, ClubResponse, ClubUpdate
+from app.schemas.user import UserCreate, UserResponse
 from app.services.club_service import ClubService
+from app.services.user_service import UserService
 
 router = APIRouter()
 
@@ -78,3 +80,18 @@ async def delete_my_club(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
         )
+
+
+@router.post("/coaches", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register_coach_for_club(
+    payload: UserCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
+):
+    """Il Club registra un nuovo account allenatore per il proprio staff."""
+    user_service = UserService(db)
+    try:
+        coach_user = await user_service.create_user(payload, role=UserRoleEnum.COACH)
+        return coach_user
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

@@ -1,7 +1,7 @@
 import uuid
 from typing import TYPE_CHECKING
 from sqlalchemy import  ForeignKey, text
-from sqlalchemy.sql.sqltypes import Integer, String
+from sqlalchemy.sql.sqltypes import Integer, String, Text
 from sqlalchemy.sql.schema import CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -43,7 +43,7 @@ class Evaluation(Base):
 
     discipline_score : Mapped[int] = mapped_column(Integer)
 
-    ai_recommended_sport : Mapped[str] = mapped_column(String(255), nullable=False)
+    ai_recommended_sport : Mapped[str] = mapped_column(Text, nullable=False)
 
     coach_notes : Mapped[str] = mapped_column(String(255), nullable=True)
 

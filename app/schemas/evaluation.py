@@ -23,6 +23,6 @@ class EvaluationResponse(EvaluationCreate):
     id : UUID
     course_id : UUID
     child_id : UUID
-    ai_recommended_sport : Optional[str] = Field(max_length=255)
+    ai_recommended_sport : Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

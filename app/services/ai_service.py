@@ -40,27 +40,16 @@ class AIService:
         2. COMPENSAZIONE: Se lo score di agilità o disciplina è basso, consiglia una disciplina che rinforzi il gap; se è alto, una disciplina che massimizzi il talento emergente.
         3. DIVERSIFICAZIONE MULTI-SPORT: Evita la specializzazione precoce; privilegia il transfer motorio positivo rispetto al precedente sport ({current_sport}).
 
-        VINCOLO STRUTTURALE DI OUTPUT (MANDATORIO):
-        L'output deve essere un giudizio sintetico, scientifico ed estremamente motivante per i genitori.
-        LUNGHEZZA MASSIMA: TASSATIVAMENTE ENTRO 240 CARATTERI (inclusi spazi), per vincoli di archiviazione su database.
-
-        FORMATO RIGIDO:
-        [Nome Sport]: [Diagnosi dell'obiettivo motorio e valore pedagogico in una sola frase d'impatto].
-
-        Esempi di qualità richiesta:
-        Judo: Ideale a {child_age} anni per canalizzare l'energia, potenziando equilibrio posturale e rispetto delle regole attraverso il contatto controllato.
-        Pallacanestro: Perfetto per stimolare la visione periferica e la reattività cinestetica, valorizzando la coordinazione in un contesto di cooperazione rapida.
+        FORMATO DI RISPOSTA RICHIESTO:
+        Organizza la risposta in modo chiaro, autorevole e ben formattato per la famiglia con questi 3 punti:
+        1. 🏅 SPORT CONSIGLIATO: [Nome dello sport principale raccomandato ed eventuale disciplina alternativa/complementare]
+        2. 🎯 OBIETTIVO MOTORIO: [Spiegazione auxologica e biomeccanica: quali schemi motori, abilità o attitudini andrà a sviluppare o riequilibrare]
+        3. 💡 CONSIGLIO PER I GENITORI: [Un suggerimento pedagogico pratico, chiaro e incoraggiante per supportare il bambino in questa fase di crescita senza pressioni]
         """
 
         response = await self.client.aio.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.0-flash',
             contents=prompt
         )
 
-        recommendation = response.text.strip()
-
-        # Garanzia di sicurezza: tronchiamo a 255 caratteri per non far crashare PostgreSQL
-        if len(recommendation) > 255:
-            recommendation = recommendation[:252] + "..."
-
-        return recommendation
+        return response.text.strip()

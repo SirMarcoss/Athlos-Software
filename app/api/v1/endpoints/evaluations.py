@@ -21,26 +21,32 @@ async def submit_evaluation(
     child_id: UUID,
     payload: EvaluationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(UserRoleEnum.CLUB)) # 👈 Solo i CLUB possono valutare!
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB, UserRoleEnum.COACH)) # 👈 Club o Coach assegnato!
 ):
-    """L'allenatore invia i voti: il server interroga l'AI e genera lo sport consigliato."""
+    """L'allenatore (o il Club) invia i voti: il server interroga l'AI e genera lo sport consigliato."""
     club_service = ClubService(db)
     eval_service = EvaluationService(db)
 
-    club = await club_service.get_club_by_user_id(current_user.id)
-    if not club:
-        raise HTTPException(status_code=400, detail="Profilo società sportiva non trovato")
+    club_id = None
+    if current_user.role == UserRoleEnum.CLUB:
+        club = await club_service.get_club_by_user_id(current_user.id)
+        if not club:
+            raise HTTPException(status_code=400, detail="Profilo società sportiva non trovato")
+        club_id = club.id
 
     try:
         evaluation = await eval_service.create_evaluation(
             eval_in=payload,
             course_id=course_id,
             child_id=child_id,
-            club_id=club.id
+            user=current_user,
+            club_id=club_id
         )
         return evaluation
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore generazione valutazione AI: {str(e)}")
 
 
 # --- 2. LATO GENITORE: Consulta le pagelle del proprio figlio ---

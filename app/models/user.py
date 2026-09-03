@@ -19,6 +19,7 @@ class UserRoleEnum(enum.Enum):
     PARENT = "parent" #Regular buyer
     CLUB = "club" #Store manager (inventory, orders)
     ADMIN = "admin"
+    COACH = 'coach'
 
 
 class User(Base):
