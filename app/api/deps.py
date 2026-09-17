@@ -1,3 +1,4 @@
+from typing import Optional
 from app.core.database import get_db
 from app.services.user_service import UserService
 from fastapi import Depends, HTTPException, status
@@ -10,6 +11,29 @@ from app.models.user import User, UserRoleEnum
 # Questo è il "segugio" di FastAPI.
 # tokenUrl indica a FastAPI dove si trova la porta d'ingresso.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+
+
+async def get_optional_current_user(
+        token: Optional[str] = Depends(oauth2_scheme_optional),
+        db: AsyncSession = Depends(get_db)
+) -> Optional[User]:
+    """
+    Dipendenza facoltativa: se il token è presente e valido restituisce l'utente autenticato,
+    altrimenti restituisce None senza sollevare eccezioni HTTP 401.
+    """
+    if not token:
+        return None
+
+    user_service = UserService(db)
+    try:
+        verified_token = verify_access_token(token)
+        user_id = verified_token.get("sub")
+        if user_id is None:
+            return None
+        return await user_service.get_user_by_id(user_id)
+    except Exception:
+        return None
 
 
 async def get_current_user(

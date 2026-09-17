@@ -1,29 +1,74 @@
 from uuid import UUID
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User, UserRoleEnum
-from app.api.deps import require_role
+from app.api.deps import require_role, get_optional_current_user
 from app.core.database import get_db
 from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate
 from app.services.course_service import CourseService
 from app.services.club_service import ClubService
+from app.services.parent_service import ParentService
 
 router = APIRouter()
 
 
-# --- 1. CATALOGO PUBBLICO / PER GENITORI ---
+# --- 1. CATALOGO CORSI (CON FILTRO GEOGRAFICO A 20 KM PER GENITORI) ---
 
 @router.get("/", response_model=List[CourseResponse])
 async def list_all_courses(
         skip: int = 0,
         limit: int = 20,
-        db: AsyncSession = Depends(get_db)
+        latitude: Optional[float] = Query(None, description="Latitudine di ricerca opzionale"),
+        longitude: Optional[float] = Query(None, description="Longitudine di ricerca opzionale"),
+        max_distance_km: float = Query(20.0, ge=1.0, le=100.0, description="Raggio massimo in km"),
+        db: AsyncSession = Depends(get_db),
+        current_user: Optional[User] = Depends(get_optional_current_user)
 ):
-    """Catalogo pubblico con paginazione: chiunque può vedere i corsi attivi."""
-
+    """
+    Catalogo corsi:
+    - Se l'utente è un genitore loggato (o specifica coordinate), visualizza solo i corsi
+      delle società sportive entro il raggio stabilito (default 20 km), calcolati con la formula di Haversine in SQL.
+    - Altrimenti, restituisce il catalogo generale paginato.
+    """
     course_service = CourseService(db)
-    return await course_service.get_all_courses(skip=skip, limit=limit)
+
+    search_lat = latitude
+    search_lon = longitude
+
+    # Se non sono state passate coordinate esplicite ma c'è un genitore loggato, usiamo quelle del suo profilo
+    if search_lat is None or search_lon is None:
+        if current_user and current_user.role == UserRoleEnum.PARENT:
+            parent_service = ParentService(db)
+            parent = await parent_service.get_parent_by_user_id(current_user.id)
+            if parent and parent.latitude is not None and parent.longitude is not None:
+                search_lat = parent.latitude
+                search_lon = parent.longitude
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Il tuo profilo genitore non ha ancora un indirizzo con coordinate. Aggiorna il tuo profilo per visualizzare i corsi entro 20 km."
+                )
+
+    # Se abbiamo coordinate valide, filtriamo con Haversine nel raggio massimo
+    if search_lat is not None and search_lon is not None:
+        results = await course_service.get_courses_within_radius(
+            lat=search_lat,
+            lon=search_lon,
+            max_km=max_distance_km,
+            skip=skip,
+            limit=limit
+        )
+        courses_response = []
+        for course, dist in results:
+            resp = CourseResponse.model_validate(course)
+            resp.distance_km = round(dist, 1)
+            courses_response.append(resp)
+        return courses_response
+
+    # Nessuna coordinata: catalogo generale
+    courses = await course_service.get_all_courses(skip=skip, limit=limit)
+    return [CourseResponse.model_validate(c) for c in courses]
 
 
 # --- 2. GESTIONE CORSI PER I CLUB ---
@@ -63,16 +108,6 @@ async def list_my_club_courses(
         raise HTTPException(status_code=400, detail="Profilo club non trovato")
 
     return await course_service.get_courses_by_club(club.id)
-
-
-@router.get("/assigned", response_model=List[CourseResponse])
-async def list_my_assigned_courses(
-        db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(require_role(UserRoleEnum.COACH))
-):
-    """Restituisce i corsi a cui l'allenatore loggato è assegnato."""
-    course_service = CourseService(db)
-    return await course_service.get_courses_by_coach(current_user.id)
 
 
 

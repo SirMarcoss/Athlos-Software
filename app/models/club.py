@@ -1,6 +1,6 @@
 import uuid
-from typing import Any, TYPE_CHECKING
-from sqlalchemy import String, ForeignKey, text
+from typing import Any, Optional, TYPE_CHECKING
+from sqlalchemy import String, ForeignKey, Float, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
@@ -35,6 +35,9 @@ class Club(Base):
     email_contact : Mapped[str] = mapped_column(String(255), nullable=False)
 
     logo_url: Mapped[str] = mapped_column(String(255), nullable=True)
+
+    latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     user : Mapped["User"] = relationship("User", back_populates="clubs")
 

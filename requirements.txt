@@ -3,9 +3,11 @@ uvicorn[standard]
 sqlalchemy
 alembic
 asyncpg
-pydantic
+pydantic[email]
 pydantic-settings
 passlib[bcrypt]
 python-jose[cryptography]
 python-multipart
 greenlet
+google-genai
+httpx

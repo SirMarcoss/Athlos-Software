@@ -9,18 +9,17 @@ class CourseCreate(BaseModel):
     name: str = Field(max_length=255)
     min_age: int = Field(ge=5)
     max_age: int = Field(le=13)
-    coach_id: Optional[UUID] = None
 
 
 class CourseUpdate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=255)
     min_age: Optional[int] = Field(default=None, ge=5)
     max_age: Optional[int] = Field(default=None, le=13)
-    coach_id: Optional[UUID] = None
 
 
 class CourseResponse(CourseCreate):
     id : UUID
     clubs_id : UUID
+    distance_km : Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -23,7 +23,7 @@ class EvaluationService:
         user: User,
         club_id: uuid.UUID | None = None
     ) -> Evaluation:
-        """Verifica le ownership (Club o Coach assegnato), interroga Gemini e archivia la valutazione."""
+        """Verifica le ownership (Club proprietario del corso), interroga Gemini e archivia la valutazione."""
 
         # 1. VERIFICA CORSO E PERMESSI
         stmt_course = select(Course).where(Course.id == course_id)
@@ -35,9 +35,6 @@ class EvaluationService:
         if user.role == UserRoleEnum.CLUB:
             if course.clubs_id != club_id:
                 raise ValueError("Corso non appartenente alla tua società sportiva")
-        elif user.role == UserRoleEnum.COACH:
-            if course.coach_id != user.id:
-                raise ValueError("Non sei l'allenatore assegnato a questo corso")
         elif user.role != UserRoleEnum.ADMIN:
             raise ValueError("Non autorizzato a valutare")
 

@@ -21,9 +21,9 @@ async def submit_evaluation(
     child_id: UUID,
     payload: EvaluationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(UserRoleEnum.CLUB, UserRoleEnum.COACH)) # 👈 Club o Coach assegnato!
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
 ):
-    """L'allenatore (o il Club) invia i voti: il server interroga l'AI e genera lo sport consigliato."""
+    """Il Club (da cui operano gli allenatori) invia i voti: il server interroga l'AI e genera lo sport consigliato."""
     club_service = ClubService(db)
     eval_service = EvaluationService(db)
 

@@ -35,7 +35,9 @@ class ClubService:
             email_contact=club_in.email_contact,
             phone_number=club_in.phone_number,
             address=address_data,
-            logo_url=club_in.logo_url
+            logo_url=club_in.logo_url,
+            latitude=club_in.latitude,
+            longitude=club_in.longitude
         )
 
         self.db.add(club_db)

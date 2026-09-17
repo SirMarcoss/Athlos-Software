@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.models.course import Course
+from app.models.club import Club
 from app.schemas.course import CourseCreate, CourseUpdate
 import uuid
 
@@ -32,8 +33,7 @@ class CourseService:
             clubs_id=club_id,
             name=course_in.name,
             min_age=course_in.min_age,
-            max_age=course_in.max_age,
-            coach_id=course_in.coach_id
+            max_age=course_in.max_age
         )
         self.db.add(db_course)
         await self.db.commit()
@@ -48,18 +48,47 @@ class CourseService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_courses_by_coach(self, coach_id: uuid.UUID) -> list[Course]:
-        """Restituisce tutti i corsi assegnati a un determinato allenatore."""
-        stmt = select(Course).where(Course.coach_id == coach_id)
-        result = await self.db.execute(stmt)
-        return list(result.scalars().all())
-
     async def get_all_courses(self, skip: int = 0, limit: int = 20) -> list[Course]:
         """Restituisce il catalogo generale dei corsi con paginazione."""
         # Ecco come si fa la paginazione in SQLAlchemy 2.0:
         stmt = select(Course).offset(skip).limit(limit)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+
+    async def get_courses_within_radius(
+        self,
+        lat: float,
+        lon: float,
+        max_km: float = 20.0,
+        skip: int = 0,
+        limit: int = 20
+    ) -> list[tuple[Course, float]]:
+        """
+        Restituisce i corsi dei club entro il raggio chilometrico specificato (default 20 km),
+        calcolato tramite la formula di Haversine / legge sferica dei coseni in SQL puro.
+        Ritorna una lista di tuple (Course, distance_km) ordinate per distanza crescente.
+        """
+        cos_val = (
+            func.sin(func.radians(lat)) * func.sin(func.radians(Club.latitude)) +
+            func.cos(func.radians(lat)) * func.cos(func.radians(Club.latitude)) *
+            func.cos(func.radians(Club.longitude) - func.radians(lon))
+        )
+        clamped_cos = func.least(1.0, func.greatest(-1.0, cos_val))
+        distance_expr = (6371.0 * func.acos(clamped_cos)).label("distance_km")
+
+        stmt = (
+            select(Course, distance_expr)
+            .join(Club, Course.clubs_id == Club.id)
+            .where(Club.latitude.isnot(None))
+            .where(Club.longitude.isnot(None))
+            .where(distance_expr <= max_km)
+            .order_by(distance_expr.asc())
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.all())
 
 
     async def update_course(self, course_id: uuid.UUID, course_in: CourseUpdate, club_id: uuid.UUID) -> Course:

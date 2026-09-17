@@ -24,15 +24,18 @@ class ParentService:
         if existing_parent:
             raise ValueError("Profilo già esistente")
 
+        address_data = parent_in.address.model_dump() if parent_in.address else None
+
         db_parent =  Parent(
-            user_id=user_id, #database non può assolutamente sapere a quale utente appartiene questo
-            # nuovo profilo Genitore, non può inventarselo! Devi dirglielo tu.
-            # il deps.py riesce a prendere l'id dell'utente tramite JWT --> noi lo inseriamo nella creazione
+            user_id=user_id,
             first_name=parent_in.first_name,
             last_name=parent_in.last_name,
             phone_number=parent_in.phone_number,
             fiscal_code=parent_in.fiscal_code,
-            info=parent_in.info
+            info=parent_in.info,
+            address=address_data,
+            latitude=parent_in.latitude,
+            longitude=parent_in.longitude
         )
         self.db.add(db_parent)
         await self.db.commit()

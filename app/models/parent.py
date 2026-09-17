@@ -1,7 +1,7 @@
 import uuid
-from typing import TYPE_CHECKING
-from sqlalchemy import String, ForeignKey, text
-from sqlalchemy.dialects.postgresql import UUID
+from typing import TYPE_CHECKING, Any, Optional
+from sqlalchemy import String, ForeignKey, Float, text
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
@@ -33,6 +33,10 @@ class Parent(Base):
     fiscal_code : Mapped[str] = mapped_column(String(16), nullable=False)
 
     info: Mapped[str] = mapped_column(String(255), nullable=True)
+
+    address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     children : Mapped[list["Child"]] = relationship("Child", back_populates="parents",
                                       cascade="all, delete-orphan")

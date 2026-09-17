@@ -6,13 +6,7 @@ from typing import Optional
 from uuid import UUID
 
 
-class Address(BaseModel):
-    street: str = Field(..., min_length=1, max_length=255)
-    number: str = Field(..., max_length=10)
-    city: str = Field(..., min_length=1, max_length=100)
-    province: str = Field(..., min_length=2, max_length=100)
-    postal_code: str = Field(..., pattern=r'^\d{5}$')  # Italian format
-    country: str = Field(default="Italy", max_length=100)
+from app.schemas.address import Address
 
 
 class ClubCreate(BaseModel):
@@ -21,6 +15,8 @@ class ClubCreate(BaseModel):
     address : Optional[Address] = None
     phone_number : str = Field(max_length=20)
     logo_url : Optional[str] = Field(default=None, max_length=255)
+    latitude : Optional[float] = None
+    longitude : Optional[float] = None
 
 
 class ClubUpdate(BaseModel):
@@ -29,6 +25,8 @@ class ClubUpdate(BaseModel):
     phone_number: Optional[str] = Field(default=None, max_length=20)
     address: Optional[Address] = None
     logo_url: Optional[str] = Field(default=None, max_length=255)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class ClubResponse(ClubCreate):

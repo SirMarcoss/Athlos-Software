@@ -48,7 +48,7 @@ class AIService:
         """
 
         response = await self.client.aio.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-3.7-flash',
             contents=prompt
         )
 
