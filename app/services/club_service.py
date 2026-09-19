@@ -3,6 +3,7 @@ from sqlalchemy import select
 from app.models.club import Club
 from app.schemas.club import ClubCreate, ClubUpdate
 import uuid
+from sqlalchemy.sql.functions import func
 
 
 class ClubService:
@@ -73,3 +74,30 @@ class ClubService:
 
         await self.db.delete(club)
         await self.db.commit()
+
+
+    async def get_nearby_clubs(self, lat: float, lon: float, max_distance_km: int = 15) -> list[Club]:
+        """
+        Calcola la distanza sferica (Haversine) tra le coordinate del genitore (lat, lon)
+        e le coordinate salvate nei Club, restituendo solo quelli entro 'max_distance_km'.
+        """
+        R = 6371.0 # Raggio della Terra in chilometri
+
+        # Formula matematica tradotta in logica database (SQLAlchemy func)
+        distance_expr = (
+            R * func.acos(
+                func.cos(func.radians(lat)) * func.cos(func.radians(Club.latitude)) *
+                func.cos(func.radians(Club.longitude) - func.radians(lon)) +
+                func.sin(func.radians(lat)) * func.sin(func.radians(Club.latitude))
+            )
+        )
+
+        # Cerca solo club che hanno inserito l'indirizzo, e ordina dal più vicino!
+        stmt = select(Club).where(
+            Club.latitude.isnot(None),
+            Club.longitude.isnot(None),
+            distance_expr <= max_distance_km
+        ).order_by(distance_expr)
+
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())

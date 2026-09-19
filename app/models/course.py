@@ -7,7 +7,8 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.club import Club
-    from app.models.evaluation import Evaluation
+    from app.models.evaluation import PhysicalTest, PsychologicalForm
+    from app.models.sport import Sport
 
 class Course(Base):
     __tablename__ = "courses"
@@ -22,6 +23,11 @@ class Course(Base):
         ForeignKey("clubs.id", ondelete="CASCADE"),
         nullable=False
     )
+    
+    sport_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sports.id", ondelete="RESTRICT"),
+        nullable=False
+    )
 
     name : Mapped[str] = mapped_column(String(100), nullable=False)
 
@@ -29,11 +35,11 @@ class Course(Base):
 
     max_age : Mapped[int]
 
-
     clubs : Mapped["Club"] = relationship("Club", back_populates="courses")
+    sport: Mapped["Sport"] = relationship("Sport", back_populates="courses")
 
-    evaluations : Mapped[list["Evaluation"]] = relationship("Evaluation", back_populates="courses",
-                                      cascade="all, delete-orphan")
+    physical_tests : Mapped[list["PhysicalTest"]] = relationship("PhysicalTest", back_populates="courses", cascade="all, delete-orphan")
+    psychological_forms : Mapped[list["PsychologicalForm"]] = relationship("PsychologicalForm", back_populates="courses", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Course(id={self.id!r}, name={self.name!r}, club_id={self.clubs_id!r})>"

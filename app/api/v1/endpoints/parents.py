@@ -4,7 +4,10 @@ from app.models.user import User, UserRoleEnum
 from app.api.deps import require_role
 from app.core.database import get_db
 from app.schemas.parent import ParentCreate, ParentResponse, ParentUpdate
+from app.schemas.club import ClubResponse
 from app.services.parent_service import ParentService
+from typing import List
+from app.services.club_service import ClubService
 
 router = APIRouter()
 
@@ -79,6 +82,48 @@ async def delete_my_profile(
         )
 
 
+@router.get("/me/referral")
+async def get_my_referral(
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(require_role(UserRoleEnum.PARENT))
+):
+    """
+    Restituisce il link di invito univoco del genitore loggato.
+    Se Tizio (referral 'A1B2C3') lo manda a Caio, Caio si iscriverà con ref=A1B2C3.
+    """
+    parent_service = ParentService(db)
+    parent = await parent_service.get_parent_by_user_id(current_user.id)
+    if not parent or not parent.referral_code:
+        raise HTTPException(status_code=404, detail="Codice referral non trovato")
+
+    # Restituiamo direttamente un link comodo da copiare
+    referral_link = f"https://athlos.it/register?ref={parent.referral_code}"
+    return {"referral_code": parent.referral_code, "link": referral_link}
+
+
 # Ecco perché si usa /me (che in inglese significa "Me stesso / Il mio"): È una convenzione universale.
 # Dice all'API: "Non ti passo nessun ID nell'URL. Guarda chi è l'utente autenticato dentro il Token JWT
 # che ti ho allegato negli Headers,e fai l'operazione sul SUO profilo
+
+
+@router.get("/me/nearby-clubs", response_model=List[ClubResponse])
+async def get_my_nearby_clubs(
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(require_role(UserRoleEnum.PARENT))
+):
+    parent_service = ParentService(db)
+    club_service = ClubService(db)
+
+    parent = await parent_service.get_parent_by_user_id(current_user.id)
+    if not parent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Genitore non trovato")
+
+    # 1. Prevenzione crash: verifichiamo che l'indirizzo esista
+    lat, lon = parent.latitude, parent.longitude
+    if lat is None or lon is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Devi inserire il tuo indirizzo nel profilo per cercare i club limitrofi.")
+
+    clubs = await club_service.get_nearby_clubs(lat, lon)
+
+    return clubs

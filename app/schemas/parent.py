@@ -15,6 +15,8 @@ class ParentCreate(BaseModel):
     address: Optional[Address] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    referral_code: Optional[str] = Field(default=None, max_length=50)
+    referred_by_id: Optional[UUID] = None
 
 
 class ParentUpdate(BaseModel):
@@ -26,6 +28,8 @@ class ParentUpdate(BaseModel):
     address: Optional[Address] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    referral_code: Optional[str] = Field(default=None, max_length=50)
+    referred_by_id: Optional[UUID] = None
 
 
 class ParentResponse(ParentCreate):

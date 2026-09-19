@@ -25,6 +25,8 @@ class ParentService:
             raise ValueError("Profilo già esistente")
 
         address_data = parent_in.address.model_dump() if parent_in.address else None
+        new_referral_code = str(uuid.uuid4()).split('-')[0].upper()
+        # Genera una stringa casuale di 8 caratteri basata su UUID
 
         db_parent =  Parent(
             user_id=user_id,
@@ -35,7 +37,8 @@ class ParentService:
             info=parent_in.info,
             address=address_data,
             latitude=parent_in.latitude,
-            longitude=parent_in.longitude
+            longitude=parent_in.longitude,
+            referral_code=new_referral_code
         )
         self.db.add(db_parent)
         await self.db.commit()
@@ -68,3 +71,4 @@ class ParentService:
 
         await self.db.delete(parent)
         await self.db.commit()
+

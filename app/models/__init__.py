@@ -15,5 +15,6 @@ from app.models.user import User
 from app.models.child import Child
 from app.models.club import Club
 from app.models.parent import Parent
-from app.models.evaluation import Evaluation
+from app.models.evaluation import PhysicalTest, PsychologicalForm
+from app.models.sport import Sport
 from app.models.course import Course

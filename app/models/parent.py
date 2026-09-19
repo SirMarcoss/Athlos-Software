@@ -34,6 +34,13 @@ class Parent(Base):
 
     info: Mapped[str] = mapped_column(String(255), nullable=True)
 
+    referral_code: Mapped[Optional[str]] = mapped_column(String(50), unique=True, nullable=True)
+    
+    referred_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("parents.id", ondelete="SET NULL"),
+        nullable=True
+    )
+
     address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

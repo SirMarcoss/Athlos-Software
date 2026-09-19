@@ -8,7 +8,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.parent import Parent
-    from app.models.evaluation import Evaluation
+    from app.models.evaluation import PhysicalTest, PsychologicalForm
 
 
 class Child(Base):
@@ -37,8 +37,8 @@ class Child(Base):
 
     parents: Mapped["Parent"] = relationship("Parent", back_populates="children")
 
-    evaluations : Mapped[list["Evaluation"]] = relationship("Evaluation", back_populates="children",
-                                      cascade="all, delete-orphan")
+    physical_tests : Mapped[list["PhysicalTest"]] = relationship("PhysicalTest", back_populates="children", cascade="all, delete-orphan")
+    psychological_forms : Mapped[list["PsychologicalForm"]] = relationship("PsychologicalForm", back_populates="children", cascade="all, delete-orphan")
 
 
     def __repr__(self) -> str:

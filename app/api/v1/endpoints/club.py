@@ -5,6 +5,7 @@ from app.api.deps import require_role
 from app.core.database import get_db
 from app.schemas.club import ClubCreate, ClubResponse, ClubUpdate
 from app.services.club_service import ClubService
+from typing import List
 
 router = APIRouter()
 
