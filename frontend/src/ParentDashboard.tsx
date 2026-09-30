@@ -46,9 +46,9 @@ const MOCK_LATEST_FORMS: Record<string, PsychForm> = {
     creativity_score: 8,
     teamwork_score: 5,
     stress_management_score: 6,
-    ai_recommended_sport: `1. 🏅 SPORT CONSIGLIATO: Scherma
-2. 🎯 OBIETTIVO MOTORIO: Lo sviluppo auxologico a 8 anni richiede affinamento della coordinazione oculo-manuale. La scherma esalta i suoi eccellenti riflessi permettendogli di canalizzare lo stress individualmente, compensando le difficoltà nelle dinamiche di squadra.
-3. 💡 CONSIGLIO PER I GENITORI: Non forzatelo a fare il 'giocatore di squadra' in questa fase. La sua tranquillità emotiva nella pedana è una dote rara: valorizzatela.`,
+    ai_recommended_sport: `1.  SPORT CONSIGLIATO: Scherma
+2.  OBIETTIVO MOTORIO: La crescita a 8 anni richiede un affinamento della coordinazione oculo-manuale. La scherma esalta i suoi eccellenti riflessi permettendogli di canalizzare lo stress individualmente, compensando le difficoltà nelle dinamiche di squadra.
+3.  CONSIGLIO PER I GENITORI: Non forzatelo a fare il 'giocatore di squadra' in questa fase. La sua tranquillità emotiva nella pedana è una dote rara: valorizzatela.`,
     coach_notes: 'Riflessi eccellenti, ma patisce le dinamiche di squadra.',
     course_id: 'corso-basket-1'
   }
@@ -77,12 +77,12 @@ const MOCK_CLUBS: Club[] = [
 
 const parseGeminiAnalysis = (text: string | undefined) => {
   if (!text) return { sportName: 'N/A', objective: null, tip: null };
-  const sportMatch = text.match(/1\.\s*🏅\s*SPORT CONSIGLIATO:\s*(.*?)(?=\n2\.|$)/s);
-  const objectiveMatch = text.match(/2\.\s*🎯\s*OBIETTIVO MOTORIO:\s*(.*?)(?=\n3\.|$)/s);
-  const tipMatch = text.match(/3\.\s*💡\s*CONSIGLIO PER I GENITORI:\s*(.*?)(?=$)/s);
+  const sportMatch = text.match(/1\.\s*\s*SPORT CONSIGLIATO:\s*(.*?)(?=\n2\.|$)/s);
+  const objectiveMatch = text.match(/2\.\s*\s*OBIETTIVO MOTORIO:\s*(.*?)(?=\n3\.|$)/s);
+  const tipMatch = text.match(/3\.\s*\s*CONSIGLIO PER I GENITORI:\s*(.*?)(?=$)/s);
 
   return {
-    sportName: sportMatch ? sportMatch[1].trim() : text.split('\n')[0].replace('1. 🏅 SPORT CONSIGLIATO: ', '').trim(),
+    sportName: sportMatch ? sportMatch[1].trim() : text.split('\n')[0].replace('1.  SPORT CONSIGLIATO: ', '').trim(),
     objective: objectiveMatch ? objectiveMatch[1].trim() : null,
     tip: tipMatch ? tipMatch[1].trim() : null,
   };
@@ -117,15 +117,15 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
       <header className="relative z-10 p-8 sm:px-12 flex justify-between items-center text-white">
         <button onClick={onLogout} className="text-left group cursor-pointer flex flex-col items-start hover:opacity-80 transition-opacity">
-          <h1 className="text-3xl font-black tracking-tighter">ATHLOS.</h1>
-          <p className="text-sky-200 font-medium text-sm group-hover:text-white transition-colors">Area Famiglia</p>
+          <img src="/logo-light.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
+          <p className="text-sky-200 font-medium text-sm group-hover:text-white transition-colors mt-2">Area Famiglia</p>
         </button>
         <div className="flex gap-4">
           <button onClick={() => setActiveModal('referral')} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-full font-bold transition-all text-sm">
-            🎁 Il mio Referral
+             Invita un altro Genitore
           </button>
           <button onClick={() => setActiveModal('profile')} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-full font-bold transition-all text-sm">
-            ⚙️ Profilo
+             Profilo
           </button>
           <button onClick={onLogout} className="px-5 py-2.5 bg-rose-500/80 hover:bg-rose-500 backdrop-blur-md border border-rose-400/50 rounded-full font-bold transition-all text-sm text-white">
             Esci
@@ -149,7 +149,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
               {activeModal === 'referral' && (
                 <div className="text-center pt-4">
-                  <div className="text-6xl mb-4">🎁</div>
+                  <div className="text-6xl mb-4"></div>
                   <h3 className="text-3xl font-black text-[#081a36] mb-2">Invita un Genitore</h3>
                   <p className="text-slate-500 font-medium mb-8">Condividi questo link con i tuoi amici. Quando iscriveranno i loro figli, riceverete entrambi un mese gratuito su Athlos!</p>
                   
@@ -274,7 +274,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
                         {aiData.objective && (
                           <div>
-                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Obiettivo Auxologico / Motorio</h4>
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Obiettivo di Crescita e Motorio</h4>
                             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
                               <p className="text-slate-600 font-medium leading-relaxed">{aiData.objective}</p>
                             </div>
@@ -283,7 +283,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
                         {aiData.tip && (
                           <div>
-                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Consiglio Pedagogico</h4>
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Consiglio Pratico</h4>
                             <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 shadow-sm">
                               <p className="text-amber-800 font-medium leading-relaxed">{aiData.tip}</p>
                             </div>
@@ -320,13 +320,13 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-sky-50 rounded-bl-full -z-10 group-hover:scale-110 transition-transform duration-500"></div>
                 <div className="absolute top-6 right-6 text-5xl opacity-20">
-                  {child.sport === 'Basket' || child.sport === 'Mini-Basket' ? '🏀' : 
-                   child.sport === 'Calcio' || child.sport === 'Scuola Calcio' ? '⚽' :
-                   child.sport === 'Nuoto' ? '🏊‍♂️' : 
-                   child.sport === 'Tennis' ? '🎾' :
-                   child.sport === 'Scherma' ? '🤺' :
-                   child.sport === 'Ginnastica' ? '🤸‍♀️' :
-                   child.sport === 'Arti Marziali' || child.sport === 'Judo' ? '🥋' : '🏆'}
+                  {child.sport === 'Basket' || child.sport === 'Mini-Basket' ? '' : 
+                   child.sport === 'Calcio' || child.sport === 'Scuola Calcio' ? '' :
+                   child.sport === 'Nuoto' ? '' : 
+                   child.sport === 'Tennis' ? '' :
+                   child.sport === 'Scherma' ? '' :
+                   child.sport === 'Ginnastica' ? '' :
+                   child.sport === 'Arti Marziali' || child.sport === 'Judo' ? '' : ''}
                 </div>
 
                 <div className="flex items-center gap-5 mb-8">
@@ -398,7 +398,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
         <section className="mt-20">
           <div className="flex justify-between items-end mb-8">
             <div>
-              <h2 className="text-3xl font-black text-[#081a36] tracking-tight">Club Convenzionati Vicino a Te</h2>
+              <h2 className="text-3xl font-black text-[#081a36] tracking-tight">Club Vicino a Te</h2>
               <p className="text-slate-500 font-medium mt-1">Scopri dove iscrivere i tuoi figli per esplorare nuovi sport.</p>
             </div>
           </div>
@@ -408,7 +408,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
               <div key={i} className="bg-white rounded-[24px] border border-slate-200 p-6 hover:shadow-xl hover:shadow-[#0066cc]/10 transition-all duration-300 flex flex-col">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    {i === 0 && <span className="text-[10px] font-black uppercase tracking-widest text-[#0066cc] bg-sky-100 px-3 py-1 rounded-full mb-3 inline-block">🥇 PIÙ VICINO (1° SCELTA)</span>}
+                    {i === 0 && <span className="text-[10px] font-black uppercase tracking-widest text-[#0066cc] bg-sky-100 px-3 py-1 rounded-full mb-3 inline-block"> PIÙ VICINO (1° SCELTA)</span>}
                     <h3 className="text-xl font-bold text-[#081a36] leading-tight">{club.name}</h3>
                   </div>
                   <span className="bg-slate-100 text-[#081a36] font-black text-sm px-3 py-1 rounded-full whitespace-nowrap">{club.distance}</span>

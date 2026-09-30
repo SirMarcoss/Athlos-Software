@@ -2,11 +2,26 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ParentDashboard from './ParentDashboard';
 import { 
-  MapPin, 
-  ArrowRight,
+  /* MapPin, ArrowRight, */
   X,
-  ArrowLeft
+  ArrowLeft,
+  Mail
 } from 'lucide-react';
+
+
+const InstagramIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+  </svg>
+);
+
+const FacebookIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+  </svg>
+);
 
 interface Recommendation {
   sport: string;
@@ -65,7 +80,7 @@ export default function App() {
   const [discipline, setDiscipline] = useState(6);
 
   // Search simulator state
-  const [selectedTown, setSelectedTown] = useState("Catania");
+  // const [selectedTown, setSelectedTown] = useState("Catania");
 
   // Auth modal state
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -85,7 +100,8 @@ export default function App() {
 
 
   // 1. Data Source: Available Clubs & Courses
-  const nearbyClubs = useMemo(() => {
+  /* 
+const nearbyClubs = useMemo(() => {
     switch (selectedTown) {
       case "Roma":
         return [
@@ -107,6 +123,7 @@ export default function App() {
         ];
     }
   }, [selectedTown]);
+*/
 
   // 2. Dynamic Recommendation Engine
   // 2. TRUE AI Dynamic Recommendation Engine (Euclidean Distance Algorithm)
@@ -176,7 +193,7 @@ export default function App() {
          : `I punteggi rilevati si allineano matematicamente con questo sport. ${bestMatch.reason}`,
       parentTip: childAge <= 5 
          ? "Non cercate il 'campione' a questa età. Premia i sorrisi e lo sforzo, non i risultati." 
-         : "L'algoritmo calcola in tempo reale la Distanza Euclidea tra i test e le metriche ottimali di 35 sport."
+         : "Il nostro sistema unisce i risultati pratici alle inclinazioni del bambino, confrontandoli con diverse discipline per suggerire lo sport in cui si divertirà e crescerà di più."
     };
   }, [childName, childAge, agility, teamwork, discipline]);
 
@@ -192,13 +209,14 @@ export default function App() {
       {/* MINIMAL NAVBAR */}
       <header className="fixed top-0 w-full z-40 bg-white/80 backdrop-blur-xl border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="text-2xl font-black tracking-tighter text-[#081a36] hover:opacity-80 transition-opacity">
-            ATHLOS.
+          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="hover:opacity-80 transition-opacity">
+            <img src="/logo-dark.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
           </a>
           <nav className="hidden md:flex items-center gap-8 text-[14px] font-bold text-slate-500">
-            <a href="#simulatore" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('simulatore'); }} className="hover:text-[#081a36] transition-colors">L'Algoritmo</a>
-            <a href="#vicino-a-te" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('vicino-a-te'); }} className="hover:text-[#081a36] transition-colors">Club Vicini</a>
-            <a href="#club-sportivi" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('club-sportivi'); }} className="hover:text-[#081a36] transition-colors">Area Club</a>
+            <a href="#manifesto" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('manifesto'); }} className="hover:text-[#0066cc] transition-colors">Il Progetto</a>
+            <a href="#simulatore" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('simulatore'); }} className="hover:text-[#0066cc] transition-colors">L'Algoritmo</a>
+            {/* <a href="#vicino-a-te" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('vicino-a-te'); }} className="hover:text-[#0066cc] transition-colors">Club Vicini</a> */}
+            <a href="#club-sportivi" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('club-sportivi'); }} className="hover:text-[#0066cc] transition-colors">Area Club</a>
           </nav>
           <div className="flex items-center gap-3">
             <button 
@@ -211,7 +229,7 @@ export default function App() {
               onClick={() => openAuth('none', 'register')}
               className="px-5 py-2.5 rounded-full bg-[#081a36] hover:bg-[#0066cc] text-white text-[14px] font-bold transition-all"
             >
-              Inizia
+              Registrati
             </button>
           </div>
         </div>
@@ -223,22 +241,22 @@ export default function App() {
         {/* FLOATING SPORTS ELEMENTS */}
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
            <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -20, 0], rotate: [0, 15, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }} className="absolute top-[20%] right-[15%] text-6xl opacity-70 transform-gpu hidden md:block">
-             🏀
+             
            </motion.div>
            <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 25, 0], rotate: [0, -10, 0] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 1 }} className="absolute top-[45%] left-[8%] text-7xl opacity-60 transform-gpu hidden md:block">
-             ⚽
+             
            </motion.div>
            <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -15, 0], rotate: [0, 5, 0] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 2 }} className="absolute bottom-[20%] right-[25%] text-6xl opacity-70 transform-gpu hidden md:block">
-             🏊‍♂️
+             
            </motion.div>
            <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 30, 0], rotate: [0, -20, 0] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 0.5 }} className="absolute top-[15%] left-[30%] text-5xl opacity-40 transform-gpu hidden md:block">
-             🎾
+             
            </motion.div>
            <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -25, 0], rotate: [0, 15, 0] }} transition={{ duration: 8.5, repeat: Infinity, ease: "easeInOut", delay: 1.5 }} className="absolute bottom-[10%] left-[40%] text-6xl opacity-50 transform-gpu hidden lg:block">
-             🥋
+             
            </motion.div>
            <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 15, 0], rotate: [0, -10, 0] }} transition={{ duration: 7.5, repeat: Infinity, ease: "easeInOut", delay: 2.5 }} className="absolute top-[60%] right-[8%] text-6xl opacity-50 transform-gpu hidden lg:block">
-             🤺
+             
            </motion.div>
         </div>
         
@@ -250,15 +268,15 @@ export default function App() {
             className="max-w-4xl"
           >
             <motion.h1 variants={fadeUp} className="text-5xl sm:text-[75px] lg:text-[90px] font-black text-[#081a36] leading-[0.95] tracking-tighter drop-shadow-sm">
-              Lo sport non è <br/>una scommessa.
+              La piattaforma che consente ai tuoi figli <br/>di trovare lo sport migliore per loro.
             </motion.h1>
             
             <motion.p variants={fadeUp} className="mt-8 text-xl sm:text-2xl text-slate-500 font-medium leading-tight max-w-2xl">
-              Un bambino su tre abbandona per noia o trasferte impossibili.
-              Athlos incrocia i test degli allenatori con le reali disponibilità dei club locali.
+              Mettiamo in contatto scuole e genitori con i club sportivi locali. I piccoli atleti partecipano ad attività trimestrali. Noi proponiamo le attività che potrebbero essere più di loro interesse
             </motion.p>
             
-            <motion.div variants={fadeUp} className="mt-12 flex flex-col sm:flex-row items-center gap-4 max-w-xl">
+            {/* 
+<motion.div variants={fadeUp} className="mt-12 flex flex-col sm:flex-row items-center gap-4 max-w-xl">
               <div className="flex-1 w-full relative group shadow-sm rounded-full bg-white">
                 <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-hover:text-[#0066cc] transition-colors pointer-events-none" />
                 <select 
@@ -278,6 +296,109 @@ export default function App() {
                 Esplora <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
             </motion.div>
+*/}
+          </motion.div>
+        </div>
+      </section>
+
+      
+      {/* MANIFESTO SECTION */}
+      
+      {/* PUNTO DI PARTENZA */}
+      <section id="manifesto" className="py-24 sm:py-32 bg-[#081a36] text-white relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
+        <div className="max-w-4xl mx-auto px-6 relative z-10 text-center">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={{
+            hidden: { opacity: 0, y: 40 },
+            visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
+          }}>
+            <div className="inline-block px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-sky-200 font-bold tracking-widest text-xs uppercase mb-8">
+              Punto di Partenza
+            </div>
+            <h2 className="text-3xl sm:text-5xl font-black leading-tight mb-8">
+              L'intuizione di base è che ogni individuo tende a praticare solo ciò a cui è stato esposto...
+            </h2>
+            <p className="text-xl text-sky-100/80 font-medium leading-relaxed max-w-3xl mx-auto">
+              escludendo inconsapevolmente opzioni che potrebbero rivelarsi più adatte alle proprie capacità naturali e attitudini.
+            </p>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* PROBLEMI */}
+      <section className="py-24 sm:py-32 bg-slate-50 relative overflow-hidden border-t border-slate-100">
+        <div className="max-w-6xl mx-auto px-6">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={{
+            hidden: { opacity: 0, y: 40 },
+            visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
+          }} className="text-center mb-16">
+            <h2 className="text-4xl sm:text-5xl font-black text-[#081a36] tracking-tighter">Gli Ostacoli Attuali</h2>
+            <p className="mt-4 text-xl text-slate-500 font-medium">Le barriere che limitano il potenziale sportivo italiano.</p>
+          </motion.div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {[
+              { t: "Mancanza di esposizione", d: "La scelta sportiva è fortemente condizionata da tradizione culturale e familiare: molti talenti rimangono inespressi." },
+              { t: "Scuola e sport separati", d: "Le scuole non offrono reali opportunità di sperimentare discipline diverse in maniera stabile." },
+              { t: "Disparità territoriali", d: "Nel Nord Italia si pratica più sport rispetto al Sud." },
+              { t: "Danni economici e sociali", d: "La mancata diversificazione dello sport riduce numero di praticanti e indotto economico legato ad ogni disciplina." }
+            ].map((p, i) => (
+              <motion.div 
+                key={i}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                className="bg-white p-8 sm:p-10 rounded-[32px] border border-slate-100 shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 group"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#0066cc] flex items-center justify-center text-2xl font-black mb-6 group-hover:bg-[#0066cc] group-hover:text-white transition-colors">
+                  {i+1}
+                </div>
+                <h3 className="text-2xl font-black text-[#081a36] mb-4">{p.t}</h3>
+                <p className="text-slate-500 text-lg font-medium leading-relaxed">{p.d}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* VISIONE E MISSIONE */}
+      <section className="py-24 sm:py-32 bg-white relative overflow-hidden border-t border-slate-100">
+        <div className="max-w-6xl mx-auto px-6">
+          <motion.div 
+            initial={{ opacity: 0, x: -50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.7 }}
+            className="flex flex-col md:flex-row items-center gap-10 sm:gap-16 mb-24"
+          >
+            <div className="w-full md:w-1/3">
+              <h2 className="text-6xl sm:text-7xl font-black text-[#0066cc] tracking-tighter opacity-10 leading-none">01</h2>
+              <h3 className="text-3xl sm:text-4xl font-black text-[#081a36] tracking-tighter mt-[-10px] relative z-10">La Nostra<br/>Visione</h3>
+            </div>
+            <div className="w-full md:w-2/3">
+              <p className="text-xl sm:text-2xl text-slate-600 font-medium leading-relaxed">
+                Creare una generazione in cui <strong className="text-[#081a36]">ogni bambino abbia la possibilità di scoprire e sviluppare il proprio talento sportivo, senza barriere.</strong> Un futuro in cui lo sport sia accessibile, diversificato e integrato nell'educazione, contribuendo allo sviluppo di nuove industrie e alla crescita economica del territorio.
+              </p>
+            </div>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, x: 50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.7 }}
+            className="flex flex-col md:flex-row-reverse items-center gap-10 sm:gap-16"
+          >
+            <div className="w-full md:w-1/3 md:text-right">
+              <h2 className="text-6xl sm:text-7xl font-black text-[#00a2ff] tracking-tighter opacity-10 leading-none">02</h2>
+              <h3 className="text-3xl sm:text-4xl font-black text-[#081a36] tracking-tighter mt-[-10px] relative z-10">La Nostra<br/>Missione</h3>
+            </div>
+            <div className="w-full md:w-2/3 md:text-right">
+              <p className="text-xl sm:text-2xl text-slate-600 font-medium leading-relaxed">
+                <strong className="text-[#081a36]">Migliorare l'offerta educativa scolastica</strong> esponendo i bambini a una vasta gamma di sport, individuare i loro talenti e promuovere l'attività sportiva a livello nazionale evitando la limitazione a sport tradizionali, che fa perdere preziose opportunità di crescita personale ed economica.
+              </p>
+            </div>
           </motion.div>
         </div>
       </section>
@@ -296,7 +417,7 @@ export default function App() {
               Oltre i semplici gol.
             </h2>
             <p className="mt-6 text-lg text-slate-400 font-medium max-w-xl">
-              Nessun tracciamento maniacale delle partite. Simuliamo l'algoritmo usando i test motori e le valutazioni psicologiche a fine trimestre redatte dal tecnico.
+              La nostra tecnologia, unita all'esperienza degli istruttori, suggerisce ai tuoi figli il prossimo sport da provare sulla base delle proprie inclinazioni.
             </p>
           </motion.div>
           
@@ -415,7 +536,8 @@ export default function App() {
       </section>
 
       {/* VICINO A TE */}
-      <section id="vicino-a-te" className="py-24 sm:py-32 bg-gradient-to-t from-sky-50/40 to-white border-t border-slate-100 relative overflow-hidden">
+      {/* VICINO A TE HIDDEN TEMPORARILY 
+<section id="vicino-a-te" className="py-24 sm:py-32 bg-gradient-to-t from-sky-50/40 to-white border-t border-slate-100 relative overflow-hidden">
         <div className="max-w-6xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
@@ -506,6 +628,7 @@ export default function App() {
           </div>
         </div>
       </section>
+*/}
 
       {/* CLUBS SECTION */}
       <section id="club-sportivi" className="py-24 sm:py-32 bg-[#081a36] text-white overflow-hidden relative">
@@ -564,10 +687,30 @@ export default function App() {
         </div>
       </section>
 
-      {/* FOOTER */}
+            {/* FOOTER */}
       <footer className="bg-slate-50 py-12 text-center border-t border-slate-100">
         <div className="max-w-6xl mx-auto px-6">
-          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="text-3xl font-black text-[#081a36] tracking-tighter mb-4 block hover:opacity-80 transition-opacity">ATHLOS.</a>
+          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="mb-6 inline-block hover:opacity-80 transition-opacity">
+            <img src="/logo-dark.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
+          </a>
+          
+          <div className="flex flex-col md:flex-row items-center justify-center gap-4 mb-10">
+            <a href="https://instagram.com/athlos.it" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-6 py-3 rounded-2xl border-2 border-[#081a36]/10 text-[#081a36] hover:border-[#0066cc] hover:text-[#0066cc] hover:bg-[#0066cc]/5 transition-all group font-bold shadow-sm">
+              <InstagramIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span>@athlos.it</span>
+            </a>
+            
+            <a href="https://facebook.com/athlos" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-6 py-3 rounded-2xl border-2 border-[#081a36]/10 text-[#081a36] hover:border-[#0066cc] hover:text-[#0066cc] hover:bg-[#0066cc]/5 transition-all group font-bold shadow-sm">
+              <FacebookIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span>Athlos</span>
+            </a>
+            
+            <a href="mailto:progetto.athlos@gmail.com" className="flex items-center gap-3 px-6 py-3 rounded-2xl border-2 border-[#081a36]/10 text-[#081a36] hover:border-[#0066cc] hover:text-[#0066cc] hover:bg-[#0066cc]/5 transition-all group font-bold shadow-sm">
+              <Mail className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span>progetto.athlos@gmail.com</span>
+            </a>
+          </div>
+
           <p className="text-slate-400 font-medium text-sm">
             © 2026 Athlos S.r.l. — Conforme alle Linee Guida Attività Motoria Giovanile CONI.
           </p>
@@ -620,14 +763,28 @@ export default function App() {
                 animate={{ opacity: authSelection === 'club' ? 0 : 1 }}
                 className="relative z-10 w-full max-w-md px-8 text-center"
               >
-                {authSelection === 'none' && (
-                  <>
-                    <h2 className="text-4xl sm:text-5xl font-black text-[#081a36] mb-3">Genitore</h2>
-                    <p className="text-lg text-slate-500 font-medium">Invita altri genitori e segui lo sviluppo</p>
-                  </>
-                )}
-                
                 <AnimatePresence mode="wait">
+                  {authSelection === 'none' && (
+                    <motion.div key="parent-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
+                      <div className="border-2 border-[#0066cc]/20 bg-white/80 backdrop-blur-sm rounded-3xl p-8 sm:p-10 shadow-lg group-hover:border-[#0066cc]/50 group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1">
+                        <h2 className="text-3xl sm:text-4xl font-black text-[#081a36] mb-6 text-center">Genitore</h2>
+                        <ul className="text-left space-y-4 text-slate-600 font-bold text-sm sm:text-base">
+                          <li className="flex items-start gap-3">
+                            <div className="w-2 h-2 rounded-full bg-[#0066cc] mt-2 shrink-0"></div>
+                            <span>Conosci i club del territorio</span>
+                          </li>
+                          <li className="flex items-start gap-3">
+                            <div className="w-2 h-2 rounded-full bg-[#0066cc] mt-2 shrink-0"></div>
+                            <span>Iscrivi i tuoi figli alle attività</span>
+                          </li>
+                          <li className="flex items-start gap-3">
+                            <div className="w-2 h-2 rounded-full bg-[#0066cc] mt-2 shrink-0"></div>
+                            <span>Ottieni i suggerimenti personalizzati</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </motion.div>
+                  )}
                   {authSelection === 'parent' && (
                     <motion.div 
                       key={authMode}
@@ -700,14 +857,28 @@ export default function App() {
                 animate={{ opacity: authSelection === 'parent' ? 0 : 1 }}
                 className="relative z-10 w-full max-w-md px-8 text-center"
               >
-                {authSelection === 'none' && (
-                  <>
-                    <h2 className="text-4xl sm:text-5xl font-black text-white mb-3">Club Sportivo</h2>
-                    <p className="text-lg text-slate-400 font-medium">Inserisci i test e compila i form</p>
-                  </>
-                )}
-                
                 <AnimatePresence mode="wait">
+                  {authSelection === 'none' && (
+                    <motion.div key="club-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
+                      <div className="border-2 border-white/20 bg-white/5 backdrop-blur-sm rounded-3xl p-8 sm:p-10 shadow-lg group-hover:border-[#00a2ff]/50 group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1">
+                        <h2 className="text-3xl sm:text-4xl font-black text-white mb-6 text-center">Club Sportivo</h2>
+                        <ul className="text-left space-y-4 text-slate-300 font-bold text-sm sm:text-base">
+                          <li className="flex items-start gap-3">
+                            <div className="w-2 h-2 rounded-full bg-[#00a2ff] mt-2 shrink-0"></div>
+                            <span>Fatti conoscere dai nuovi clienti</span>
+                          </li>
+                          <li className="flex items-start gap-3">
+                            <div className="w-2 h-2 rounded-full bg-[#00a2ff] mt-2 shrink-0"></div>
+                            <span>Analizza le nuove iscrizioni</span>
+                          </li>
+                          <li className="flex items-start gap-3">
+                            <div className="w-2 h-2 rounded-full bg-[#00a2ff] mt-2 shrink-0"></div>
+                            <span>Visualizza i test</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </motion.div>
+                  )}
                   {authSelection === 'club' && (
                     <motion.div 
                       key={authMode}
