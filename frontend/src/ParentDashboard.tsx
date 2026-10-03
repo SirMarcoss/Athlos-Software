@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, MapPin, Shield, ChevronRight, X, Copy, CheckCircle2, User as UserIcon, Phone, MapPin as MapPinIcon, Info } from 'lucide-react';
+import { Brain, MapPin, Shield, ChevronRight, X, Copy, CheckCircle2, User as UserIcon, Phone, Info } from 'lucide-react';
 
 // === INTERFACCE ===
 interface Child {
@@ -110,7 +110,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     <div className="min-h-screen bg-[#f4f8fc] font-sans pb-32 relative overflow-x-hidden">
       
       {/* Sfondo Astratto */}
-      <div className="absolute top-0 left-0 w-full h-[450px] bg-gradient-to-br from-[#081a36] via-[#0a254f] to-[#0066cc] rounded-b-[40px] z-0 overflow-hidden shadow-2xl">
+      <div className="absolute top-0 left-0 w-full h-[450px] bg-gradient-to-br from-[#1E2046] via-[#0a254f] to-[#E52B6D] rounded-b-[40px] z-0 overflow-hidden shadow-2xl">
         <div className="absolute top-20 -left-10 w-96 h-96 bg-[#0055aa] rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>
         <div className="absolute top-10 -right-10 w-96 h-96 bg-[#0088ff] rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>
       </div>
@@ -136,26 +136,26 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
       {/* MODALI FRONT-END */}
       <AnimatePresence>
         {activeModal !== 'none' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081a36]/60 backdrop-blur-sm overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E2046]/60 backdrop-blur-sm overflow-y-auto">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               className={`bg-white rounded-[32px] p-8 w-full shadow-2xl relative my-8 ${activeModal === 'analysis' ? 'max-w-4xl' : 'max-w-lg'}`}
             >
-              <button onClick={() => setActiveModal('none')} className="absolute top-6 right-6 text-slate-400 hover:text-[#081a36]">
+              <button onClick={() => setActiveModal('none')} className="absolute top-6 right-6 text-slate-400 hover:text-[#1E2046]">
                 <X className="w-6 h-6" />
               </button>
 
               {activeModal === 'referral' && (
                 <div className="text-center pt-4">
-                  <div className="text-6xl mb-4"></div>
-                  <h3 className="text-3xl font-black text-[#081a36] mb-2">Invita un Genitore</h3>
+                  <div className="text-6xl mb-4">🎁</div>
+                  <h3 className="text-3xl font-black text-[#1E2046] mb-2">Invita un Genitore</h3>
                   <p className="text-slate-500 font-medium mb-8">Condividi questo link con i tuoi amici. Quando iscriveranno i loro figli, riceverete entrambi un mese gratuito su Athlos!</p>
                   
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between mb-4">
-                    <span className="font-mono font-bold text-[#0066cc] truncate">athlos.it/register?ref={myReferralCode}</span>
-                    <button onClick={copyToClipboard} className="ml-4 p-2 bg-white rounded-xl shadow-sm border border-slate-200 hover:bg-sky-50 text-[#081a36]">
+                    <span className="font-mono font-bold text-[#E52B6D] truncate">athlos.it/register?ref={myReferralCode}</span>
+                    <button onClick={copyToClipboard} className="ml-4 p-2 bg-white rounded-xl shadow-sm border border-slate-200 hover:bg-sky-50 text-[#1E2046]">
                       {copied ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
                     </button>
                   </div>
@@ -164,19 +164,19 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
               {activeModal === 'profile' && (
                 <div className="pt-2">
-                  <h3 className="text-2xl font-black text-[#081a36] mb-6">Modifica Profilo</h3>
+                  <h3 className="text-2xl font-black text-[#1E2046] mb-6">Modifica Profilo</h3>
                   <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setActiveModal('none'); }}>
                     <div className="flex gap-4">
                       <div className="flex-1">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Nome</label>
                         <div className="relative">
                           <UserIcon className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                          <input type="text" defaultValue="Marco" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
+                          <input type="text" defaultValue="Marco" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]" />
                         </div>
                       </div>
                       <div className="flex-1">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Cognome</label>
-                        <input type="text" defaultValue="Mazzone" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
+                        <input type="text" defaultValue="Mazzone" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]" />
                       </div>
                     </div>
                     
@@ -184,15 +184,15 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Telefono</label>
                       <div className="relative">
                         <Phone className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                        <input type="tel" defaultValue="+39 333 1234567" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
+                        <input type="tel" defaultValue="+39 333 1234567" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]" />
                       </div>
                     </div>
 
                     <div>
                       <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Indirizzo Completo</label>
                       <div className="relative">
-                        <MapPinIcon className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                        <input type="text" defaultValue="Via Roma 1, Catania" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
+                        <MapPin className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
+                        <input type="text" defaultValue="Via Roma 1, Catania" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]" />
                       </div>
                     </div>
 
@@ -200,11 +200,11 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Info Mediche / Extra (Opzionale)</label>
                       <div className="relative">
                         <Info className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                        <textarea rows={2} defaultValue="" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
+                        <textarea rows={2} defaultValue="" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]" />
                       </div>
                     </div>
 
-                    <button type="submit" className="w-full py-4 mt-4 bg-[#0066cc] hover:bg-[#081a36] transition-colors text-white rounded-xl font-bold text-lg">
+                    <button type="submit" className="w-full py-4 mt-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg">
                       Salva Modifiche
                     </button>
                   </form>
@@ -219,11 +219,11 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       {/* COLONNA SINISTRA */}
                       <div className="space-y-6">
                         <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-6">
-                          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#081a36] to-[#0066cc] text-white flex items-center justify-center font-black text-2xl shadow-lg shrink-0">
+                          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center font-black text-2xl shadow-lg shrink-0">
                             {selectedChild.first_name.charAt(0)}
                           </div>
                           <div>
-                            <h3 className="text-3xl font-black text-[#081a36]">{selectedChild.first_name} {selectedChild.last_name}</h3>
+                            <h3 className="text-3xl font-black text-[#1E2046]">{selectedChild.first_name} {selectedChild.last_name}</h3>
                             <p className="text-sky-600 font-bold text-sm tracking-wide uppercase">Analisi Dettagliata</p>
                           </div>
                         </div>
@@ -233,22 +233,22 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                           <div className="grid grid-cols-3 gap-3">
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
                               <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Creatività</div>
-                              <div className="text-3xl font-black text-[#081a36]">{selectedForm.creativity_score}</div>
+                              <div className="text-3xl font-black text-[#1E2046]">{selectedForm.creativity_score}</div>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
                               <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Gruppo</div>
-                              <div className="text-3xl font-black text-[#081a36]">{selectedForm.teamwork_score}</div>
+                              <div className="text-3xl font-black text-[#1E2046]">{selectedForm.teamwork_score}</div>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
                               <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Stress</div>
-                              <div className="text-3xl font-black text-[#081a36]">{selectedForm.stress_management_score}</div>
+                              <div className="text-3xl font-black text-[#1E2046]">{selectedForm.stress_management_score}</div>
                             </div>
                           </div>
                         </div>
 
                         <div>
                           <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Note del Tecnico</h4>
-                          <div className="bg-[#081a36] rounded-xl p-5 text-white shadow-inner relative overflow-hidden">
+                          <div className="bg-[#1E2046] rounded-xl p-5 text-white shadow-inner relative overflow-hidden">
                             <p className="text-lg text-slate-200 font-medium italic relative z-10">
                               "{selectedForm.coach_notes}"
                             </p>
@@ -267,7 +267,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                         <div>
                           <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Sport Ideale Identificato</h4>
                           <div className="bg-sky-50 rounded-xl p-4 border border-sky-100 flex items-center justify-between">
-                            <span className="text-2xl font-black text-[#0066cc]">{aiData.sportName}</span>
+                            <span className="text-2xl font-black text-[#E52B6D]">{aiData.sportName}</span>
                             <Brain className="w-8 h-8 text-sky-300" />
                           </div>
                         </div>
@@ -316,27 +316,27 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                 whileHover={{ y: -5, boxShadow: "0 25px 50px -12px rgba(0, 102, 204, 0.2)" }}
                 transition={{ delay: idx * 0.15, duration: 0.4, ease: "easeOut" }}
                 key={child.id} 
-                className="bg-white rounded-[32px] p-8 shadow-xl shadow-[#0066cc]/10 border border-sky-50 relative overflow-hidden group"
+                className="bg-white rounded-[32px] p-8 shadow-xl shadow-[#E52B6D]/10 border border-sky-50 relative overflow-hidden group"
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-sky-50 rounded-bl-full -z-10 group-hover:scale-110 transition-transform duration-500"></div>
-                <div className="absolute top-6 right-6 text-5xl opacity-20">
-                  {child.sport === 'Basket' || child.sport === 'Mini-Basket' ? '' : 
-                   child.sport === 'Calcio' || child.sport === 'Scuola Calcio' ? '' :
-                   child.sport === 'Nuoto' ? '' : 
-                   child.sport === 'Tennis' ? '' :
-                   child.sport === 'Scherma' ? '' :
-                   child.sport === 'Ginnastica' ? '' :
-                   child.sport === 'Arti Marziali' || child.sport === 'Judo' ? '' : ''}
+                <div className="absolute top-6 right-6 text-5xl opacity-15 select-none pointer-events-none">
+                  {child.sport === 'Basket' || child.sport === 'Mini-Basket' ? '🏀' : 
+                   child.sport === 'Calcio' || child.sport === 'Scuola Calcio' ? '⚽' :
+                   child.sport === 'Nuoto' ? '🏊' : 
+                   child.sport === 'Tennis' ? '🎾' :
+                   child.sport === 'Scherma' ? '🤺' :
+                   child.sport === 'Ginnastica' ? '🤸' :
+                   child.sport === 'Arti Marziali' || child.sport === 'Judo' ? '🥋' : '🏅'}
                 </div>
 
                 <div className="flex items-center gap-5 mb-8">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#081a36] to-[#0066cc] text-white flex items-center justify-center font-black text-2xl shadow-lg">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center font-black text-2xl shadow-lg">
                     {child.first_name.charAt(0)}
                   </div>
                   <div>
-                    <h3 className="text-2xl font-black text-[#081a36]">{child.first_name} {child.last_name}</h3>
+                    <h3 className="text-2xl font-black text-[#1E2046]">{child.first_name} {child.last_name}</h3>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="bg-sky-100 text-[#0066cc] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+                      <span className="bg-sky-100 text-[#E52B6D] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
                         {child.sport}
                       </span>
                       <span className="text-slate-400 font-medium text-sm flex items-center gap-1">
@@ -347,7 +347,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                 </div>
 
                 {form ? (
-                  <div className="bg-gradient-to-br from-[#081a36] to-[#0a254f] rounded-2xl p-6 text-white shadow-inner relative overflow-hidden">
+                  <div className="bg-gradient-to-br from-[#1E2046] to-[#0a254f] rounded-2xl p-6 text-white shadow-inner relative overflow-hidden">
                     <div className="absolute -right-4 -bottom-4 opacity-10">
                       <Brain className="w-32 h-32" />
                     </div>
@@ -377,7 +377,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
                     <button 
                       onClick={() => { setSelectedAnalysisChildId(child.id); setActiveModal('analysis'); }}
-                      className="w-full py-3 bg-white hover:bg-sky-50 text-[#081a36] rounded-xl font-bold transition-colors flex items-center justify-center gap-2 relative z-10"
+                      className="w-full py-3 bg-white hover:bg-sky-50 text-[#1E2046] rounded-xl font-bold transition-colors flex items-center justify-center gap-2 relative z-10"
                     >
                       Leggi Analisi Completa <ChevronRight className="w-5 h-5" />
                     </button>
@@ -398,20 +398,20 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
         <section className="mt-20">
           <div className="flex justify-between items-end mb-8">
             <div>
-              <h2 className="text-3xl font-black text-[#081a36] tracking-tight">Club Vicino a Te</h2>
+              <h2 className="text-3xl font-black text-[#1E2046] tracking-tight">Club Vicino a Te</h2>
               <p className="text-slate-500 font-medium mt-1">Scopri dove iscrivere i tuoi figli per esplorare nuovi sport.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {MOCK_CLUBS.map((club, i) => (
-              <div key={i} className="bg-white rounded-[24px] border border-slate-200 p-6 hover:shadow-xl hover:shadow-[#0066cc]/10 transition-all duration-300 flex flex-col">
+              <div key={i} className="bg-white rounded-[24px] border border-slate-200 p-6 hover:shadow-xl hover:shadow-[#E52B6D]/10 transition-all duration-300 flex flex-col">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    {i === 0 && <span className="text-[10px] font-black uppercase tracking-widest text-[#0066cc] bg-sky-100 px-3 py-1 rounded-full mb-3 inline-block"> PIÙ VICINO (1° SCELTA)</span>}
-                    <h3 className="text-xl font-bold text-[#081a36] leading-tight">{club.name}</h3>
+                    {i === 0 && <span className="text-[10px] font-black uppercase tracking-widest text-[#E52B6D] bg-sky-100 px-3 py-1 rounded-full mb-3 inline-block"> PIÙ VICINO (1° SCELTA)</span>}
+                    <h3 className="text-xl font-bold text-[#1E2046] leading-tight">{club.name}</h3>
                   </div>
-                  <span className="bg-slate-100 text-[#081a36] font-black text-sm px-3 py-1 rounded-full whitespace-nowrap">{club.distance}</span>
+                  <span className="bg-slate-100 text-[#1E2046] font-black text-sm px-3 py-1 rounded-full whitespace-nowrap">{club.distance}</span>
                 </div>
                 
                 <p className="text-slate-500 text-sm flex items-center gap-2 mb-6">
@@ -422,9 +422,9 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Corsi Disponibili</h4>
                   <div className="space-y-3">
                     {club.courses.map((course, cIdx) => (
-                      <div key={cIdx} className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex justify-between items-center hover:border-[#0066cc] transition-colors">
+                      <div key={cIdx} className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex justify-between items-center hover:border-[#E52B6D] transition-colors">
                         <div>
-                          <p className="font-bold text-[#081a36] text-sm">{course.name}</p>
+                          <p className="font-bold text-[#1E2046] text-sm">{course.name}</p>
                           <p className="text-xs text-slate-400 font-medium mt-0.5">Età: {course.age_range} anni</p>
                         </div>
                       </div>

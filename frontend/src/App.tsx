@@ -2,10 +2,15 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ParentDashboard from './ParentDashboard';
 import { 
-  /* MapPin, ArrowRight, */
+  /* MapPin */
   X,
   ArrowLeft,
-  Mail
+  ArrowRight,
+  Mail,
+  Check,
+  Users,
+  GraduationCap,
+  Trophy
 } from 'lucide-react';
 
 
@@ -47,7 +52,8 @@ const customSmoothScrollTo = (id: string) => {
   if (!element) return;
   
   const navbarHeight = 80;
-  const targetPosition = element.getBoundingClientRect().top + window.pageYOffset - navbarHeight;
+  let targetPosition = element.getBoundingClientRect().top + window.pageYOffset - navbarHeight;
+  if (id === 'top') targetPosition = 0;
   const startPosition = window.pageYOffset;
   const distance = targetPosition - startPosition;
   const duration = 1200; // Super smooth 1.2s scroll
@@ -133,7 +139,7 @@ const nearbyClubs = useMemo(() => {
       { sport: "Ginnastica Artistica", a: 10, t: 2, d: 10, tag: "Perfezione Biomeccanica", tagColor: "bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200", reason: "Eccelle nel controllo del corpo e nella disciplina rigorosa, preferendo un lavoro individuale." },
       { sport: "Ginnastica Ritmica", a: 9, t: 4, d: 9, tag: "Eleganza e Controllo", tagColor: "bg-pink-50 text-pink-800 border-pink-200", reason: "Movenze armoniche e altissima adesione alle regole, con una minima interazione coordinata." },
       { sport: "Tuffi", a: 10, t: 1, d: 8, tag: "Esplosività e Coraggio", tagColor: "bg-cyan-50 text-cyan-800 border-cyan-200", reason: "Massima reattività isolata, assenza totale di ansia da prestazione di gruppo." },
-      { sport: "Arrampicata Sportiva", a: 9, t: 1, d: 6, tag: "Verticalità Istintiva", tagColor: "bg-slate-50 text-slate-800 border-slate-200", reason: "Grande agilità e totale indipendenza. Non ama le classiche regole di campo." },
+      { sport: "Arrampicata Sportiva", a: 9, t: 1, d: 6, tag: "Verticalità Istintiva", tagColor: "bg-amber-50 text-amber-800 border-amber-200", reason: "Grande agilità e totale indipendenza. Non ama le classiche regole di campo." },
       { sport: "Scherma (Spada)", a: 9, t: 2, d: 8, tag: "Riflessi Tattici", tagColor: "bg-sky-50 text-sky-800 border-sky-200", reason: "Mente fredda, tempi di reazione eccezionali, protezione dalle logiche di spogliatoio." },
       { sport: "Scherma (Sciabola)", a: 10, t: 2, d: 6, tag: "Esplosività Pura", tagColor: "bg-red-50 text-red-800 border-red-200", reason: "Estremamente rapido, impulsivo. La sciabola premia chi attacca subito." },
       { sport: "Karate (Kumite)", a: 8, t: 2, d: 7, tag: "Contatto e Riflessi", tagColor: "bg-orange-50 text-orange-800 border-orange-200", reason: "Canalizza l'irruenza fisica all'interno di regole marziali." },
@@ -154,7 +160,7 @@ const nearbyClubs = useMemo(() => {
       { sport: "Nuoto Formativo", a: 3, t: 3, d: 5, tag: "Ambiente Protetto", tagColor: "bg-blue-50 text-blue-800 border-blue-200", reason: "Ideale per lo sviluppo motorio base senza pressione sociale." },
       { sport: "Nuoto Sincronizzato", a: 8, t: 9, d: 10, tag: "Geometria Liquida", tagColor: "bg-purple-50 text-purple-800 border-purple-200", reason: "Massima flessibilità unita a regole ferree e perfezione sincronizzata." },
       { sport: "Canottaggio", a: 6, t: 9, d: 10, tag: "Sincronia Perfetta", tagColor: "bg-indigo-50 text-indigo-800 border-indigo-200", reason: "La fatica pura condivisa con il team, senza necessità di cambi di direzione." },
-      { sport: "Tennis (Singolare)", a: 8, t: 2, d: 8, tag: "Equilibrio Totale", tagColor: "bg-[#f8fafc] text-[#081a36] border-slate-200", reason: "Classico bilanciamento perfetto. Sa stare in campo da solo gestendo la pressione." },
+      { sport: "Tennis (Singolare)", a: 8, t: 2, d: 8, tag: "Equilibrio Totale", tagColor: "bg-lime-50 text-lime-800 border-lime-200", reason: "Classico bilanciamento perfetto. Sa stare in campo da solo gestendo la pressione." },
       { sport: "Padel", a: 7, t: 6, d: 4, tag: "Competizione Rapida", tagColor: "bg-lime-50 text-lime-800 border-lime-200", reason: "Reattivo e divertente, il punteggio si azzera in fretta senza tattiche ansiogene." },
       { sport: "Tennistavolo", a: 9, t: 3, d: 5, tag: "Prontezza Oculomanuale", tagColor: "bg-sky-50 text-sky-800 border-sky-200", reason: "Ottimi riflessi visivi e socialità moderata al chiuso." },
       { sport: "Tiro con l'Arco", a: 2, t: 1, d: 10, tag: "Concentrazione Zen", tagColor: "bg-teal-50 text-teal-800 border-teal-200", reason: "Altissima disciplina. L'assenza di contrasti fisici lo rende perfetto." },
@@ -204,30 +210,39 @@ const nearbyClubs = useMemo(() => {
           <ParentDashboard onLogout={() => { setIsLoggedInAs('none'); setAuthModalOpen(false); }} />
         </motion.div>
       ) : (
-        <motion.div key="landing-page" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4 }} className="min-h-screen bg-[#fafcff] text-[#081a36] font-sans antialiased selection:bg-sky-200 selection:text-[#081a36]">
+        <motion.div key="landing-page" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4 }} className="min-h-screen text-white font-sans antialiased relative selection:bg-[#E52B6D] selection:text-white">
+      {/* FIXED CONTINUOUS BACKGROUND */}
+      <div className="fixed inset-0 z-[-1]">
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/bg1.png')" }}></div>
+        {/* Dark overlay to ensure text is always readable against the bright pink waves */}
+        <div className="absolute inset-0 bg-[#1E2046]/85 backdrop-blur-[2px]"></div>
+      </div>
+
       
+      <div id="top" className="absolute top-0 w-full h-1"></div>
       {/* MINIMAL NAVBAR */}
-      <header className="fixed top-0 w-full z-40 bg-white/80 backdrop-blur-xl border-b border-slate-100">
+      <header className="fixed top-0 w-full z-40 bg-[#1E2046]/60 backdrop-blur-xl border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="hover:opacity-80 transition-opacity">
-            <img src="/logo-dark.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
-          </a>
-          <nav className="hidden md:flex items-center gap-8 text-[14px] font-bold text-slate-500">
-            <a href="#manifesto" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('manifesto'); }} className="hover:text-[#0066cc] transition-colors">Il Progetto</a>
-            <a href="#simulatore" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('simulatore'); }} className="hover:text-[#0066cc] transition-colors">L'Algoritmo</a>
-            {/* <a href="#vicino-a-te" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('vicino-a-te'); }} className="hover:text-[#0066cc] transition-colors">Club Vicini</a> */}
-            <a href="#club-sportivi" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('club-sportivi'); }} className="hover:text-[#0066cc] transition-colors">Area Club</a>
+          <button onClick={() => customSmoothScrollTo('top')} className="hover:opacity-80 transition-opacity cursor-pointer border-none bg-transparent p-0">
+            <img src="/logo-light.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
+          </button>
+          <nav className="hidden md:flex items-center gap-8 text-[14px] font-bold text-slate-200">
+            <a href="#manifesto" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('manifesto'); }} className="hover:text-[#E52B6D] transition-colors">Il Progetto</a>
+            <a href="#simulatore" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('simulatore'); }} className="hover:text-[#E52B6D] transition-colors">L'Algoritmo</a>
+            {/* <a href="#vicino-a-te" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('vicino-a-te'); }} className="hover:text-[#E52B6D] transition-colors">Club Vicini</a> */}
+            <a href="#club-sportivi" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('club-sportivi'); }} className="hover:text-[#E52B6D] transition-colors">Area Club</a>
+            <a href="#benefici" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('benefici'); }} className="hover:text-[#E52B6D] transition-colors">Benefici</a>
           </nav>
           <div className="flex items-center gap-3">
             <button 
               onClick={() => openAuth('none', 'login')}
-              className="text-[14px] font-bold text-[#081a36] hover:opacity-70 transition-opacity"
+              className="text-[14px] font-bold text-white hover:opacity-70 transition-opacity"
             >
               Accedi
             </button>
             <button 
               onClick={() => openAuth('none', 'register')}
-              className="px-5 py-2.5 rounded-full bg-[#081a36] hover:bg-[#0066cc] text-white text-[14px] font-bold transition-all"
+              className="px-5 py-2.5 rounded-full bg-[#E52B6D] hover:bg-[#FF4F8B] text-white shadow-lg text-[14px] font-bold transition-all"
             >
               Registrati
             </button>
@@ -236,27 +251,27 @@ const nearbyClubs = useMemo(() => {
       </header>
 
       {/* HERO SECTION */}
-      <section className="relative pt-32 pb-24 sm:pt-44 sm:pb-32 px-6 overflow-hidden bg-gradient-to-br from-blue-50 via-[#f8fafc] to-sky-100">
+      <section className="relative min-h-screen flex flex-col justify-center pt-24 pb-12 px-6 overflow-hidden bg-gradient-to-b from-transparent to-[#1E2046]/40">
         
         {/* FLOATING SPORTS ELEMENTS */}
-        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -20, 0], rotate: [0, 15, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }} className="absolute top-[20%] right-[15%] text-6xl opacity-70 transform-gpu hidden md:block">
-             
+        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden select-none">
+           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -20, 0], rotate: [0, 15, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }} className="absolute top-[20%] right-[15%] text-6xl opacity-25 transform-gpu hidden md:block">
+             🏀
            </motion.div>
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 25, 0], rotate: [0, -10, 0] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 1 }} className="absolute top-[45%] left-[8%] text-7xl opacity-60 transform-gpu hidden md:block">
-             
+           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 25, 0], rotate: [0, -10, 0] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 1 }} className="absolute top-[45%] left-[8%] text-7xl opacity-20 transform-gpu hidden md:block">
+             ⚽
            </motion.div>
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -15, 0], rotate: [0, 5, 0] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 2 }} className="absolute bottom-[20%] right-[25%] text-6xl opacity-70 transform-gpu hidden md:block">
-             
+           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -15, 0], rotate: [0, 5, 0] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 2 }} className="absolute bottom-[20%] right-[25%] text-6xl opacity-25 transform-gpu hidden md:block">
+             🏊‍♂️
            </motion.div>
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 30, 0], rotate: [0, -20, 0] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 0.5 }} className="absolute top-[15%] left-[30%] text-5xl opacity-40 transform-gpu hidden md:block">
-             
+           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 30, 0], rotate: [0, -20, 0] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 0.5 }} className="absolute top-[15%] left-[30%] text-5xl opacity-15 transform-gpu hidden md:block">
+             🎾
            </motion.div>
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -25, 0], rotate: [0, 15, 0] }} transition={{ duration: 8.5, repeat: Infinity, ease: "easeInOut", delay: 1.5 }} className="absolute bottom-[10%] left-[40%] text-6xl opacity-50 transform-gpu hidden lg:block">
-             
+           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -25, 0], rotate: [0, 15, 0] }} transition={{ duration: 8.5, repeat: Infinity, ease: "easeInOut", delay: 1.5 }} className="absolute bottom-[10%] left-[40%] text-6xl opacity-20 transform-gpu hidden lg:block">
+             🥋
            </motion.div>
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 15, 0], rotate: [0, -10, 0] }} transition={{ duration: 7.5, repeat: Infinity, ease: "easeInOut", delay: 2.5 }} className="absolute top-[60%] right-[8%] text-6xl opacity-50 transform-gpu hidden lg:block">
-             
+           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 15, 0], rotate: [0, -10, 0] }} transition={{ duration: 7.5, repeat: Infinity, ease: "easeInOut", delay: 2.5 }} className="absolute top-[60%] right-[8%] text-6xl opacity-20 transform-gpu hidden lg:block">
+             🤺
            </motion.div>
         </div>
         
@@ -265,24 +280,24 @@ const nearbyClubs = useMemo(() => {
             initial="hidden" 
             animate="visible" 
             variants={stagger}
-            className="max-w-4xl"
+            className="max-w-5xl mx-auto text-center"
           >
-            <motion.h1 variants={fadeUp} className="text-5xl sm:text-[75px] lg:text-[90px] font-black text-[#081a36] leading-[0.95] tracking-tighter drop-shadow-sm">
+            <motion.h1 variants={fadeUp} className="text-5xl sm:text-[75px] lg:text-[90px] font-black text-white leading-[0.95] tracking-tighter drop-shadow-sm">
               La piattaforma che consente ai tuoi figli <br/>di trovare lo sport migliore per loro.
             </motion.h1>
             
-            <motion.p variants={fadeUp} className="mt-8 text-xl sm:text-2xl text-slate-500 font-medium leading-tight max-w-2xl">
+            <motion.p variants={fadeUp} className="mt-8 text-xl sm:text-2xl text-slate-200 font-medium leading-tight max-w-2xl mx-auto drop-shadow-md text-center">
               Mettiamo in contatto scuole e genitori con i club sportivi locali. I piccoli atleti partecipano ad attività trimestrali. Noi proponiamo le attività che potrebbero essere più di loro interesse
             </motion.p>
             
             {/* 
 <motion.div variants={fadeUp} className="mt-12 flex flex-col sm:flex-row items-center gap-4 max-w-xl">
-              <div className="flex-1 w-full relative group shadow-sm rounded-full bg-white">
-                <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-hover:text-[#0066cc] transition-colors pointer-events-none" />
+              <div className="flex-1 w-full relative group shadow-sm rounded-full bg-transparent">
+                <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-hover:text-[#E52B6D] transition-colors pointer-events-none" />
                 <select 
                   value={selectedTown} 
                   onChange={(e) => setSelectedTown(e.target.value)}
-                  className="w-full bg-transparent border-2 border-transparent hover:border-sky-100 rounded-full pl-12 pr-6 py-4 text-lg font-bold text-[#081a36] appearance-none focus:outline-none focus:border-[#0066cc] transition-all cursor-pointer"
+                  className="w-full bg-transparent border-2 border-transparent hover:border-slate-100 rounded-full pl-12 pr-6 py-4 text-lg font-bold text-white appearance-none focus:outline-none focus:border-[#E52B6D] transition-all cursor-pointer"
                 >
                   <option value="Catania">Catania</option>
                   <option value="Roma">Roma</option>
@@ -291,7 +306,7 @@ const nearbyClubs = useMemo(() => {
               </div>
               <button 
                 onClick={() => customSmoothScrollTo('vicino-a-te')}
-                className="w-full sm:w-auto px-8 py-4 rounded-full bg-[#0066cc] hover:bg-[#081a36] text-white font-bold text-lg transition-all flex items-center justify-center gap-2 group"
+                className="w-full sm:w-auto px-8 py-4 rounded-full bg-[#E52B6D] hover:bg-[#1E2046] text-white font-bold text-lg transition-all flex items-center justify-center gap-2 group"
               >
                 Esplora <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
@@ -299,20 +314,36 @@ const nearbyClubs = useMemo(() => {
 */}
           </motion.div>
         </div>
-      </section>
 
+        {/* SCROLL INDICATOR */}
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2, duration: 0.8 }}
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center cursor-pointer hover:text-white group"
+          onClick={() => customSmoothScrollTo('manifesto')}
+        >
+          <span className="text-white/50 group-hover:text-white transition-colors text-[10px] font-bold uppercase tracking-[0.3em] mb-2">Esplora</span>
+          <motion.div
+            animate={{ y: [0, 8, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/50 group-hover:text-white transition-colors"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </motion.div>
+        </motion.div>
+      </section>
       
       {/* MANIFESTO SECTION */}
       
       {/* PUNTO DI PARTENZA */}
-      <section id="manifesto" className="py-24 sm:py-32 bg-[#081a36] text-white relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
+      <section id="manifesto" className="relative py-24 sm:py-32 overflow-hidden text-white bg-gradient-to-b from-[#1E2046]/40 via-[#1E2046]/60 to-transparent">
+        
         <div className="max-w-4xl mx-auto px-6 relative z-10 text-center">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={{
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-150px" }} variants={{
             hidden: { opacity: 0, y: 40 },
             visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
           }}>
-            <div className="inline-block px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-sky-200 font-bold tracking-widest text-xs uppercase mb-8">
+            <div className="inline-block px-8 py-4 sm:px-10 sm:py-5 rounded-full bg-white text-[#1E2046] shadow-xl font-black tracking-[0.2em] text-xl sm:text-3xl uppercase mb-12 transform hover:scale-105 transition-transform">
               Punto di Partenza
             </div>
             <h2 className="text-3xl sm:text-5xl font-black leading-tight mb-8">
@@ -326,14 +357,14 @@ const nearbyClubs = useMemo(() => {
       </section>
 
       {/* PROBLEMI */}
-      <section className="py-24 sm:py-32 bg-slate-50 relative overflow-hidden border-t border-slate-100">
+      <section className="relative py-24 sm:py-32 overflow-hidden text-white bg-transparent">
         <div className="max-w-6xl mx-auto px-6">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={{
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-150px" }} variants={{
             hidden: { opacity: 0, y: 40 },
             visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
           }} className="text-center mb-16">
-            <h2 className="text-4xl sm:text-5xl font-black text-[#081a36] tracking-tighter">Gli Ostacoli Attuali</h2>
-            <p className="mt-4 text-xl text-slate-500 font-medium">Le barriere che limitano il potenziale sportivo italiano.</p>
+            <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter drop-shadow-lg">Gli Ostacoli Attuali</h2>
+            <p className="mt-4 text-xl text-slate-200 font-medium drop-shadow-md">Le barriere che limitano il potenziale sportivo italiano.</p>
           </motion.div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -349,13 +380,13 @@ const nearbyClubs = useMemo(() => {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-50px" }}
                 transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="bg-white p-8 sm:p-10 rounded-[32px] border border-slate-100 shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 group"
+                className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl hover:-translate-y-2 transition-transform duration-300 shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 group"
               >
-                <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#0066cc] flex items-center justify-center text-2xl font-black mb-6 group-hover:bg-[#0066cc] group-hover:text-white transition-colors">
+                <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center text-2xl font-black mb-6 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors">
                   {i+1}
                 </div>
-                <h3 className="text-2xl font-black text-[#081a36] mb-4">{p.t}</h3>
-                <p className="text-slate-500 text-lg font-medium leading-relaxed">{p.d}</p>
+                <h3 className="text-2xl font-black text-[#1E2046] mb-4">{p.t}</h3>
+                <p className="text-slate-600 text-lg font-medium leading-relaxed">{p.d}</p>
               </motion.div>
             ))}
           </div>
@@ -363,7 +394,7 @@ const nearbyClubs = useMemo(() => {
       </section>
 
       {/* VISIONE E MISSIONE */}
-      <section className="py-24 sm:py-32 bg-white relative overflow-hidden border-t border-slate-100">
+      <section className="relative py-24 sm:py-32 overflow-hidden text-white bg-gradient-to-b from-transparent via-[#1E2046]/60 to-transparent">
         <div className="max-w-6xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, x: -50 }}
@@ -373,12 +404,12 @@ const nearbyClubs = useMemo(() => {
             className="flex flex-col md:flex-row items-center gap-10 sm:gap-16 mb-24"
           >
             <div className="w-full md:w-1/3">
-              <h2 className="text-6xl sm:text-7xl font-black text-[#0066cc] tracking-tighter opacity-10 leading-none">01</h2>
-              <h3 className="text-3xl sm:text-4xl font-black text-[#081a36] tracking-tighter mt-[-10px] relative z-10">La Nostra<br/>Visione</h3>
+              <h2 className="text-6xl sm:text-7xl font-black text-[#E52B6D] tracking-tighter opacity-90 drop-shadow-xl leading-none">01</h2>
+              <h3 className="text-3xl sm:text-4xl font-black text-white tracking-tighter mt-[-10px] relative z-10">La Nostra<br/>Visione</h3>
             </div>
             <div className="w-full md:w-2/3">
-              <p className="text-xl sm:text-2xl text-slate-600 font-medium leading-relaxed">
-                Creare una generazione in cui <strong className="text-[#081a36]">ogni bambino abbia la possibilità di scoprire e sviluppare il proprio talento sportivo, senza barriere.</strong> Un futuro in cui lo sport sia accessibile, diversificato e integrato nell'educazione, contribuendo allo sviluppo di nuove industrie e alla crescita economica del territorio.
+              <p className="text-xl sm:text-2xl text-slate-200 font-medium leading-relaxed drop-shadow-md">
+                Creare una generazione in cui <strong className="text-white drop-shadow-md">ogni bambino abbia la possibilità di scoprire e sviluppare il proprio talento sportivo, senza barriere.</strong> Un futuro in cui lo sport sia accessibile, diversificato e integrato nell'educazione, contribuendo allo sviluppo di nuove industrie e alla crescita economica del territorio.
               </p>
             </div>
           </motion.div>
@@ -391,12 +422,12 @@ const nearbyClubs = useMemo(() => {
             className="flex flex-col md:flex-row-reverse items-center gap-10 sm:gap-16"
           >
             <div className="w-full md:w-1/3 md:text-right">
-              <h2 className="text-6xl sm:text-7xl font-black text-[#00a2ff] tracking-tighter opacity-10 leading-none">02</h2>
-              <h3 className="text-3xl sm:text-4xl font-black text-[#081a36] tracking-tighter mt-[-10px] relative z-10">La Nostra<br/>Missione</h3>
+              <h2 className="text-6xl sm:text-7xl font-black text-[#E52B6D] tracking-tighter opacity-90 drop-shadow-xl leading-none">02</h2>
+              <h3 className="text-3xl sm:text-4xl font-black text-white tracking-tighter mt-[-10px] relative z-10">La Nostra<br/>Missione</h3>
             </div>
             <div className="w-full md:w-2/3 md:text-right">
-              <p className="text-xl sm:text-2xl text-slate-600 font-medium leading-relaxed">
-                <strong className="text-[#081a36]">Migliorare l'offerta educativa scolastica</strong> esponendo i bambini a una vasta gamma di sport, individuare i loro talenti e promuovere l'attività sportiva a livello nazionale evitando la limitazione a sport tradizionali, che fa perdere preziose opportunità di crescita personale ed economica.
+              <p className="text-xl sm:text-2xl text-slate-200 font-medium leading-relaxed drop-shadow-md">
+                <strong className="text-white drop-shadow-md">Migliorare l'offerta educativa scolastica</strong> esponendo i bambini a una vasta gamma di sport, individuare i loro talenti e promuovere l'attività sportiva a livello nazionale evitando la limitazione a sport tradizionali, che fa perdere preziose opportunità di crescita personale ed economica.
               </p>
             </div>
           </motion.div>
@@ -404,7 +435,7 @@ const nearbyClubs = useMemo(() => {
       </section>
 
       {/* SIMULATOR */}
-      <section id="simulatore" className="py-24 sm:py-32 bg-gradient-to-b from-[#f8fafc] to-[#f1f5f9] border-t border-slate-100 overflow-hidden relative">
+      <section id="simulatore" className="relative py-24 sm:py-32 overflow-hidden text-white bg-transparent">
         <div className="max-w-6xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
@@ -413,10 +444,10 @@ const nearbyClubs = useMemo(() => {
             transition={{ duration: 0.6 }}
             className="mb-16"
           >
-            <h2 className="text-4xl sm:text-5xl font-black text-[#081a36] tracking-tighter leading-tight">
+            <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter leading-tight drop-shadow-lg">
               Oltre i semplici gol.
             </h2>
-            <p className="mt-6 text-lg text-slate-400 font-medium max-w-xl">
+            <p className="mt-6 text-lg text-slate-200 font-medium max-w-xl drop-shadow-md">
               La nostra tecnologia, unita all'esperienza degli istruttori, suggerisce ai tuoi figli il prossimo sport da provare sulla base delle proprie inclinazioni.
             </p>
           </motion.div>
@@ -433,45 +464,45 @@ const nearbyClubs = useMemo(() => {
             >
                <div className="space-y-4">
                  <div className="flex justify-between items-baseline">
-                   <h3 className="text-xl font-bold text-[#081a36]">Test Fisici e Motori</h3>
-                   <span className="text-3xl font-black text-[#0066cc]">{agility}</span>
+                   <h3 className="text-xl font-bold text-white">Test Fisici e Motori</h3>
+                   <span className="text-3xl font-black text-sky-400">{agility}</span>
                  </div>
                  <input 
                    type="range" min="1" max="10" value={agility}
                    onChange={(e) => setAgility(Number(e.target.value))}
-                   className="w-full h-2.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-[#0066cc] hover:accent-[#081a36] transition-all"
+                   className="w-full h-2.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-sky-400 hover:accent-[#1E2046] transition-all"
                  />
-                 <div className="flex justify-between text-xs text-slate-400 font-bold uppercase tracking-widest">
+                 <div className="flex justify-between text-xs text-slate-200 font-bold uppercase tracking-widest">
                    <span>(Es. Scatto, Salto)</span>
                  </div>
                </div>
 
                <div className="space-y-4">
                  <div className="flex justify-between items-baseline">
-                   <h3 className="text-xl font-bold text-[#081a36]">Creatività e Gruppo</h3>
-                   <span className="text-3xl font-black text-[#00a2ff]">{teamwork}</span>
+                   <h3 className="text-xl font-bold text-white">Creatività e Gruppo</h3>
+                   <span className="text-3xl font-black text-[#E52B6D]">{teamwork}</span>
                  </div>
                  <input 
                    type="range" min="1" max="10" value={teamwork}
                    onChange={(e) => setTeamwork(Number(e.target.value))}
-                   className="w-full h-2.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-[#00a2ff] hover:accent-[#081a36] transition-all"
+                   className="w-full h-2.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-[#E52B6D] hover:accent-[#1E2046] transition-all"
                  />
-                 <div className="flex justify-between text-xs text-slate-400 font-bold uppercase tracking-widest">
+                 <div className="flex justify-between text-xs text-slate-200 font-bold uppercase tracking-widest">
                    <span>(Form Trimestrale)</span>
                  </div>
                </div>
 
                <div className="space-y-4">
                  <div className="flex justify-between items-baseline">
-                   <h3 className="text-xl font-bold text-[#081a36]">Gestione Stress/Regole</h3>
-                   <span className="text-3xl font-black text-emerald-500">{discipline}</span>
+                   <h3 className="text-xl font-bold text-white">Gestione Stress/Regole</h3>
+                   <span className="text-3xl font-black text-amber-400">{discipline}</span>
                  </div>
                  <input 
                    type="range" min="1" max="10" value={discipline}
                    onChange={(e) => setDiscipline(Number(e.target.value))}
-                   className="w-full h-2.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-emerald-500 hover:accent-[#081a36] transition-all"
+                   className="w-full h-2.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-amber-400 hover:accent-[#1E2046] transition-all"
                  />
-                 <div className="flex justify-between text-xs text-slate-400 font-bold uppercase tracking-widest">
+                 <div className="flex justify-between text-xs text-slate-200 font-bold uppercase tracking-widest">
                    <span>(Form Trimestrale)</span>
                  </div>
                </div>
@@ -485,7 +516,7 @@ const nearbyClubs = useMemo(() => {
               transition={{ duration: 0.6, delay: 0.4 }}
               className="lg:col-span-7"
             >
-               <div className="relative bg-white rounded-[2rem] p-8 sm:p-12 shadow-xl shadow-slate-200/50 border border-slate-100 min-h-[420px] flex flex-col justify-center">
+               <div className="relative bg-white rounded-[2rem] p-8 sm:p-12 shadow-2xl border border-slate-100 min-h-[420px] flex flex-col justify-center">
                  <AnimatePresence mode="wait">
                    <motion.div
                      key={recommendation.sport}
@@ -499,30 +530,30 @@ const nearbyClubs = useMemo(() => {
                        <span className={`inline-block px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${recommendation.tagColor} mb-4 transition-colors`}>
                          {recommendation.tag}
                        </span>
-                       <h4 className="text-3xl sm:text-4xl font-black text-[#081a36] leading-tight tracking-tight transition-all">
+                       <h4 className="text-3xl sm:text-4xl font-black text-[#1E2046] leading-tight tracking-tight transition-all">
                          {recommendation.sport}
                        </h4>
-                       <p className="mt-3 text-sm text-slate-400 font-medium">
+                       <p className="mt-3 text-sm text-slate-500 font-medium">
                          Elaborazione AI basata su parametri biomeccanici e attitudinali
                        </p>
                      </div>
                      
                      <div className="space-y-6">
                        <div>
-                         <h5 className="text-xs font-black text-slate-300 uppercase tracking-widest mb-2">Osservazione Tecnica</h5>
-                         <p className="text-lg text-slate-600 leading-relaxed font-medium">
+                         <h5 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Osservazione Tecnica</h5>
+                         <p className="text-lg text-slate-700 leading-relaxed font-medium">
                            {recommendation.reason}
                          </p>
                        </div>
                        <div className="pt-6 border-t border-slate-100">
-                         <h5 className="text-xs font-black text-slate-300 uppercase tracking-widest mb-2">Nota per la Famiglia</h5>
-                         <p className="text-xl text-[#081a36] leading-relaxed font-bold">
+                         <h5 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Nota per la Famiglia</h5>
+                         <p className="text-xl text-[#1E2046] leading-relaxed font-bold">
                            "{recommendation.parentTip}"
                          </p>
                        </div>
-                       <div className="pt-4 border-t border-slate-100/50">
-                         <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                           <strong className="text-slate-500">Avvertenza:</strong> Athlos raccoglie un insieme di osservazioni qualificate sul campo per aiutarti a orientarti verso lo sport più adatto. La piattaforma non produce né sostituisce alcuna diagnosi medica o psicologica professionale.
+                       <div className="pt-4 border-t border-slate-200">
+                         <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                           <strong className="text-slate-600">Avvertenza:</strong> Athlos raccoglie un insieme di osservazioni qualificate sul campo per aiutarti a orientarti verso lo sport più adatto. La piattaforma non produce né sostituisce alcuna diagnosi medica o psicologica professionale.
                          </p>
                        </div>
                      </div>
@@ -537,7 +568,7 @@ const nearbyClubs = useMemo(() => {
 
       {/* VICINO A TE */}
       {/* VICINO A TE HIDDEN TEMPORARILY 
-<section id="vicino-a-te" className="py-24 sm:py-32 bg-gradient-to-t from-sky-50/40 to-white border-t border-slate-100 relative overflow-hidden">
+<section id="vicino-a-te" className="relative py-24 sm:py-32 text-white bg-gradient-to-b from-transparent via-[#1E2046]/50 to-transparent overflow-hidden">
         <div className="max-w-6xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
@@ -547,10 +578,10 @@ const nearbyClubs = useMemo(() => {
             className="flex flex-col lg:flex-row lg:items-end justify-between gap-10 mb-16"
           >
             <div className="max-w-xl">
-              <h2 className="text-4xl sm:text-5xl font-black text-[#081a36] tracking-tighter leading-tight">
+              <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter leading-tight drop-shadow-lg">
                 Il raggio protetto.
               </h2>
-              <p className="mt-6 text-xl text-slate-400 font-medium">
+              <p className="mt-6 text-xl text-slate-300 font-medium">
                 Iscriviti solo in strutture entro 20 km. Nessuna corsa nel traffico, più tempo libero per te.
               </p>
             </div>
@@ -562,8 +593,8 @@ const nearbyClubs = useMemo(() => {
                     onClick={() => setSelectedTown(town)}
                     className={`px-5 py-3 rounded-full text-sm font-bold transition-all ${
                       selectedTown === town 
-                        ? "bg-[#081a36] text-white shadow-lg" 
-                        : "bg-slate-50 text-slate-400 hover:text-[#081a36] hover:bg-slate-100"
+                        ? "bg-[#1E2046] text-white shadow-lg" 
+                        : "bg-transparent text-slate-300 hover:text-white hover:bg-white/10"
                     }`}
                   >
                     {town}
@@ -572,7 +603,7 @@ const nearbyClubs = useMemo(() => {
             </div>
           </motion.div>
 
-          <div className="border-t border-slate-100">
+          <div className="border-t border-white/10 pt-8">
             <AnimatePresence mode="wait">
                <motion.div 
                  key={selectedTown}
@@ -593,31 +624,31 @@ const nearbyClubs = useMemo(() => {
                    >
                      <div className="flex-1">
                        <div className="flex items-center gap-3 mb-3">
-                         <span className="text-lg font-black text-[#0066cc]">
+                         <span className="text-lg font-black text-[#E52B6D]">
                            {club.distance} km
                          </span>
                          <span className="text-sm font-bold text-slate-300">
                            {club.travelTime} min auto
                          </span>
                        </div>
-                       <h3 className="text-2xl sm:text-3xl font-black text-[#081a36] group-hover:text-[#0066cc] transition-colors tracking-tight">
+                       <h3 className="text-2xl sm:text-3xl font-black text-white group-hover:text-[#E52B6D] transition-colors tracking-tight">
                          {club.name}
                        </h3>
-                       <p className="mt-1 text-lg text-slate-400 font-medium">
+                       <p className="mt-1 text-lg text-slate-300 font-medium">
                          {club.address}
                        </p>
                      </div>
                      <div className="flex-1 md:text-right">
                         <ul className="space-y-2 inline-block text-left md:text-right">
                           {club.courses.map((course, cIdx) => (
-                            <li key={cIdx} className="text-lg text-slate-600 font-bold">
+                            <li key={cIdx} className="text-lg text-slate-200 font-bold">
                               {course}
                             </li>
                           ))}
                         </ul>
                      </div>
                      <div className="shrink-0 flex justify-end">
-                       <div className="w-12 h-12 rounded-full border-2 border-slate-200 flex items-center justify-center group-hover:bg-[#081a36] group-hover:border-[#081a36] group-hover:text-white transition-all text-slate-300">
+                       <div className="w-12 h-12 rounded-full border-2 border-slate-200 flex items-center justify-center group-hover:bg-[#1E2046] group-hover:border-[#1E2046] group-hover:text-white transition-all text-slate-300">
                          <ArrowRight className="w-6 h-6" />
                        </div>
                      </div>
@@ -631,56 +662,191 @@ const nearbyClubs = useMemo(() => {
 */}
 
       {/* CLUBS SECTION */}
-      <section id="club-sportivi" className="py-24 sm:py-32 bg-[#081a36] text-white overflow-hidden relative">
+      <section id="club-sportivi" className="relative py-24 sm:py-32 text-white bg-gradient-to-b from-transparent to-[#1E2046]/90 overflow-hidden">
         <motion.div 
           animate={{ scale: [1, 1.05, 1], opacity: [0.05, 0.08, 0.05] }}
           transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/4 -right-1/4 w-[800px] h-[800px] bg-[#0066cc] rounded-full pointer-events-none transform-gpu"
+          className="absolute top-1/4 -right-1/4 w-[800px] h-[800px] bg-[#E52B6D] rounded-full pointer-events-none transform-gpu"
         />
+        <div className="max-w-4xl mx-auto px-6 relative z-10 text-center">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="flex flex-col items-center"
+          >
+            <span className="inline-block px-5 py-2 rounded-full bg-[#E52B6D]/15 border border-[#E52B6D]/30 text-[#FF4F8B] text-xs sm:text-sm font-black uppercase tracking-wider mb-6">
+              Per i centri sportivi
+            </span>
+            <h2 className="text-4xl sm:text-6xl font-black tracking-tighter leading-[0.95]">
+              I test che fai,<br/>valorizzati.
+            </h2>
+            <p className="mt-8 text-xl text-slate-300 font-medium leading-relaxed max-w-xl mx-auto">
+              Un'area gestionale dove inserire i test fisici settimanali e un form caratteriale veloce a fine trimestre. L'AI fa il resto.
+            </p>
+            <div className="mt-10">
+              <button 
+                onClick={() => openAuth('club', 'register')}
+                className="px-8 py-4 rounded-full bg-[#1E2046] border border-white/20 text-white hover:bg-[#E52B6D] hover:border-[#E52B6D] hover:text-white font-black text-lg transition-all shadow-xl hover:scale-105"
+              >
+                Registra il tuo Club
+              </button>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* 
+          Recensione Salvo R. - rimossa temporaneamente in attesa di una recensione verificata:
+          <div className="bg-transparent/5 border border-slate-100 p-10 sm:p-12 rounded-[2rem] backdrop-blur-md">
+            <p className="text-2xl text-slate-200 font-bold leading-tight italic">
+              "Ora i genitori vedono i risultati scritti di tutti quegli esercizi sulla rapidità e attenzione che facciamo in campo. Hanno smesso di chiederci solo quanti gol hanno fatto."
+            </p>
+            <div className="mt-10 flex items-center gap-5">
+              <div className="w-14 h-14 rounded-full bg-[#E52B6D] flex items-center justify-center font-black text-xl">
+                S
+              </div>
+              <div>
+                <div className="text-lg font-black">Salvo R.</div>
+                <div className="text-slate-200 font-bold text-sm">Responsabile Scuola Calcio</div>
+              </div>
+            </div>
+          </div>
+        */}
+      </section>
+
+      {/* BENEFICI SECTION */}
+      <section id="benefici" className="relative py-24 sm:py-32 text-white bg-gradient-to-b from-[#1E2046]/90 via-[#1E2046] to-[#1E2046] overflow-hidden">
         <div className="max-w-6xl mx-auto px-6 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-16 sm:mb-20"
+          >
+            <span className="inline-block px-5 py-2 rounded-full bg-[#E52B6D]/15 border border-[#E52B6D]/30 text-[#FF4F8B] text-xs sm:text-sm font-black uppercase tracking-wider mb-6">
+              I Benefici di Athlos
+            </span>
+            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tighter drop-shadow-lg leading-tight">
+              Un valore per tutto l'ecosistema.
+            </h2>
+            <p className="mt-6 text-xl text-slate-200 font-medium max-w-2xl mx-auto drop-shadow-md">
+              Scuole, società sportive e famiglie: una sinergia completa per orientare e valorizzare i giovani atleti.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
             
+            {/* PER LE FAMIGLIE */}
             <motion.div 
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col h-full border border-slate-100 group"
             >
-              <h2 className="text-4xl sm:text-6xl font-black tracking-tighter leading-[0.95]">
-                I test che fai,<br/>valorizzati.
-              </h2>
-              <p className="mt-8 text-xl text-slate-400 font-medium leading-tight max-w-md">
-                Un'area gestionale dove inserire i test fisici settimanali e un form psicologico veloce a fine trimestre. L'AI fa il resto.
-              </p>
-              <div className="mt-12">
-                <button 
-                  onClick={() => openAuth('club', 'register')}
-                  className="px-8 py-4 rounded-full bg-white text-[#081a36] hover:bg-[#0066cc] hover:text-white font-black text-lg transition-all"
-                >
-                  Registra il tuo Club
-                </button>
+              <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center mb-6 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors">
+                <Users className="w-7 h-7" />
               </div>
+              <span className="text-xs font-black uppercase tracking-widest text-[#E52B6D] mb-2 block">
+                Famiglie & Atleti
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-black text-[#1E2046] tracking-tight mb-6">
+                Per le Famiglie
+              </h3>
+              <ul className="space-y-4 flex-1">
+                <li className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#E52B6D]/10 text-[#E52B6D] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <p className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed">
+                    Offre un programma in cui i bambini sperimentano discipline diverse, acquisendone i valori oltre che le abilità
+                  </p>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#E52B6D]/10 text-[#E52B6D] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <p className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed">
+                    L'AI propone i prossimi step basandosi solo sulle attitudini dei piccoli atleti
+                  </p>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#E52B6D]/10 text-[#E52B6D] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <p className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed">
+                    Permette ai bambini di trovare la disciplina che più apprezzano
+                  </p>
+                </li>
+              </ul>
             </motion.div>
 
+            {/* PER LE SCUOLE */}
             <motion.div 
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="bg-white/5 border border-white/10 p-10 sm:p-12 rounded-[2rem] backdrop-blur-md"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col h-full border border-slate-100 group"
             >
-              <p className="text-2xl text-slate-200 font-bold leading-tight italic">
-                "Ora i genitori vedono i risultati scritti di tutti quegli esercizi sulla rapidità e attenzione che facciamo in campo. Hanno smesso di chiederci solo quanti gol hanno fatto."
-              </p>
-              <div className="mt-10 flex items-center gap-5">
-                <div className="w-14 h-14 rounded-full bg-[#0066cc] flex items-center justify-center font-black text-xl">
-                  S
-                </div>
-                <div>
-                  <div className="text-lg font-black">Salvo R.</div>
-                  <div className="text-slate-400 font-bold text-sm">Responsabile Scuola Calcio</div>
-                </div>
+              <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center mb-6 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors">
+                <GraduationCap className="w-7 h-7" />
               </div>
+              <span className="text-xs font-black uppercase tracking-widest text-[#E52B6D] mb-2 block">
+                Istituti Scolastici
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-black text-[#1E2046] tracking-tight mb-6">
+                Per le Scuole
+              </h3>
+              <ul className="space-y-4 flex-1">
+                <li className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#E52B6D]/10 text-[#E52B6D] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <p className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed">
+                    Offre la possibilità di inserire il programma come attività extracurriculare, migliorando l'offerta formativa
+                  </p>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#E52B6D]/10 text-[#E52B6D] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <p className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed">
+                    Esenta la scuola da qualunque attività burocratica, totalmente gestite da Athlos
+                  </p>
+                </li>
+              </ul>
+            </motion.div>
+
+            {/* PER I CLUB SPORTIVI */}
+            <motion.div 
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col h-full border border-slate-100 group"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center mb-6 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors">
+                <Trophy className="w-7 h-7" />
+              </div>
+              <span className="text-xs font-black uppercase tracking-widest text-[#E52B6D] mb-2 block">
+                Società Sportive
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-black text-[#1E2046] tracking-tight mb-6">
+                Per i Club Sportivi
+              </h3>
+              <ul className="space-y-4 flex-1">
+                <li className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-[#E52B6D]/10 text-[#E52B6D] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <p className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed">
+                    Offre l'accesso a una clientela aggiuntiva, diversificata e continua nel tempo
+                  </p>
+                </li>
+              </ul>
             </motion.div>
 
           </div>
@@ -688,30 +854,30 @@ const nearbyClubs = useMemo(() => {
       </section>
 
             {/* FOOTER */}
-      <footer className="bg-slate-50 py-12 text-center border-t border-slate-100">
+      <footer className="py-12 text-center border-t border-white/10 relative z-10">
         <div className="max-w-6xl mx-auto px-6">
-          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="mb-6 inline-block hover:opacity-80 transition-opacity">
-            <img src="/logo-dark.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
-          </a>
+          <button onClick={() => customSmoothScrollTo('top')} className="mb-6 inline-block hover:opacity-80 transition-opacity cursor-pointer border-none bg-transparent p-0">
+            <img src="/logo-light.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
+          </button>
           
           <div className="flex flex-col md:flex-row items-center justify-center gap-4 mb-10">
-            <a href="https://instagram.com/athlos.it" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-6 py-3 rounded-2xl border-2 border-[#081a36]/10 text-[#081a36] hover:border-[#0066cc] hover:text-[#0066cc] hover:bg-[#0066cc]/5 transition-all group font-bold shadow-sm">
+            <a href="https://instagram.com/athlos.it" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-6 py-3 rounded-2xl border-2 border-[#1E2046]/10 text-white hover:border-[#E52B6D] hover:text-[#E52B6D] hover:bg-transparent/5 transition-all group font-bold shadow-sm">
               <InstagramIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
               <span>@athlos.it</span>
             </a>
             
-            <a href="https://facebook.com/athlos" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-6 py-3 rounded-2xl border-2 border-[#081a36]/10 text-[#081a36] hover:border-[#0066cc] hover:text-[#0066cc] hover:bg-[#0066cc]/5 transition-all group font-bold shadow-sm">
+            <a href="https://www.facebook.com/profile.php?id=61570873401132&sk=directory_intro" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-6 py-3 rounded-2xl border-2 border-[#1E2046]/10 text-white hover:border-[#E52B6D] hover:text-[#E52B6D] hover:bg-transparent/5 transition-all group font-bold shadow-sm">
               <FacebookIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
               <span>Athlos</span>
             </a>
             
-            <a href="mailto:progetto.athlos@gmail.com" className="flex items-center gap-3 px-6 py-3 rounded-2xl border-2 border-[#081a36]/10 text-[#081a36] hover:border-[#0066cc] hover:text-[#0066cc] hover:bg-[#0066cc]/5 transition-all group font-bold shadow-sm">
+            <a href="mailto:progetto.athlos@gmail.com" className="flex items-center gap-3 px-6 py-3 rounded-2xl border-2 border-[#1E2046]/10 text-white hover:border-[#E52B6D] hover:text-[#E52B6D] hover:bg-transparent/5 transition-all group font-bold shadow-sm">
               <Mail className="w-5 h-5 group-hover:scale-110 transition-transform" />
               <span>progetto.athlos@gmail.com</span>
             </a>
           </div>
 
-          <p className="text-slate-400 font-medium text-sm">
+          <p className="text-slate-300 font-medium text-sm">
             © 2026 Athlos S.r.l. — Conforme alle Linee Guida Attività Motoria Giovanile CONI.
           </p>
         </div>
@@ -724,12 +890,12 @@ const nearbyClubs = useMemo(() => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { delay: 0.3 } }}
-            className="fixed inset-0 z-50 flex w-full h-full bg-white overflow-hidden"
+            className="fixed inset-0 z-50 flex w-full h-full bg-[#1E2046]/95 backdrop-blur-xl overflow-hidden"
           >
             
             <button 
               onClick={() => setAuthModalOpen(false)}
-              className="absolute top-6 right-6 z-[100] w-12 h-12 flex items-center justify-center rounded-full bg-white text-[#081a36] shadow-lg hover:scale-105 transition-transform"
+              className="absolute top-6 right-6 z-[100] w-12 h-12 flex items-center justify-center rounded-full bg-white border border-slate-200 text-[#1E2046] shadow-lg hover:scale-105 transition-transform"
             >
               <X className="w-6 h-6" />
             </button>
@@ -741,7 +907,7 @@ const nearbyClubs = useMemo(() => {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   onClick={() => setAuthSelection('none')}
-                  className="absolute top-6 left-6 z-[100] px-5 py-3 rounded-full bg-white text-[#081a36] shadow-lg font-bold flex items-center gap-2 hover:scale-105 transition-transform"
+                  className="absolute top-6 left-6 z-[100] px-5 py-3 rounded-full bg-white border border-slate-200 text-[#1E2046] shadow-lg font-bold flex items-center gap-2 hover:scale-105 transition-transform"
                 >
                   <ArrowLeft className="w-5 h-5" /> Indietro
                 </motion.button>
@@ -754,34 +920,43 @@ const nearbyClubs = useMemo(() => {
                 width: authSelection === 'none' ? "50%" : authSelection === 'parent' ? "100%" : "0%",
               }}
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="relative h-full bg-sky-50 flex flex-col items-center justify-center cursor-pointer overflow-hidden group border-r border-sky-100"
+              className="relative h-full bg-transparent flex flex-col items-center justify-center cursor-pointer overflow-hidden group border-r border-slate-100"
               onClick={() => authSelection === 'none' && setAuthSelection('parent')}
             >
-              <div className="absolute inset-0 bg-[#0066cc]/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-0 bg-transparent/5 opacity-0 group-hover:opacity-100 transition-opacity" />
               
               <motion.div 
                 animate={{ opacity: authSelection === 'club' ? 0 : 1 }}
-                className="relative z-10 w-full max-w-md px-8 text-center"
+                className="relative z-10 w-full max-w-lg lg:max-w-xl px-6 sm:px-8 text-center"
               >
                 <AnimatePresence mode="wait">
                   {authSelection === 'none' && (
-                    <motion.div key="parent-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
-                      <div className="border-2 border-[#0066cc]/20 bg-white/80 backdrop-blur-sm rounded-3xl p-8 sm:p-10 shadow-lg group-hover:border-[#0066cc]/50 group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1">
-                        <h2 className="text-3xl sm:text-4xl font-black text-[#081a36] mb-6 text-center">Genitore</h2>
-                        <ul className="text-left space-y-4 text-slate-600 font-bold text-sm sm:text-base">
-                          <li className="flex items-start gap-3">
-                            <div className="w-2 h-2 rounded-full bg-[#0066cc] mt-2 shrink-0"></div>
+                    <motion.div key="parent-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }} className="w-full">
+                      <div className="bg-white rounded-[32px] sm:rounded-[40px] p-8 sm:p-12 lg:p-14 border border-slate-100 shadow-2xl group-hover:border-[#E52B6D]/50 group-hover:shadow-[0_25px_60px_-15px_rgba(229,43,109,0.3)] transition-all duration-300 transform group-hover:-translate-y-2">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center mx-auto mb-6 sm:mb-8 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors duration-300 shadow-sm">
+                          <Users className="w-8 h-8 sm:w-10 sm:h-10" />
+                        </div>
+                        <h2 className="text-3xl sm:text-5xl font-black text-[#1E2046] mb-6 sm:mb-8 text-center tracking-tight">Genitore</h2>
+                        <ul className="text-left space-y-4 sm:space-y-5 text-slate-600 font-bold text-base sm:text-lg">
+                          <li className="flex items-start gap-3 sm:gap-4">
+                            <div className="w-2.5 h-2.5 rounded-full bg-[#E52B6D] mt-2 shrink-0"></div>
                             <span>Conosci i club del territorio</span>
                           </li>
-                          <li className="flex items-start gap-3">
-                            <div className="w-2 h-2 rounded-full bg-[#0066cc] mt-2 shrink-0"></div>
+                          <li className="flex items-start gap-3 sm:gap-4">
+                            <div className="w-2.5 h-2.5 rounded-full bg-[#E52B6D] mt-2 shrink-0"></div>
                             <span>Iscrivi i tuoi figli alle attività</span>
                           </li>
-                          <li className="flex items-start gap-3">
-                            <div className="w-2 h-2 rounded-full bg-[#0066cc] mt-2 shrink-0"></div>
+                          <li className="flex items-start gap-3 sm:gap-4">
+                            <div className="w-2.5 h-2.5 rounded-full bg-[#E52B6D] mt-2 shrink-0"></div>
                             <span>Ottieni i suggerimenti personalizzati</span>
                           </li>
                         </ul>
+                        <div className="mt-8 sm:mt-10 pt-6 sm:pt-8 border-t border-slate-100 flex items-center justify-between text-[#1E2046] font-black text-sm sm:text-base group-hover:text-[#E52B6D] transition-colors">
+                          <span>Accedi o Registrati</span>
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1E2046]/5 flex items-center justify-center group-hover:bg-[#E52B6D] group-hover:text-white transition-all">
+                            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-0.5 transition-transform" />
+                          </div>
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -794,43 +969,43 @@ const nearbyClubs = useMemo(() => {
                       transition={{ delay: 0.2 }}
                       className="mt-4"
                     >
-                      <div className="p-8 bg-white rounded-3xl shadow-xl shadow-sky-900/5 text-left cursor-default" onClick={e => e.stopPropagation()}>
+                      <div className="p-8 sm:p-10 bg-white rounded-[32px] sm:rounded-[36px] shadow-2xl text-left cursor-default max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         
                         {authMode === 'register' ? (
                           <>
-                            <h3 className="text-2xl font-bold text-[#081a36] mb-4">Crea account famiglia</h3>
+                            <h3 className="text-2xl font-bold text-[#1E2046] mb-4">Crea account famiglia</h3>
                             <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Nome" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
-                              <input type="text" placeholder="Cognome" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
+                              <input type="text" placeholder="Nome" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" placeholder="Cognome" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                             </div>
                             <div className="flex gap-3 mb-3">
-                              <input type="tel" placeholder="Telefono" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
-                              <input type="text" placeholder="Codice Fiscale" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36] uppercase" />
+                              <input type="tel" placeholder="Telefono" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" placeholder="Codice Fiscale" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 uppercase" />
                             </div>
                             <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
-                              <input type="text" placeholder="CAP" className="w-1/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
+                              <input type="text" placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" placeholder="CAP" className="w-1/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                             </div>
                             <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
-                              <input type="text" placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
+                              <input type="text" placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                             </div>
-                            <input type="email" placeholder="Indirizzo Email" className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
-                            <input type="password" placeholder="Scegli una password" className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
-                            <input type="text" placeholder="Codice Invito (Opzionale)" className="w-full mb-5 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
-                            <button onClick={(e) => { e.preventDefault(); setIsLoggedInAs('parent'); setAuthModalOpen(false); }} className="w-full py-4 bg-[#0066cc] hover:bg-[#081a36] transition-colors text-white rounded-xl font-bold text-lg">Registrati ora</button>
+                            <input type="email" placeholder="Indirizzo Email" className="w-full mb-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <input type="password" placeholder="Scegli una password" className="w-full mb-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <input type="text" placeholder="Codice Invito (Opzionale)" className="w-full mb-5 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <button onClick={(e) => { e.preventDefault(); setIsLoggedInAs('parent'); setAuthModalOpen(false); }} className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg">Registrati ora</button>
                             <p className="mt-5 text-sm text-center text-slate-500 font-medium">
-                              Hai già un account? <span className="text-[#0066cc] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('login')}>Accedi</span>
+                              Hai già un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('login')}>Accedi</span>
                             </p>
                           </>
                         ) : (
                           <>
-                            <h3 className="text-2xl font-bold text-[#081a36] mb-6">Bentornato</h3>
-                            <input type="email" placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
-                            <input type="password" placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#0066cc] font-medium text-[#081a36]" />
-                            <button onClick={(e) => { e.preventDefault(); setIsLoggedInAs('parent'); setAuthModalOpen(false); }} className="w-full py-4 bg-[#081a36] hover:bg-[#0066cc] transition-colors text-white rounded-xl font-bold text-lg">Accedi</button>
+                            <h3 className="text-2xl font-bold text-[#1E2046] mb-6">Bentornato</h3>
+                            <input type="email" placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <input type="password" placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <button onClick={(e) => { e.preventDefault(); setIsLoggedInAs('parent'); setAuthModalOpen(false); }} className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] transition-colors text-white rounded-xl font-bold text-lg">Accedi</button>
                             <p className="mt-6 text-sm text-center text-slate-500 font-medium">
-                              Non hai un account? <span className="text-[#0066cc] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('register')}>Registrati</span>
+                              Non hai un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('register')}>Registrati</span>
                             </p>
                           </>
                         )}
@@ -848,34 +1023,43 @@ const nearbyClubs = useMemo(() => {
                 width: authSelection === 'none' ? "50%" : authSelection === 'club' ? "100%" : "0%",
               }}
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="relative h-full bg-[#081a36] flex flex-col items-center justify-center cursor-pointer overflow-hidden group"
+              className="relative h-full bg-[#1E2046] flex flex-col items-center justify-center cursor-pointer overflow-hidden group"
               onClick={() => authSelection === 'none' && setAuthSelection('club')}
             >
-              <div className="absolute inset-0 bg-[#0066cc]/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-0 bg-[#E52B6D]/20 opacity-0 group-hover:opacity-100 transition-opacity" />
               
               <motion.div 
                 animate={{ opacity: authSelection === 'parent' ? 0 : 1 }}
-                className="relative z-10 w-full max-w-md px-8 text-center"
+                className="relative z-10 w-full max-w-lg lg:max-w-xl px-6 sm:px-8 text-center"
               >
                 <AnimatePresence mode="wait">
                   {authSelection === 'none' && (
-                    <motion.div key="club-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
-                      <div className="border-2 border-white/20 bg-white/5 backdrop-blur-sm rounded-3xl p-8 sm:p-10 shadow-lg group-hover:border-[#00a2ff]/50 group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1">
-                        <h2 className="text-3xl sm:text-4xl font-black text-white mb-6 text-center">Club Sportivo</h2>
-                        <ul className="text-left space-y-4 text-slate-300 font-bold text-sm sm:text-base">
-                          <li className="flex items-start gap-3">
-                            <div className="w-2 h-2 rounded-full bg-[#00a2ff] mt-2 shrink-0"></div>
+                    <motion.div key="club-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }} className="w-full">
+                      <div className="bg-[#E52B6D] text-white rounded-[32px] sm:rounded-[40px] p-8 sm:p-12 lg:p-14 shadow-2xl group-hover:border-[#FF4F8B]/50 group-hover:shadow-[0_25px_60px_-15px_rgba(255,79,139,0.5)] transition-all duration-300 transform group-hover:-translate-y-2 border border-transparent">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl bg-white/15 text-white flex items-center justify-center mx-auto mb-6 sm:mb-8 group-hover:bg-white group-hover:text-[#E52B6D] transition-colors duration-300 shadow-sm">
+                          <Trophy className="w-8 h-8 sm:w-10 sm:h-10" />
+                        </div>
+                        <h2 className="text-3xl sm:text-5xl font-black text-white mb-6 sm:mb-8 text-center tracking-tight">Club Sportivo</h2>
+                        <ul className="text-left space-y-4 sm:space-y-5 text-pink-50 font-bold text-base sm:text-lg">
+                          <li className="flex items-start gap-3 sm:gap-4">
+                            <div className="w-2.5 h-2.5 rounded-full bg-white mt-2 shrink-0"></div>
                             <span>Fatti conoscere dai nuovi clienti</span>
                           </li>
-                          <li className="flex items-start gap-3">
-                            <div className="w-2 h-2 rounded-full bg-[#00a2ff] mt-2 shrink-0"></div>
+                          <li className="flex items-start gap-3 sm:gap-4">
+                            <div className="w-2.5 h-2.5 rounded-full bg-white mt-2 shrink-0"></div>
                             <span>Analizza le nuove iscrizioni</span>
                           </li>
-                          <li className="flex items-start gap-3">
-                            <div className="w-2 h-2 rounded-full bg-[#00a2ff] mt-2 shrink-0"></div>
+                          <li className="flex items-start gap-3 sm:gap-4">
+                            <div className="w-2.5 h-2.5 rounded-full bg-white mt-2 shrink-0"></div>
                             <span>Visualizza i test</span>
                           </li>
                         </ul>
+                        <div className="mt-8 sm:mt-10 pt-6 sm:pt-8 border-t border-white/20 flex items-center justify-between text-white font-black text-sm sm:text-base">
+                          <span>Accedi o Affiliati</span>
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/15 flex items-center justify-center group-hover:bg-white group-hover:text-[#E52B6D] transition-all">
+                            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-0.5 transition-transform" />
+                          </div>
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -888,42 +1072,42 @@ const nearbyClubs = useMemo(() => {
                       transition={{ delay: 0.2 }}
                       className="mt-4"
                     >
-                      <div className="p-8 bg-white/10 backdrop-blur-md rounded-3xl border border-white/20 shadow-2xl text-left cursor-default" onClick={e => e.stopPropagation()}>
+                      <div className="p-8 sm:p-10 bg-white rounded-[32px] sm:rounded-[36px] shadow-2xl text-left cursor-default max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         
                         {authMode === 'register' ? (
                           <>
-                            <h3 className="text-2xl font-bold text-white mb-4">Affilia la tua Società</h3>
+                            <h3 className="text-2xl font-bold text-[#1E2046] mb-4">Affilia la tua Società</h3>
                             <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Nome Resp." className="w-1/2 px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
-                              <input type="text" placeholder="Cognome Resp." className="w-1/2 px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
+                              <input type="text" placeholder="Nome Resp." className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" placeholder="Cognome Resp." className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             </div>
-                            <input type="text" placeholder="Nome Società Sportiva" className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
+                            <input type="text" placeholder="Nome Società Sportiva" className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             <div className="flex gap-3 mb-3">
-                              <input type="tel" placeholder="Telefono Club" className="w-1/2 px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
-                              <input type="email" placeholder="Email ufficiale" className="w-1/2 px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
-                            </div>
-                            <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
-                              <input type="text" placeholder="CAP" className="w-1/3 px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
+                              <input type="tel" placeholder="Telefono Club" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="email" placeholder="Email ufficiale" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             </div>
                             <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
-                              <input type="text" placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
+                              <input type="text" placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" placeholder="CAP" className="w-1/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             </div>
-                            <input type="password" placeholder="Scegli una password" className="w-full mb-5 px-4 py-3 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
-                            <button className="w-full py-4 bg-white hover:bg-[#0066cc] hover:text-white transition-colors text-[#081a36] rounded-xl font-bold text-lg">Richiedi Affiliazione</button>
-                            <p className="mt-5 text-sm text-center text-slate-400 font-medium">
-                              Già affiliato? <span className="text-white font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('login')}>Accedi al gestionale</span>
+                            <div className="flex gap-3 mb-3">
+                              <input type="text" placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            </div>
+                            <input type="password" placeholder="Scegli una password" className="w-full mb-5 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            <button type="button" onClick={(e) => { e.preventDefault(); alert("Richiesta inviata con successo! Un referente Athlos ti contatterà per l'accreditamento."); setAuthModalOpen(false); }} className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg">Richiedi Affiliazione</button>
+                            <p className="mt-5 text-sm text-center text-slate-500 font-medium">
+                              Già affiliato? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('login')}>Accedi al gestionale</span>
                             </p>
                           </>
                         ) : (
                           <>
-                            <h3 className="text-2xl font-bold text-white mb-6">Area Riservata Club</h3>
-                            <input type="email" placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
-                            <input type="password" placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-slate-900/50 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:border-[#0066cc] font-medium" />
-                            <button className="w-full py-4 bg-[#0066cc] hover:bg-white hover:text-[#081a36] transition-colors text-white rounded-xl font-bold text-lg">Accedi</button>
-                            <p className="mt-6 text-sm text-center text-slate-400 font-medium">
-                              Nuova società? <span className="text-white font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('register')}>Affiliati ad Athlos</span>
+                            <h3 className="text-2xl font-bold text-[#1E2046] mb-6">Area Riservata Club</h3>
+                            <input type="email" placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            <input type="password" placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            <button type="button" onClick={(e) => { e.preventDefault(); alert("Accesso al gestionale club in fase di attivazione."); setAuthModalOpen(false); }} className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] transition-colors text-white rounded-xl font-bold text-lg">Accedi</button>
+                            <p className="mt-6 text-sm text-center text-slate-500 font-medium">
+                              Nuova società? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('register')}>Affiliati ad Athlos</span>
                             </p>
                           </>
                         )}

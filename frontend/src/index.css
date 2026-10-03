@@ -42,3 +42,8 @@
   transform: scale(1.15);
 }
 
+
+
+body {
+  font-family: 'Alice', serif !important;
+}
