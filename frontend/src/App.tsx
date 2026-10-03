@@ -10,7 +10,10 @@ import {
   Check,
   Users,
   GraduationCap,
-  Trophy
+  Trophy,
+  Sparkles,
+  Clock,
+  Compass
 } from 'lucide-react';
 
 
@@ -27,6 +30,9 @@ const FacebookIcon = ({ className }: { className?: string }) => (
     <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
   </svg>
 );
+
+// Link al questionario 'Passaporto Sportivo' per le famiglie (sostituire con il link reale, es. Typeform, Tally, Google Forms)
+const PARENT_FORM_URL = "https://progettoathlos.netlify.app/";
 
 interface Recommendation {
   sport: string;
@@ -229,6 +235,7 @@ const nearbyClubs = useMemo(() => {
           <nav className="hidden md:flex items-center gap-8 text-[14px] font-bold text-slate-200">
             <a href="#manifesto" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('manifesto'); }} className="hover:text-[#E52B6D] transition-colors">Il Progetto</a>
             <a href="#simulatore" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('simulatore'); }} className="hover:text-[#E52B6D] transition-colors">L'Algoritmo</a>
+            <a href="#passaporto-sportivo" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('passaporto-sportivo'); }} className="hover:text-[#E52B6D] transition-colors">Passaporto</a>
             {/* <a href="#vicino-a-te" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('vicino-a-te'); }} className="hover:text-[#E52B6D] transition-colors">Club Vicini</a> */}
             <a href="#club-sportivi" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('club-sportivi'); }} className="hover:text-[#E52B6D] transition-colors">Area Club</a>
             <a href="#benefici" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('benefici'); }} className="hover:text-[#E52B6D] transition-colors">Benefici</a>
@@ -568,98 +575,164 @@ const nearbyClubs = useMemo(() => {
 
       {/* VICINO A TE */}
       {/* VICINO A TE HIDDEN TEMPORARILY 
-<section id="vicino-a-te" className="relative py-24 sm:py-32 text-white bg-gradient-to-b from-transparent via-[#1E2046]/50 to-transparent overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="flex flex-col lg:flex-row lg:items-end justify-between gap-10 mb-16"
-          >
-            <div className="max-w-xl">
-              <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter leading-tight drop-shadow-lg">
-                Il raggio protetto.
-              </h2>
-              <p className="mt-6 text-xl text-slate-300 font-medium">
-                Iscriviti solo in strutture entro 20 km. Nessuna corsa nel traffico, più tempo libero per te.
-              </p>
-            </div>
-            
-            <div className="shrink-0 flex flex-wrap gap-2">
-               {["Catania", "Roma", "Milano"].map((town) => (
-                  <button
-                    key={town}
-                    onClick={() => setSelectedTown(town)}
-                    className={`px-5 py-3 rounded-full text-sm font-bold transition-all ${
-                      selectedTown === town 
-                        ? "bg-[#1E2046] text-white shadow-lg" 
-                        : "bg-transparent text-slate-300 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    {town}
-                  </button>
-               ))}
-            </div>
-          </motion.div>
+<section id="vicino-a-te" ...
+      </section>
+*/}
 
-          <div className="border-t border-white/10 pt-8">
-            <AnimatePresence mode="wait">
-               <motion.div 
-                 key={selectedTown}
-                 initial={{ opacity: 0, y: 15 }}
-                 animate={{ opacity: 1, y: 0 }}
-                 exit={{ opacity: 0, y: -15 }}
-                 transition={{ duration: 0.3 }}
-               >
-                 {nearbyClubs.map((club, idx) => (
-                   <motion.div 
-                     key={idx}
-                     initial={{ opacity: 0, y: 15 }}
-                     whileInView={{ opacity: 1, y: 0 }}
-                     viewport={{ once: true }}
-                     transition={{ delay: idx * 0.1 }}
-                     className="group flex flex-col md:flex-row md:items-center justify-between py-8 border-b border-slate-100 hover:px-4 transition-all duration-300 gap-6 cursor-pointer"
-                     onClick={() => openAuth('parent', 'register')}
-                   >
-                     <div className="flex-1">
-                       <div className="flex items-center gap-3 mb-3">
-                         <span className="text-lg font-black text-[#E52B6D]">
-                           {club.distance} km
-                         </span>
-                         <span className="text-sm font-bold text-slate-300">
-                           {club.travelTime} min auto
-                         </span>
-                       </div>
-                       <h3 className="text-2xl sm:text-3xl font-black text-white group-hover:text-[#E52B6D] transition-colors tracking-tight">
-                         {club.name}
-                       </h3>
-                       <p className="mt-1 text-lg text-slate-300 font-medium">
-                         {club.address}
-                       </p>
-                     </div>
-                     <div className="flex-1 md:text-right">
-                        <ul className="space-y-2 inline-block text-left md:text-right">
-                          {club.courses.map((course, cIdx) => (
-                            <li key={cIdx} className="text-lg text-slate-200 font-bold">
-                              {course}
-                            </li>
-                          ))}
-                        </ul>
-                     </div>
-                     <div className="shrink-0 flex justify-end">
-                       <div className="w-12 h-12 rounded-full border-2 border-slate-200 flex items-center justify-center group-hover:bg-[#1E2046] group-hover:border-[#1E2046] group-hover:text-white transition-all text-slate-300">
-                         <ArrowRight className="w-6 h-6" />
-                       </div>
-                     </div>
-                   </motion.div>
-                 ))}
-               </motion.div>
-            </AnimatePresence>
+      {/* PASSAPORTO SPORTIVO - FORM GENITORI */}
+      <section id="passaporto-sportivo" className="relative py-24 sm:py-32 text-white bg-gradient-to-b from-transparent via-[#081812]/80 to-transparent overflow-hidden">
+        {/* Glow decorative orbs */}
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[140px] pointer-events-none" />
+        <div className="absolute top-1/3 right-1/4 -translate-y-1/2 w-[400px] h-[400px] bg-[#cbe859]/10 rounded-full blur-[120px] pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto px-6 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+            
+            {/* LEFT COLUMN: Narrative & Benefits */}
+            <motion.div 
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.6 }}
+              className="lg:col-span-6 space-y-8"
+            >
+              <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[#cbe859] text-xs sm:text-sm font-black tracking-wider uppercase">
+                <Sparkles className="w-4 h-4 text-[#cbe859]" />
+                <span>Passaporto Sportivo • Per Famiglie</span>
+              </div>
+
+              <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter leading-tight drop-shadow-lg">
+                Dalla simulazione<br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-[#cbe859] to-lime-300">
+                  alla realtà.
+                </span>
+              </h2>
+
+              <p className="text-lg text-slate-300 font-medium leading-relaxed">
+                Hai visto come lavora il nostro algoritmo nel simulatore. Ora bastano <strong>6 veloci risposte</strong> per generare la prima mappatura attitudinale di tuo figlio e assicurargli l'accesso prioritario ai corsi pilota della tua città.
+              </p>
+
+              <div className="space-y-4 pt-2">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center shrink-0 text-[#cbe859]">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-bold text-base">Solo 60 secondi</h4>
+                    <p className="text-slate-400 text-sm font-medium">Sei domande veloci ed intuitive, completabili comodamente da smartphone.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center shrink-0 text-[#cbe859]">
+                    <Compass className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-bold text-base">Profilo sportivo su misura</h4>
+                    <p className="text-slate-400 text-sm font-medium">L'AI analizza predisposizioni motorie, spirito di squadra e gestione delle regole.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center shrink-0 text-[#cbe859]">
+                    <Trophy className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-bold text-base">Lista d'attesa prioritaria</h4>
+                    <p className="text-slate-400 text-sm font-medium">Entri con precedenza nella prima fase di sperimentazione attiva nella tua città.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row sm:items-center gap-4">
+                <a 
+                  href={PARENT_FORM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full bg-gradient-to-r from-[#cbe859] to-lime-400 text-[#0c231a] hover:from-white hover:to-white font-black text-lg transition-all shadow-xl shadow-lime-500/15 hover:shadow-lime-500/30 hover:scale-105 active:scale-95 group"
+                >
+                  <span>Compila il questionario (60s)</span>
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </a>
+                <span className="text-xs text-slate-400 font-medium">
+                  ✓ 100% Gratuito • Nessun impegno
+                </span>
+              </div>
+            </motion.div>
+
+            {/* RIGHT COLUMN: Realistic Interactive Preview of the Form */}
+            <motion.div 
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="lg:col-span-6 flex justify-center"
+            >
+              <div className="w-full max-w-sm sm:max-w-md relative group">
+                {/* Ambient dynamic glow */}
+                <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/20 via-[#cbe859]/25 to-teal-500/20 rounded-[42px] blur-xl opacity-75 group-hover:opacity-100 transition-opacity duration-500" />
+                
+                {/* Form Screen Mockup */}
+                <div className="relative rounded-[36px] bg-[#0c231a] border border-emerald-700/40 p-7 sm:p-9 shadow-2xl overflow-hidden flex flex-col justify-between min-h-[490px]">
+                  {/* Subtle Grid texture */}
+                  <div 
+                    className="absolute inset-0 pointer-events-none opacity-10"
+                    style={{
+                      backgroundImage: 'linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)',
+                      backgroundSize: '24px 24px'
+                    }}
+                  />
+
+                  {/* Top Bar: Athlos. + Progress bar */}
+                  <div className="relative z-10 flex items-center justify-between gap-4 pb-6">
+                    <div className="text-2xl font-black text-white tracking-tight">
+                      Athlos<span className="text-[#cbe859]">.</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 flex-1 max-w-[170px] justify-end">
+                      <div className="h-1.5 bg-white/10 rounded-full flex-1 overflow-hidden">
+                        <div className="h-full w-2 bg-[#cbe859]/60 rounded-full" />
+                      </div>
+                      <span className="text-xs font-mono font-bold text-slate-400 shrink-0">0/6</span>
+                    </div>
+                  </div>
+
+                  {/* Body Content from user's screen */}
+                  <div className="relative z-10 py-6 space-y-4">
+                    <span className="inline-block text-xs font-black tracking-widest text-[#cbe859] uppercase">
+                      PASSAPORTO SPORTIVO
+                    </span>
+                    <h3 className="text-2xl sm:text-3xl font-black text-white leading-tight tracking-tight">
+                      Scopri lo sport giusto per tuo figlio in 60 secondi
+                    </h3>
+                    <p className="text-slate-300 text-sm sm:text-base font-normal leading-relaxed">
+                      Sei domande veloci, nessun impegno. Alla fine ricevi il profilo sportivo del tuo bambino e puoi entrare nella lista d'attesa della fase pilota nella tua città.
+                    </p>
+                  </div>
+
+                  {/* Action Button styled identically to user's screen */}
+                  <div className="relative z-10 pt-4">
+                    <a 
+                      href={PARENT_FORM_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-4 px-6 rounded-2xl bg-[#cbe859] hover:bg-[#d8f566] text-[#0c231a] font-black text-base sm:text-lg text-center transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-lime-500/20 hover:scale-[1.02] active:scale-[0.99] group/btn"
+                    >
+                      <span>Prova il primo suggerimento AI</span>
+                      <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                    </a>
+                    <p className="text-center text-[11px] text-emerald-200/50 font-medium mt-3 flex items-center justify-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#cbe859]" />
+                      <span>Fase pilota attiva su Catania</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
           </div>
         </div>
       </section>
-*/}
 
       {/* CLUBS SECTION */}
       <section id="club-sportivi" className="relative py-24 sm:py-32 text-white bg-gradient-to-b from-transparent to-[#1E2046]/90 overflow-hidden">
