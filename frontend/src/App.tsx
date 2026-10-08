@@ -260,27 +260,6 @@ const nearbyClubs = useMemo(() => {
       {/* HERO SECTION */}
       <section className="relative min-h-screen flex flex-col justify-center pt-24 pb-12 px-6 overflow-hidden bg-gradient-to-b from-transparent to-[#1E2046]/40">
         
-        {/* FLOATING SPORTS ELEMENTS */}
-        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden select-none">
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -20, 0], rotate: [0, 15, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }} className="absolute top-[20%] right-[15%] text-6xl opacity-25 transform-gpu hidden md:block">
-             🏀
-           </motion.div>
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 25, 0], rotate: [0, -10, 0] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 1 }} className="absolute top-[45%] left-[8%] text-7xl opacity-20 transform-gpu hidden md:block">
-             ⚽
-           </motion.div>
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -15, 0], rotate: [0, 5, 0] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 2 }} className="absolute bottom-[20%] right-[25%] text-6xl opacity-25 transform-gpu hidden md:block">
-             🏊‍♂️
-           </motion.div>
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 30, 0], rotate: [0, -20, 0] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 0.5 }} className="absolute top-[15%] left-[30%] text-5xl opacity-15 transform-gpu hidden md:block">
-             🎾
-           </motion.div>
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, -25, 0], rotate: [0, 15, 0] }} transition={{ duration: 8.5, repeat: Infinity, ease: "easeInOut", delay: 1.5 }} className="absolute bottom-[10%] left-[40%] text-6xl opacity-20 transform-gpu hidden lg:block">
-             🥋
-           </motion.div>
-           <motion.div style={{ willChange: "transform" }} animate={{ y: [0, 15, 0], rotate: [0, -10, 0] }} transition={{ duration: 7.5, repeat: Infinity, ease: "easeInOut", delay: 2.5 }} className="absolute top-[60%] right-[8%] text-6xl opacity-20 transform-gpu hidden lg:block">
-             🤺
-           </motion.div>
-        </div>
         
         <div className="max-w-6xl mx-auto relative z-10">
           <motion.div 
