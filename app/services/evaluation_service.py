@@ -10,10 +10,12 @@ from app.models.user import User, UserRoleEnum
 from app.schemas.evaluation import EvaluationSessionCreate, EvaluationSessionResponse
 from app.services.ai_service import AIService
 
+
 class EvaluationService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.ai_service = AIService()
+
 
     async def submit_evaluation_session(
         self,
@@ -114,6 +116,7 @@ class EvaluationService:
             ai_recommendation=ai_sport
         )
 
+
     async def get_evaluations_for_child(self, child_id: uuid.UUID, parent_id: uuid.UUID) -> list[PsychologicalForm]:
         """Restituisce le schede di valutazione finali per la dashboard famiglia."""
         stmt_child = select(Child).where(Child.id == child_id).where(Child.parent_id == parent_id)
@@ -122,5 +125,16 @@ class EvaluationService:
             raise ValueError("Bambino non trovato o non autorizzato")
 
         stmt_eval = select(PsychologicalForm).where(PsychologicalForm.child_id == child_id)
+        res_eval = await self.db.execute(stmt_eval)
+        return list(res_eval.scalars().all())
+
+
+    async def get_physical_tests_for_child(self, child_id: uuid.UUID, parent_id: uuid.UUID) -> list[PhysicalTest]:
+        stmt_child = select(Child).where(Child.id == child_id).where(Child.parent_id == parent_id)
+        res_child = await self.db.execute(stmt_child)
+        if not res_child.scalars().first():
+            raise ValueError("Bambino non trovato o non autorizzato")
+
+        stmt_eval = select(PhysicalTest).where(PhysicalTest.child_id == child_id)
         res_eval = await self.db.execute(stmt_eval)
         return list(res_eval.scalars().all())

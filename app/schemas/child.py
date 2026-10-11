@@ -13,7 +13,7 @@ class ChildCreate(BaseModel):
     gender : str = Field(max_length=10)
     sport : str = Field(max_length=255)
     skills : list[str]
-    fiscal_code : str = Field(max_length=100)
+    fiscal_code : str = Field(min_length=16, max_length=16)
     medical_notes : Optional[str] = Field(default=None, max_length=255)
     info : Optional[str] = Field(default=None, max_length=255)
 
@@ -25,7 +25,7 @@ class ChildUpdate(BaseModel):
     gender: Optional[str] = Field(default=None, max_length=10)
     sport: Optional[str] = Field(default=None, max_length=255)
     skills: Optional[list[str]] = None
-    fiscal_code: Optional[str] = Field(default=None, max_length=100)
+    fiscal_code: Optional[str] = Field(default=None, min_length=16, max_length=16)
     medical_notes: Optional[str] = Field(default=None, max_length=255)
     info: Optional[str] = Field(default=None, max_length=255)
 

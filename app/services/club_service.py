@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.club import Club
 from app.schemas.club import ClubCreate, ClubUpdate
+from app.services.geo_service import GeoService
 import uuid
 from sqlalchemy.sql.functions import func
 
@@ -30,6 +31,17 @@ class ClubService:
         # TRUCCHETTO PER IL JSONB: Convertiamo l'oggetto Pydantic in un dizionario
         address_data = club_in.address.model_dump() if club_in.address else None
 
+        lat, lon = None, None
+        if club_in.address:
+            geo_service = GeoService()
+            query_str = f"{club_in.address.street}, {club_in.address.city}"
+            geo_results = await geo_service.autocomplete(query_str, limit=1)
+            if geo_results:
+                lat = geo_results[0].latitude
+                lon = geo_results[0].longitude
+        # se latitude e longitude sono a None, utilizzo il service di geo per
+        # ottenerle automaticamente
+
         club_db = Club(
             user_id=user_id,
             name=club_in.name,
@@ -37,8 +49,8 @@ class ClubService:
             phone_number=club_in.phone_number,
             address=address_data,
             logo_url=club_in.logo_url,
-            latitude=club_in.latitude,
-            longitude=club_in.longitude
+            latitude=lat,
+            longitude=lon,
         )
 
         self.db.add(club_db)
@@ -57,6 +69,17 @@ class ClubService:
             raise ValueError("Club non trovato")
 
         update_data = club_in.model_dump(exclude_unset=True)
+
+        # Se il club sta modificando l'indirizzo, ricalcoliamo lat e lon automaticamente con GeoService
+        if club_in.address:
+            geo_service = GeoService()
+            query_str = f"{club_in.address.street}, {club_in.address.city}"
+            geo_results = await geo_service.autocomplete(query_str, limit=1)
+            if geo_results:
+                update_data["latitude"] = geo_results[0].latitude
+                update_data["longitude"] = geo_results[0].longitude
+
+
         for key, value in update_data.items():
             setattr(club, key, value)
 

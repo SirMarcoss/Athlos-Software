@@ -15,8 +15,6 @@ class ClubCreate(BaseModel):
     address : Optional[Address] = None
     phone_number : str = Field(max_length=20)
     logo_url : Optional[str] = Field(default=None, max_length=255)
-    latitude : Optional[float] = None
-    longitude : Optional[float] = None
 
 
 class ClubUpdate(BaseModel):
@@ -25,8 +23,6 @@ class ClubUpdate(BaseModel):
     phone_number: Optional[str] = Field(default=None, max_length=20)
     address: Optional[Address] = None
     logo_url: Optional[str] = Field(default=None, max_length=255)
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
 
 
 class ClubResponse(ClubCreate):

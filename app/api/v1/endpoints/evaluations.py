@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User, UserRoleEnum
 from app.api.deps import require_role
 from app.core.database import get_db
-from app.schemas.evaluation import EvaluationSessionCreate, EvaluationSessionResponse, PsychologicalFormResponse
+from app.schemas.evaluation import (EvaluationSessionCreate, EvaluationSessionResponse, PsychologicalFormResponse,
+                                    PhysicalTestResponse)
 from app.services.evaluation_service import EvaluationService
 from app.services.club_service import ClubService
 from app.services.parent_service import ParentService
@@ -72,3 +73,25 @@ async def get_child_evaluations(
         return await eval_service.get_evaluations_for_child(child_id=child_id, parent_id=parent.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/child/{child_id}/physical", response_model=List[PhysicalTestResponse])
+async def get_child_physical_tests(
+    child_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.PARENT))
+):
+    """Il genitore consulta lo storico dei test fisici trimestrali con il consiglio AI per il proprio figlio."""
+
+    parent_service = ParentService(db)
+    eval_service = EvaluationService(db)
+
+    parent = await parent_service.get_parent_by_user_id(current_user.id)
+    if not parent:
+        raise HTTPException(status_code=400, detail="Profilo genitore non trovato")
+
+    try:
+        return await eval_service.get_physical_tests_for_child(child_id, parent.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=str(e))
