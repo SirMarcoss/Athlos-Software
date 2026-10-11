@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ParentDashboard from './ParentDashboard';
+import ClubDashboard from './ClubDashboard';
 import { 
   /* MapPin */
   X,
@@ -212,11 +213,15 @@ const nearbyClubs = useMemo(() => {
   return (
     <AnimatePresence mode="wait">
       {isLoggedInAs === 'parent' ? (
-        <motion.div key="parent-dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4 }}>
-          <ParentDashboard onLogout={() => { setIsLoggedInAs('none'); setAuthModalOpen(false); }} />
+        <motion.div key="parent-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>
+          <ParentDashboard onLogout={() => { window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('none'); setAuthModalOpen(false); }} />
+        </motion.div>
+      ) : isLoggedInAs === 'club' ? (
+        <motion.div key="club-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>
+          <ClubDashboard onLogout={() => { window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('none'); setAuthModalOpen(false); }} />
         </motion.div>
       ) : (
-        <motion.div key="landing-page" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.4 }} className="min-h-screen text-white font-sans antialiased relative selection:bg-[#E52B6D] selection:text-white">
+        <motion.div key="landing-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease: "easeOut" }} className="min-h-screen text-white font-sans antialiased relative selection:bg-[#E52B6D] selection:text-white">
       {/* FIXED CONTINUOUS BACKGROUND */}
       <div className="fixed inset-0 z-[-1]">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/bg1.png')" }}></div>
@@ -227,7 +232,7 @@ const nearbyClubs = useMemo(() => {
       
       <div id="top" className="absolute top-0 w-full h-1"></div>
       {/* MINIMAL NAVBAR */}
-      <header className="fixed top-0 w-full z-40 bg-[#1E2046]/60 backdrop-blur-xl border-b border-slate-100">
+      <header className="fixed top-0 w-full z-40 bg-[#1E2046]/60 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
           <button onClick={() => customSmoothScrollTo('top')} className="hover:opacity-80 transition-opacity cursor-pointer border-none bg-transparent p-0">
             <img src="/logo-light.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
@@ -243,13 +248,13 @@ const nearbyClubs = useMemo(() => {
           <div className="flex items-center gap-3">
             <button 
               onClick={() => openAuth('none', 'login')}
-              className="text-[14px] font-bold text-white hover:opacity-70 transition-opacity"
+              className="text-[14px] font-bold text-white hover:opacity-70 transition-opacity cursor-pointer"
             >
               Accedi
             </button>
             <button 
               onClick={() => openAuth('none', 'register')}
-              className="px-5 py-2.5 rounded-full bg-[#E52B6D] hover:bg-[#FF4F8B] text-white shadow-lg text-[14px] font-bold transition-all"
+              className="px-5 py-2.5 rounded-full bg-[#E52B6D] hover:bg-[#FF4F8B] text-white shadow-lg text-[14px] font-bold transition-colors cursor-pointer"
             >
               Registrati
             </button>
@@ -362,11 +367,12 @@ const nearbyClubs = useMemo(() => {
             ].map((p, i) => (
               <motion.div 
                 key={i}
-                initial={{ opacity: 0, y: 30 }}
+                initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
+                whileHover={{ y: -6, transition: { duration: 0.2, delay: 0 } }}
                 viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl hover:-translate-y-2 transition-transform duration-300 shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 group"
+                transition={{ duration: 0.45, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                className="bg-white p-8 sm:p-10 rounded-[32px] shadow-xl shadow-slate-900/15 hover:shadow-2xl transition-shadow duration-300 group transform-gpu"
               >
                 <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center text-2xl font-black mb-6 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors">
                   {i+1}
@@ -506,11 +512,11 @@ const nearbyClubs = useMemo(() => {
                  <AnimatePresence mode="wait">
                    <motion.div
                      key={recommendation.sport}
-                     initial={{ opacity: 0, filter: "blur(8px)", y: 15 }}
-                     animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
-                     exit={{ opacity: 0, filter: "blur(8px)", y: -15, transition: { duration: 0.05 } }}
-                     transition={{ duration: 0.4, ease: "easeOut" }}
-                     className="space-y-8"
+                     initial={{ opacity: 0, y: 8 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     exit={{ opacity: 0, y: -8 }}
+                     transition={{ duration: 0.18, ease: "easeOut" }}
+                     className="space-y-8 transform-gpu"
                    >
                      <div>
                        <span className={`inline-block px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${recommendation.tagColor} mb-4 transition-colors`}>
@@ -792,11 +798,12 @@ const nearbyClubs = useMemo(() => {
             
             {/* PER LE FAMIGLIE */}
             <motion.div 
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -6, transition: { duration: 0.2, delay: 0 } }}
               viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col h-full border border-slate-100 group"
+              transition={{ duration: 0.45, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
+              className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl transition-shadow duration-300 flex flex-col h-full border border-slate-100 group transform-gpu"
             >
               <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center mb-6 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors">
                 <Users className="w-7 h-7" />
@@ -837,11 +844,12 @@ const nearbyClubs = useMemo(() => {
 
             {/* PER LE SCUOLE */}
             <motion.div 
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -6, transition: { duration: 0.2, delay: 0 } }}
               viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col h-full border border-slate-100 group"
+              transition={{ duration: 0.45, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+              className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl transition-shadow duration-300 flex flex-col h-full border border-slate-100 group transform-gpu"
             >
               <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center mb-6 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors">
                 <GraduationCap className="w-7 h-7" />
@@ -874,11 +882,12 @@ const nearbyClubs = useMemo(() => {
 
             {/* PER I CLUB SPORTIVI */}
             <motion.div 
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -6, transition: { duration: 0.2, delay: 0 } }}
               viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col h-full border border-slate-100 group"
+              transition={{ duration: 0.45, delay: 0.19, ease: [0.22, 1, 0.36, 1] }}
+              className="bg-white p-8 sm:p-10 rounded-[32px] shadow-2xl transition-shadow duration-300 flex flex-col h-full border border-slate-100 group transform-gpu"
             >
               <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center mb-6 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors">
                 <Trophy className="w-7 h-7" />
@@ -941,13 +950,14 @@ const nearbyClubs = useMemo(() => {
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { delay: 0.3 } }}
-            className="fixed inset-0 z-50 flex w-full h-full bg-[#1E2046]/95 backdrop-blur-xl overflow-hidden"
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            className="fixed inset-0 z-50 flex flex-col md:flex-row w-full h-full bg-[#1E2046]/95 backdrop-blur-xl overflow-y-auto md:overflow-hidden"
           >
             
             <button 
               onClick={() => setAuthModalOpen(false)}
-              className="absolute top-6 right-6 z-[100] w-12 h-12 flex items-center justify-center rounded-full bg-white border border-slate-200 text-[#1E2046] shadow-lg hover:scale-105 transition-transform"
+              className="fixed md:absolute top-6 right-6 z-[100] w-12 h-12 flex items-center justify-center rounded-full bg-white border border-slate-200 text-[#1E2046] shadow-lg hover:scale-105 transition-transform cursor-pointer"
             >
               <X className="w-6 h-6" />
             </button>
@@ -955,11 +965,12 @@ const nearbyClubs = useMemo(() => {
             <AnimatePresence>
               {authSelection !== 'none' && (
                 <motion.button 
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, x: -16 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
+                  exit={{ opacity: 0, x: -16 }}
+                  transition={{ duration: 0.2 }}
                   onClick={() => setAuthSelection('none')}
-                  className="absolute top-6 left-6 z-[100] px-5 py-3 rounded-full bg-white border border-slate-200 text-[#1E2046] shadow-lg font-bold flex items-center gap-2 hover:scale-105 transition-transform"
+                  className="fixed md:absolute top-6 left-6 z-[100] px-5 py-3 rounded-full bg-white border border-slate-200 text-[#1E2046] shadow-lg font-bold flex items-center gap-2 hover:scale-105 transition-transform cursor-pointer"
                 >
                   <ArrowLeft className="w-5 h-5" /> Indietro
                 </motion.button>
@@ -969,21 +980,24 @@ const nearbyClubs = useMemo(() => {
             {/* LEFT HALF: PARENT */}
             <motion.div
               animate={{
-                width: authSelection === 'none' ? "50%" : authSelection === 'parent' ? "100%" : "0%",
+                flexBasis: authSelection === 'none' ? "50%" : authSelection === 'parent' ? "100%" : "0%",
               }}
-              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="relative h-full bg-transparent flex flex-col items-center justify-center cursor-pointer overflow-hidden group border-r border-slate-100"
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              className={`relative min-h-[50vh] md:h-full bg-transparent flex flex-col items-center justify-center cursor-pointer overflow-hidden group border-b md:border-b-0 md:border-r border-slate-100/20 py-16 md:py-0 ${
+                authSelection === 'club' ? 'hidden md:flex md:pointer-events-none' : 'flex'
+              }`}
               onClick={() => authSelection === 'none' && setAuthSelection('parent')}
             >
               <div className="absolute inset-0 bg-transparent/5 opacity-0 group-hover:opacity-100 transition-opacity" />
               
               <motion.div 
                 animate={{ opacity: authSelection === 'club' ? 0 : 1 }}
+                transition={{ duration: 0.2 }}
                 className="relative z-10 w-full max-w-lg lg:max-w-xl px-6 sm:px-8 text-center"
               >
                 <AnimatePresence mode="wait">
                   {authSelection === 'none' && (
-                    <motion.div key="parent-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }} className="w-full">
+                    <motion.div key="parent-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.18 }} className="w-full">
                       <div className="bg-white rounded-[32px] sm:rounded-[40px] p-8 sm:p-12 lg:p-14 border border-slate-100 shadow-2xl group-hover:border-[#E52B6D]/50 group-hover:shadow-[0_25px_60px_-15px_rgba(229,43,109,0.3)] transition-all duration-300 transform group-hover:-translate-y-2">
                         <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center mx-auto mb-6 sm:mb-8 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors duration-300 shadow-sm">
                           <Users className="w-8 h-8 sm:w-10 sm:h-10" />
@@ -1015,16 +1029,16 @@ const nearbyClubs = useMemo(() => {
                   {authSelection === 'parent' && (
                     <motion.div 
                       key={authMode}
-                      initial={{ opacity: 0, y: 30 }}
+                      initial={{ opacity: 0, y: 16 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ delay: 0.2 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                       className="mt-4"
                     >
                       <div className="p-8 sm:p-10 bg-white rounded-[32px] sm:rounded-[36px] shadow-2xl text-left cursor-default max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         
                         {authMode === 'register' ? (
-                          <>
+                          <form onSubmit={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('parent'); setAuthModalOpen(false); }}>
                             <h3 className="text-2xl font-bold text-[#1E2046] mb-4">Crea account famiglia</h3>
                             <div className="flex gap-3 mb-3">
                               <input type="text" placeholder="Nome" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
@@ -1045,21 +1059,21 @@ const nearbyClubs = useMemo(() => {
                             <input type="email" placeholder="Indirizzo Email" className="w-full mb-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                             <input type="password" placeholder="Scegli una password" className="w-full mb-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                             <input type="text" placeholder="Codice Invito (Opzionale)" className="w-full mb-5 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                            <button onClick={(e) => { e.preventDefault(); setIsLoggedInAs('parent'); setAuthModalOpen(false); }} className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg">Registrati ora</button>
+                            <button type="submit" className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">Registrati ora</button>
                             <p className="mt-5 text-sm text-center text-slate-500 font-medium">
                               Hai già un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('login')}>Accedi</span>
                             </p>
-                          </>
+                          </form>
                         ) : (
-                          <>
+                          <form onSubmit={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('parent'); setAuthModalOpen(false); }}>
                             <h3 className="text-2xl font-bold text-[#1E2046] mb-6">Bentornato</h3>
                             <input type="email" placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                             <input type="password" placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                            <button onClick={(e) => { e.preventDefault(); setIsLoggedInAs('parent'); setAuthModalOpen(false); }} className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] transition-colors text-white rounded-xl font-bold text-lg">Accedi</button>
+                            <button type="submit" className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">Accedi</button>
                             <p className="mt-6 text-sm text-center text-slate-500 font-medium">
                               Non hai un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('register')}>Registrati</span>
                             </p>
-                          </>
+                          </form>
                         )}
                         
                       </div>
@@ -1072,21 +1086,24 @@ const nearbyClubs = useMemo(() => {
             {/* RIGHT HALF: CLUB */}
             <motion.div
               animate={{
-                width: authSelection === 'none' ? "50%" : authSelection === 'club' ? "100%" : "0%",
+                flexBasis: authSelection === 'none' ? "50%" : authSelection === 'club' ? "100%" : "0%",
               }}
-              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="relative h-full bg-[#1E2046] flex flex-col items-center justify-center cursor-pointer overflow-hidden group"
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              className={`relative min-h-[50vh] md:h-full bg-[#1E2046] flex flex-col items-center justify-center cursor-pointer overflow-hidden group py-16 md:py-0 ${
+                authSelection === 'parent' ? 'hidden md:flex md:pointer-events-none' : 'flex'
+              }`}
               onClick={() => authSelection === 'none' && setAuthSelection('club')}
             >
               <div className="absolute inset-0 bg-[#E52B6D]/20 opacity-0 group-hover:opacity-100 transition-opacity" />
               
               <motion.div 
                 animate={{ opacity: authSelection === 'parent' ? 0 : 1 }}
+                transition={{ duration: 0.2 }}
                 className="relative z-10 w-full max-w-lg lg:max-w-xl px-6 sm:px-8 text-center"
               >
                 <AnimatePresence mode="wait">
                   {authSelection === 'none' && (
-                    <motion.div key="club-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }} className="w-full">
+                    <motion.div key="club-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.18 }} className="w-full">
                       <div className="bg-[#E52B6D] text-white rounded-[32px] sm:rounded-[40px] p-8 sm:p-12 lg:p-14 shadow-2xl group-hover:border-[#FF4F8B]/50 group-hover:shadow-[0_25px_60px_-15px_rgba(255,79,139,0.5)] transition-all duration-300 transform group-hover:-translate-y-2 border border-transparent">
                         <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl bg-white/15 text-white flex items-center justify-center mx-auto mb-6 sm:mb-8 group-hover:bg-white group-hover:text-[#E52B6D] transition-colors duration-300 shadow-sm">
                           <Trophy className="w-8 h-8 sm:w-10 sm:h-10" />
@@ -1118,16 +1135,16 @@ const nearbyClubs = useMemo(() => {
                   {authSelection === 'club' && (
                     <motion.div 
                       key={authMode}
-                      initial={{ opacity: 0, y: 30 }}
+                      initial={{ opacity: 0, y: 16 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ delay: 0.2 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                       className="mt-4"
                     >
                       <div className="p-8 sm:p-10 bg-white rounded-[32px] sm:rounded-[36px] shadow-2xl text-left cursor-default max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         
                         {authMode === 'register' ? (
-                          <>
+                          <form onSubmit={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('club'); setAuthModalOpen(false); }}>
                             <h3 className="text-2xl font-bold text-[#1E2046] mb-4">Affilia la tua Società</h3>
                             <div className="flex gap-3 mb-3">
                               <input type="text" placeholder="Nome Resp." className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
@@ -1147,21 +1164,21 @@ const nearbyClubs = useMemo(() => {
                               <input type="text" placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             </div>
                             <input type="password" placeholder="Scegli una password" className="w-full mb-5 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                            <button type="button" onClick={(e) => { e.preventDefault(); alert("Richiesta inviata con successo! Un referente Athlos ti contatterà per l'accreditamento."); setAuthModalOpen(false); }} className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg">Richiedi Affiliazione</button>
+                            <button type="submit" className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">Richiedi Affiliazione</button>
                             <p className="mt-5 text-sm text-center text-slate-500 font-medium">
                               Già affiliato? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('login')}>Accedi al gestionale</span>
                             </p>
-                          </>
+                          </form>
                         ) : (
-                          <>
+                          <form onSubmit={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('club'); setAuthModalOpen(false); }}>
                             <h3 className="text-2xl font-bold text-[#1E2046] mb-6">Area Riservata Club</h3>
                             <input type="email" placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             <input type="password" placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                            <button type="button" onClick={(e) => { e.preventDefault(); alert("Accesso al gestionale club in fase di attivazione."); setAuthModalOpen(false); }} className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] transition-colors text-white rounded-xl font-bold text-lg">Accedi</button>
+                            <button type="submit" className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">Accedi</button>
                             <p className="mt-6 text-sm text-center text-slate-500 font-medium">
                               Nuova società? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('register')}>Affiliati ad Athlos</span>
                             </p>
-                          </>
+                          </form>
                         )}
 
                       </div>

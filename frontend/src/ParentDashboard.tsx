@@ -1,13 +1,23 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, MapPin, Shield, ChevronRight, X, Copy, CheckCircle2, User as UserIcon, Phone, Info } from 'lucide-react';
+import { Brain, MapPin, Shield, ChevronRight, X, Copy, CheckCircle2, User as UserIcon, Phone, Info, Plus } from 'lucide-react';
 
 // === INTERFACCE ===
 interface Child {
   id: string;
   first_name: string;
   last_name: string;
-  sport: string; 
+  date_of_birth?: string;
+  gender?: string;
+  sport: string;
+}
+
+interface ParentProfileState {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  address: string;
+  extra_notes: string;
 }
 
 interface PsychForm {
@@ -18,7 +28,7 @@ interface PsychForm {
   stress_management_score: number;
   ai_recommended_sport: string;
   coach_notes: string;
-  course_id: string; 
+  course_id: string;
 }
 
 interface Course {
@@ -35,8 +45,8 @@ interface Club {
 }
 
 const MOCK_CHILDREN: Child[] = [
-  { id: 'uuid-1', first_name: 'Lorenzo', last_name: 'Mazzone', sport: 'Basket' },
-  { id: 'uuid-2', first_name: 'Sofia', last_name: 'Mazzone', sport: 'Nuoto' }
+  { id: 'uuid-1', first_name: 'Lorenzo', last_name: 'Mazzone', date_of_birth: '2018-04-12', gender: 'M', sport: 'Basket' },
+  { id: 'uuid-4', first_name: 'Sofia', last_name: 'Mazzone', date_of_birth: '2018-02-18', gender: 'F', sport: 'Pallavolo' }
 ];
 
 const MOCK_LATEST_FORMS: Record<string, PsychForm> = {
@@ -77,57 +87,117 @@ const MOCK_CLUBS: Club[] = [
 
 const parseGeminiAnalysis = (text: string | undefined) => {
   if (!text) return { sportName: 'N/A', objective: null, tip: null };
-  const sportMatch = text.match(/1\.\s*\s*SPORT CONSIGLIATO:\s*(.*?)(?=\n2\.|$)/s);
-  const objectiveMatch = text.match(/2\.\s*\s*OBIETTIVO MOTORIO:\s*(.*?)(?=\n3\.|$)/s);
-  const tipMatch = text.match(/3\.\s*\s*CONSIGLIO PER I GENITORI:\s*(.*?)(?=$)/s);
+  const sportMatch = text.match(/1\.\s*(?:🏅\s*)?SPORT CONSIGLIATO:\s*(.*?)(?=\n2\.|$)/s);
+  const objectiveMatch = text.match(/2\.\s*(?:🎯\s*)?OBIETTIVO MOTORIO:\s*(.*?)(?=\n3\.|$)/s);
+  const tipMatch = text.match(/3\.\s*(?:💡\s*)?CONSIGLIO PER I GENITORI:\s*(.*?)(?=$)/s);
 
   return {
-    sportName: sportMatch ? sportMatch[1].trim() : text.split('\n')[0].replace('1.  SPORT CONSIGLIATO: ', '').trim(),
+    sportName: sportMatch ? sportMatch[1].trim() : text.split('\n')[0].replace(/1\.\s*(?:🏅\s*)?SPORT CONSIGLIATO:\s*/, '').trim(),
     objective: objectiveMatch ? objectiveMatch[1].trim() : null,
     tip: tipMatch ? tipMatch[1].trim() : null,
   };
 };
 
 export default function ParentDashboard({ onLogout }: { onLogout: () => void }) {
-  const [children] = useState<Child[]>(MOCK_CHILDREN);
+  const [children, setChildren] = useState<Child[]>(MOCK_CHILDREN);
   const [forms] = useState<Record<string, PsychForm>>(MOCK_LATEST_FORMS);
-  
-  const [activeModal, setActiveModal] = useState<'none' | 'referral' | 'profile' | 'analysis'>('none');
+  const [parentProfile, setParentProfile] = useState<ParentProfileState>({
+    first_name: 'Marco',
+    last_name: 'Mazzone',
+    phone: '+39 333 1234567',
+    address: 'Via Roma 1, Catania',
+    extra_notes: ''
+  });
+
+  const [activeModal, setActiveModal] = useState<'none' | 'referral' | 'profile' | 'analysis' | 'add-child'>('none');
   const [selectedAnalysisChildId, setSelectedAnalysisChildId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const myReferralCode = "ATH-A1B2C3"; 
+  const myReferralCode = "ATH-A1B2C3";
+
+  // Stato nuovo figlio
+  const [newChildFirstName, setNewChildFirstName] = useState('');
+  const [newChildLastName, setNewChildLastName] = useState('Mazzone');
+  const [newChildDob, setNewChildDob] = useState('2018-05-10');
+  const [newChildGender, setNewChildGender] = useState('M');
+  const [newChildSport, setNewChildSport] = useState('Basket');
+
+  // Toast di conferma con cleanup del timer
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+  const showToast = (msg: string) => {
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    setToastMessage(msg);
+    toastTimerRef.current = window.setTimeout(() => setToastMessage(null), 3200);
+  };
   
   const selectedChild = selectedAnalysisChildId ? children.find(c => c.id === selectedAnalysisChildId) : null;
   const selectedForm = selectedAnalysisChildId ? forms[selectedAnalysisChildId] : null;
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(`https://athlos.it/register?ref=${myReferralCode}`);
+    navigator.clipboard.writeText(`https://athlos.it/register?ref=${myReferralCode}`).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleAddChild = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newChildFirstName.trim() || !newChildLastName.trim()) return;
+    const created: Child = {
+      id: `child-${Date.now()}`,
+      first_name: newChildFirstName.trim(),
+      last_name: newChildLastName.trim(),
+      date_of_birth: newChildDob,
+      gender: newChildGender,
+      sport: newChildSport
+    };
+    setChildren(prev => [...prev, created]);
+    setNewChildFirstName('');
+    setActiveModal('none');
+    showToast(`${created.first_name} aggiunto con successo!`);
+  };
+
   return (
     <div className="min-h-screen bg-[#f4f8fc] font-sans pb-32 relative overflow-x-hidden">
+      {/* Notifica di conferma */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -24 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-[#1E2046] text-white px-6 py-3.5 rounded-full shadow-2xl border border-white/15 flex items-center gap-3 font-bold text-sm"
+          >
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Sfondo Astratto */}
-      <div className="absolute top-0 left-0 w-full h-[450px] bg-gradient-to-br from-[#1E2046] via-[#0a254f] to-[#E52B6D] rounded-b-[40px] z-0 overflow-hidden shadow-2xl">
-        <div className="absolute top-20 -left-10 w-96 h-96 bg-[#0055aa] rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>
-        <div className="absolute top-10 -right-10 w-96 h-96 bg-[#0088ff] rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>
+      <div className="absolute top-0 left-0 w-full h-[450px] bg-gradient-to-br from-[#1E2046] via-[#0a254f] to-[#E52B6D] rounded-b-[40px] z-0 overflow-hidden shadow-2xl pointer-events-none">
+        <div className="absolute top-20 -left-10 w-96 h-96 bg-[#0055aa] rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
+        <div className="absolute top-10 -right-10 w-96 h-96 bg-[#0088ff] rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
       </div>
 
-      <header className="relative z-10 p-8 sm:px-12 flex justify-between items-center text-white">
+      <header className="relative z-10 p-8 sm:px-12 flex flex-wrap justify-between items-center gap-4 text-white">
         <button onClick={onLogout} className="text-left group cursor-pointer flex flex-col items-start hover:opacity-80 transition-opacity">
           <img src="/logo-light.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
-          <p className="text-sky-200 font-medium text-sm group-hover:text-white transition-colors mt-2">Area Famiglia</p>
+          <p className="text-sky-200 font-medium text-sm group-hover:text-white transition-colors mt-2">
+            Area Famiglia • {parentProfile.first_name} {parentProfile.last_name}
+          </p>
         </button>
-        <div className="flex gap-4">
-          <button onClick={() => setActiveModal('referral')} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-full font-bold transition-all text-sm">
+        <div className="flex flex-wrap gap-3 sm:gap-4">
+          <button onClick={() => setActiveModal('add-child')} className="px-5 py-2.5 bg-[#E52B6D] hover:bg-[#FF4F8B] backdrop-blur-md border border-pink-400/40 rounded-full font-bold transition-colors text-sm flex items-center gap-2 shadow-lg cursor-pointer">
+            <Plus className="w-4 h-4" /> Aggiungi Figlio
+          </button>
+          <button onClick={() => setActiveModal('referral')} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-full font-bold transition-colors text-sm cursor-pointer">
              Invita un altro Genitore
           </button>
-          <button onClick={() => setActiveModal('profile')} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-full font-bold transition-all text-sm">
+          <button onClick={() => setActiveModal('profile')} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-full font-bold transition-colors text-sm cursor-pointer">
              Profilo
           </button>
-          <button onClick={onLogout} className="px-5 py-2.5 bg-rose-500/80 hover:bg-rose-500 backdrop-blur-md border border-rose-400/50 rounded-full font-bold transition-all text-sm text-white">
+          <button onClick={onLogout} className="px-5 py-2.5 bg-rose-500/80 hover:bg-rose-500 backdrop-blur-md border border-rose-400/50 rounded-full font-bold transition-colors text-sm text-white cursor-pointer">
             Esci
           </button>
         </div>
@@ -136,14 +206,21 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
       {/* MODALI FRONT-END */}
       <AnimatePresence>
         {activeModal !== 'none' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E2046]/60 backdrop-blur-sm overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E2046]/60 backdrop-blur-sm overflow-y-auto"
+          >
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className={`bg-white rounded-[32px] p-8 w-full shadow-2xl relative my-8 ${activeModal === 'analysis' ? 'max-w-4xl' : 'max-w-lg'}`}
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className={`bg-white rounded-[32px] p-8 w-full shadow-2xl relative my-8 transform-gpu ${activeModal === 'analysis' ? 'max-w-4xl' : 'max-w-lg'}`}
             >
-              <button onClick={() => setActiveModal('none')} className="absolute top-6 right-6 text-slate-400 hover:text-[#1E2046]">
+              <button onClick={() => setActiveModal('none')} className="absolute top-6 right-6 text-slate-400 hover:text-[#1E2046] transition-colors cursor-pointer">
                 <X className="w-6 h-6" />
               </button>
 
@@ -155,28 +232,125 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                   
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between mb-4">
                     <span className="font-mono font-bold text-[#E52B6D] truncate">athlos.it/register?ref={myReferralCode}</span>
-                    <button onClick={copyToClipboard} className="ml-4 p-2 bg-white rounded-xl shadow-sm border border-slate-200 hover:bg-sky-50 text-[#1E2046]">
+                    <button onClick={copyToClipboard} className="ml-4 p-2 bg-white rounded-xl shadow-sm border border-slate-200 hover:bg-sky-50 text-[#1E2046] transition-colors cursor-pointer">
                       {copied ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
                     </button>
                   </div>
                 </div>
               )}
 
+              {activeModal === 'add-child' && (
+                <div className="pt-2">
+                  <h3 className="text-2xl font-black text-[#1E2046] mb-1">Aggiungi un Figlio</h3>
+                  <p className="text-slate-400 text-sm font-medium mb-6">Inserisci i dati del tuo piccolo atleta per monitorarne il percorso.</p>
+                  <form className="space-y-4" onSubmit={handleAddChild}>
+                    <div className="flex gap-4">
+                      <div className="flex-1">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Nome</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Es. Gabriele"
+                          value={newChildFirstName}
+                          onChange={(e) => setNewChildFirstName(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Cognome</label>
+                        <input
+                          type="text"
+                          required
+                          value={newChildLastName}
+                          onChange={(e) => setNewChildLastName(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Data di Nascita</label>
+                        <input
+                          type="date"
+                          required
+                          value={newChildDob}
+                          onChange={(e) => setNewChildDob(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Genere</label>
+                        <select
+                          value={newChildGender}
+                          onChange={(e) => setNewChildGender(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-bold text-[#1E2046]"
+                        >
+                          <option value="M">Maschio (M)</option>
+                          <option value="F">Femmina (F)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Sport Attuale</label>
+                      <select
+                        value={newChildSport}
+                        onChange={(e) => setNewChildSport(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-bold text-[#1E2046]"
+                      >
+                        <option value="Basket">🏀 Basket</option>
+                        <option value="Pallavolo">🏐 Pallavolo</option>
+                        <option value="Calcio">⚽ Calcio</option>
+                        <option value="Nuoto">🏊 Nuoto</option>
+                        <option value="Scherma">🤺 Scherma</option>
+                        <option value="Ginnastica">🤸 Ginnastica</option>
+                        <option value="Judo">🥋 Judo</option>
+                        <option value="Tennis">🎾 Tennis</option>
+                      </select>
+                    </div>
+
+                    <button type="submit" className="w-full py-4 mt-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">
+                      Aggiungi Figlio
+                    </button>
+                  </form>
+                </div>
+              )}
+
               {activeModal === 'profile' && (
                 <div className="pt-2">
                   <h3 className="text-2xl font-black text-[#1E2046] mb-6">Modifica Profilo</h3>
-                  <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setActiveModal('none'); }}>
+                  <form
+                    className="space-y-4"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setActiveModal('none');
+                      showToast('Profilo aggiornato con successo!');
+                    }}
+                  >
                     <div className="flex gap-4">
                       <div className="flex-1">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Nome</label>
                         <div className="relative">
                           <UserIcon className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                          <input type="text" defaultValue="Marco" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]" />
+                          <input
+                            type="text"
+                            required
+                            value={parentProfile.first_name}
+                            onChange={(e) => setParentProfile({ ...parentProfile, first_name: e.target.value })}
+                            className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                          />
                         </div>
                       </div>
                       <div className="flex-1">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Cognome</label>
-                        <input type="text" defaultValue="Mazzone" className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]" />
+                        <input
+                          type="text"
+                          required
+                          value={parentProfile.last_name}
+                          onChange={(e) => setParentProfile({ ...parentProfile, last_name: e.target.value })}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                        />
                       </div>
                     </div>
                     
@@ -184,7 +358,13 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Telefono</label>
                       <div className="relative">
                         <Phone className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                        <input type="tel" defaultValue="+39 333 1234567" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]" />
+                        <input
+                          type="tel"
+                          required
+                          value={parentProfile.phone}
+                          onChange={(e) => setParentProfile({ ...parentProfile, phone: e.target.value })}
+                          className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                        />
                       </div>
                     </div>
 
@@ -192,7 +372,13 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Indirizzo Completo</label>
                       <div className="relative">
                         <MapPin className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                        <input type="text" defaultValue="Via Roma 1, Catania" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]" />
+                        <input
+                          type="text"
+                          required
+                          value={parentProfile.address}
+                          onChange={(e) => setParentProfile({ ...parentProfile, address: e.target.value })}
+                          className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                        />
                       </div>
                     </div>
 
@@ -200,11 +386,16 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Info Mediche / Extra (Opzionale)</label>
                       <div className="relative">
                         <Info className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                        <textarea rows={2} defaultValue="" className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]" />
+                        <textarea
+                          rows={2}
+                          value={parentProfile.extra_notes}
+                          onChange={(e) => setParentProfile({ ...parentProfile, extra_notes: e.target.value })}
+                          className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                        />
                       </div>
                     </div>
 
-                    <button type="submit" className="w-full py-4 mt-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg">
+                    <button type="submit" className="w-full py-4 mt-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">
                       Salva Modifiche
                     </button>
                   </form>
@@ -295,7 +486,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                 );
               })()}
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -311,16 +502,17 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
             return (
               <motion.div 
-                initial={{ opacity: 0, y: 30 }} 
+                initial={{ opacity: 0, y: 18 }} 
                 animate={{ opacity: 1, y: 0 }} 
-                whileHover={{ y: -5, boxShadow: "0 25px 50px -12px rgba(0, 102, 204, 0.2)" }}
-                transition={{ delay: idx * 0.15, duration: 0.4, ease: "easeOut" }}
+                whileHover={{ y: -4, transition: { duration: 0.2, delay: 0 } }}
+                transition={{ delay: idx * 0.08, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 key={child.id} 
-                className="bg-white rounded-[32px] p-8 shadow-xl shadow-[#E52B6D]/10 border border-sky-50 relative overflow-hidden group"
+                className="bg-white rounded-[32px] p-8 shadow-xl shadow-[#E52B6D]/10 hover:shadow-2xl hover:shadow-[#E52B6D]/15 transition-shadow duration-300 border border-sky-50 relative overflow-hidden group transform-gpu"
               >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-sky-50 rounded-bl-full -z-10 group-hover:scale-110 transition-transform duration-500"></div>
-                <div className="absolute top-6 right-6 text-5xl opacity-15 select-none pointer-events-none">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-sky-50 rounded-bl-full z-0 pointer-events-none group-hover:scale-110 transition-transform duration-500"></div>
+                <div className="absolute top-6 right-6 text-5xl opacity-15 select-none pointer-events-none z-0">
                   {child.sport === 'Basket' || child.sport === 'Mini-Basket' ? '🏀' : 
+                   child.sport === 'Pallavolo' ? '🏐' :
                    child.sport === 'Calcio' || child.sport === 'Scuola Calcio' ? '⚽' :
                    child.sport === 'Nuoto' ? '🏊' : 
                    child.sport === 'Tennis' ? '🎾' :
@@ -329,7 +521,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                    child.sport === 'Arti Marziali' || child.sport === 'Judo' ? '🥋' : '🏅'}
                 </div>
 
-                <div className="flex items-center gap-5 mb-8">
+                <div className="flex items-center gap-5 mb-8 relative z-10">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center font-black text-2xl shadow-lg">
                     {child.first_name.charAt(0)}
                   </div>
@@ -340,14 +532,14 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                         {child.sport}
                       </span>
                       <span className="text-slate-400 font-medium text-sm flex items-center gap-1">
-                        <MapPin className="w-4 h-4" /> Non iscritto
+                        <MapPin className="w-4 h-4" /> Iscritto tramite Athlos
                       </span>
                     </div>
                   </div>
                 </div>
 
                 {form ? (
-                  <div className="bg-gradient-to-br from-[#1E2046] to-[#0a254f] rounded-2xl p-6 text-white shadow-inner relative overflow-hidden">
+                  <div className="bg-gradient-to-br from-[#1E2046] to-[#0a254f] rounded-2xl p-6 text-white shadow-inner relative overflow-hidden z-10">
                     <div className="absolute -right-4 -bottom-4 opacity-10">
                       <Brain className="w-32 h-32" />
                     </div>
@@ -377,13 +569,13 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
                     <button 
                       onClick={() => { setSelectedAnalysisChildId(child.id); setActiveModal('analysis'); }}
-                      className="w-full py-3 bg-white hover:bg-sky-50 text-[#1E2046] rounded-xl font-bold transition-colors flex items-center justify-center gap-2 relative z-10"
+                      className="w-full py-3 bg-white hover:bg-sky-50 text-[#1E2046] rounded-xl font-bold transition-colors flex items-center justify-center gap-2 relative z-10 cursor-pointer"
                     >
                       Leggi Analisi Completa <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
                 ) : (
-                  <div className="bg-slate-50 border border-slate-100 border-dashed rounded-2xl p-8 text-center flex flex-col items-center justify-center">
+                  <div className="bg-slate-50 border border-slate-100 border-dashed rounded-2xl p-8 text-center flex flex-col items-center justify-center relative z-10">
                     <Shield className="w-10 h-10 text-slate-300 mb-3" />
                     <h4 className="text-slate-600 font-bold mb-1">Nessuna valutazione</h4>
                     <p className="text-slate-400 text-sm font-medium">Il club non ha ancora inviato il passaporto trimestrale.</p>
@@ -405,7 +597,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {MOCK_CLUBS.map((club, i) => (
-              <div key={i} className="bg-white rounded-[24px] border border-slate-200 p-6 hover:shadow-xl hover:shadow-[#E52B6D]/10 transition-all duration-300 flex flex-col">
+              <div key={i} className="bg-white rounded-[24px] border border-slate-200 p-6 hover:shadow-xl hover:shadow-[#E52B6D]/10 transition-shadow duration-300 flex flex-col">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     {i === 0 && <span className="text-[10px] font-black uppercase tracking-widest text-[#E52B6D] bg-sky-100 px-3 py-1 rounded-full mb-3 inline-block"> PIÙ VICINO (1° SCELTA)</span>}
