@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User, UserRoleEnum
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_role
 from app.schemas.user import UserCreate, UserResponse
 from app.services.user_service import UserService
 from app.core.database import get_db
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from app.core.security import create_access_token
-
+from uuid import UUID
+from datetime import timedelta
 
 # Creiamo il router
 router = APIRouter() # starta il router
@@ -91,3 +92,56 @@ async def register_club_user(payload: UserCreate, db: AsyncSession = Depends(get
         return user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/users", response_model=list[UserResponse], status_code=status.HTTP_200_OK)
+async def list_all_users(
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(require_role(UserRoleEnum.ADMIN))
+):
+    """Restituisce la lista di tutti gli utenti (Solo per ADMIN)."""
+
+    user_service = UserService(db)
+    return await user_service.get_all_users()
+
+
+@router.post("/impersonate/{user_id}", response_model=Token, status_code=status.HTTP_200_OK)
+async def impersonate_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.ADMIN))
+):
+    """Genera un token JWT per entrare nell'account di qualsiasi Genitore o Club (Solo per ADMIN)."""
+
+    user_service = UserService(db)
+    target_user = await user_service.get_user_by_id(user_id)
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utente da impersonare non trovato"
+        )
+
+    if target_user.role == UserRoleEnum.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Non è consentito impersonare un altro amministratore'
+        )
+
+
+
+    # 1. Generazione del JWT per l'utente scelto (target_user):
+    # - "sub" (Subject) indica chi è il titolare del token. Inserendo l'ID di target_user,
+    #   la dipendenza get_current_user (in deps.py) caricherà automaticamente dal DB
+    #   il profilo di quel Genitore o di quel Club in tutte le chiamate successive.
+    # - Forziamo str() perché target_user.id è un oggetto UUID di PostgreSQL, mentre
+    #   la libreria crittografica JOSE richiede una stringa JSON valida.
+    access_token = create_access_token(data={"sub": str(target_user.id),
+                                             "impersonated_by": str(current_user.id)},
+                                       expires_delta=timedelta(minutes=30))
+
+    # 2. Restituzione del token secondo lo standard OAuth2 (validato dallo schema Token):
+    # - "access_token": la stringa JWT firmata con la SECRET_KEY che il Front-End userà temporaneamente.
+    # - "token_type": "bearer" ("al portatore"), indica al Front-End di inviare il token
+    #   nell'header HTTP "Authorization: Bearer <access_token>".
+    return {"access_token": access_token, "token_type": "bearer"}
+

@@ -3,6 +3,7 @@ from sqlalchemy import select
 from app.models.user import User, UserRoleEnum
 from app.schemas.user import UserCreate
 from app.core.security import hash_password, verify_password
+import uuid
 
 
 class UserService:
@@ -33,7 +34,7 @@ class UserService:
         # scalar scompatta la tupla e ti restituisce l'oggetto Python pulito (User)
 
 
-    async def get_user_by_id(self, user_id: str) -> User | None:
+    async def get_user_by_id(self, user_id: str | uuid.UUID) -> User | None:
         """
         Cerca un utente nel database tramite l'ID.
         Ritorna l'oggetto User di SQLAlchemy se trovato, altrimenti None.
@@ -100,3 +101,11 @@ class UserService:
             return None
 
         return user
+
+
+    async def get_all_users(self) ->list[User]:
+        """Restituisce tutti gli utenti registrati (usato dalla dashboard Admin)."""
+
+        stmt = select(User).order_by(User.created_at.desc())
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())

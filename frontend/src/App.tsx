@@ -9,8 +9,15 @@ import {
   createParentProfile,
   createClubProfile,
   getCurrentUser,
+  getAllUsers,
+  impersonateUser,
   getToken,
-  clearToken
+  setToken,
+  clearToken,
+  getAdminToken,
+  setAdminToken,
+  clearAdminToken,
+  type ApiUserResponse
 } from './api';
 import { 
   /* MapPin */
@@ -110,10 +117,18 @@ export default function App() {
   const [authSelection, setAuthSelection] = useState<'none' | 'parent' | 'club'>('none');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
 
-  // STATO DI SESSIONE REALE ('none' | 'parent' | 'club')
-  const [isLoggedInAs, setIsLoggedInAs] = useState<'none' | 'parent' | 'club'>('none');
+  // STATO DI SESSIONE REALE ('none' | 'parent' | 'club' | 'admin')
+  const [isLoggedInAs, setIsLoggedInAs] = useState<'none' | 'parent' | 'club' | 'admin'>('none');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  // Stato Console Admin & Impersonation
+  const [adminUsers, setAdminUsers] = useState<ApiUserResponse[]>([]);
+  const [isAdminLoading, setIsAdminLoading] = useState(false);
+  const [adminSearch, setAdminSearch] = useState('');
+  const [adminRoleFilter, setAdminRoleFilter] = useState<'all' | 'parent' | 'club'>('all');
+  const [impersonatedUser, setImpersonatedUser] = useState<ApiUserResponse | null>(null);
+  const [isAdminPreviewMode, setIsAdminPreviewMode] = useState(false);
 
   // Campi Form Login condivisi
   const [loginEmail, setLoginEmail] = useState('');
@@ -145,6 +160,18 @@ export default function App() {
   const [clubLogoUrl, setClubLogoUrl] = useState('');
   const [clubPassword, setClubPassword] = useState('');
 
+  const loadAdminUsers = async () => {
+    setIsAdminLoading(true);
+    try {
+      const users = await getAllUsers();
+      setAdminUsers(users);
+    } catch {
+      // Ignora errori se non admin
+    } finally {
+      setIsAdminLoading(false);
+    }
+  };
+
   // Ripristino automatico della sessione al caricamento della pagina se esiste un token JWT valido
   useEffect(() => {
     const existingToken = getToken();
@@ -152,7 +179,10 @@ export default function App() {
 
     getCurrentUser()
       .then(user => {
-        if (user.role === 'club') {
+        if (user.role === 'admin') {
+          setIsLoggedInAs('admin');
+          loadAdminUsers();
+        } else if (user.role === 'club') {
           setIsLoggedInAs('club');
         } else {
           setIsLoggedInAs('parent');
@@ -160,6 +190,7 @@ export default function App() {
       })
       .catch(() => {
         clearToken();
+        clearAdminToken();
       });
   }, []);
 
@@ -170,11 +201,56 @@ export default function App() {
     setAuthModalOpen(true);
   };
 
+  const handleReturnToAdmin = () => {
+    const savedAdminToken = getAdminToken();
+    if (savedAdminToken) {
+      setToken(savedAdminToken);
+      clearAdminToken();
+    }
+    setImpersonatedUser(null);
+    setIsAdminPreviewMode(false);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setIsLoggedInAs('admin');
+    loadAdminUsers();
+  };
+
   const handleLogout = () => {
+    // Se l'Admin stava impersonando un utente o visualizzando un'anteprima, "Esci" riporta alla Console Admin
+    if (getAdminToken() || isAdminPreviewMode) {
+      handleReturnToAdmin();
+      return;
+    }
     clearToken();
+    clearAdminToken();
+    setImpersonatedUser(null);
+    setIsAdminPreviewMode(false);
     window.scrollTo({ top: 0, behavior: 'instant' });
     setIsLoggedInAs('none');
     setAuthModalOpen(false);
+  };
+
+  const handleImpersonate = async (targetUser: ApiUserResponse) => {
+    try {
+      const currentAdminJwt = getToken();
+      if (currentAdminJwt && !getAdminToken()) {
+        setAdminToken(currentAdminJwt);
+      }
+      const tokenRes = await impersonateUser(targetUser.id);
+      setToken(tokenRes.access_token);
+      setImpersonatedUser(targetUser);
+      setIsAdminPreviewMode(false);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      setIsLoggedInAs(targetUser.role === 'club' ? 'club' : 'parent');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Impossibile impersonare utente');
+    }
+  };
+
+  const handleAdminPreviewInterface = (role: 'parent' | 'club') => {
+    setIsAdminPreviewMode(true);
+    setImpersonatedUser(null);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setIsLoggedInAs(role);
   };
 
   const handleLoginSubmit = async (e: React.FormEvent, expectedRole: 'parent' | 'club') => {
@@ -184,9 +260,17 @@ export default function App() {
     try {
       await loginWithPassword(loginEmail.trim(), loginPassword);
       const user = await getCurrentUser();
-      const targetRole = user.role === 'club' ? 'club' : 'parent';
       window.scrollTo({ top: 0, behavior: 'instant' });
-      setIsLoggedInAs(targetRole);
+      if (user.role === 'admin') {
+        clearAdminToken();
+        setImpersonatedUser(null);
+        setIsAdminPreviewMode(false);
+        setIsLoggedInAs('admin');
+        loadAdminUsers();
+      } else {
+        const targetRole = user.role === 'club' ? 'club' : 'parent';
+        setIsLoggedInAs(targetRole);
+      }
       setAuthModalOpen(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore durante il login';
@@ -394,15 +478,245 @@ const nearbyClubs = useMemo(() => {
     };
   }, [childName, childAge, agility, teamwork, discipline]);
 
+  const filteredAdminUsers = adminUsers.filter(u => {
+    if (adminRoleFilter !== 'all' && u.role !== adminRoleFilter) return false;
+    if (!adminSearch.trim()) return true;
+    const q = adminSearch.toLowerCase();
+    return (
+      u.email.toLowerCase().includes(q) ||
+      `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <AnimatePresence mode="wait">
-      {isLoggedInAs === 'parent' ? (
+      {isLoggedInAs === 'admin' ? (
+        <motion.div
+          key="admin-console"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+          className="min-h-screen bg-[#F8FAFC] text-[#1E2046] font-sans pb-20"
+        >
+          {/* HEADER ADMIN */}
+          <div className="bg-gradient-to-br from-[#1E2046] via-[#0a254f] to-[#E52B6D] text-white px-6 sm:px-12 py-10 shadow-xl">
+            <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-xs font-black uppercase tracking-widest mb-3">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Console Sviluppatore & Admin
+                </div>
+                <h1 className="text-3xl sm:text-4xl font-black tracking-tight">
+                  Controllo Totale Piattaforma
+                </h1>
+                <p className="text-sky-200 text-sm font-medium mt-1">
+                  Entra in qualsiasi interfaccia o impersona qualsiasi Genitore o Centro Sportivo registrato.
+                </p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="px-5 py-2.5 bg-rose-500/80 hover:bg-rose-500 border border-rose-400/50 rounded-full font-bold text-sm text-white transition-colors cursor-pointer"
+              >
+                Esci da Admin
+              </button>
+            </div>
+          </div>
+
+          <div className="max-w-6xl mx-auto px-6 sm:px-12 mt-8 space-y-8">
+            {/* ACCESSO RAPIDO ANTEPRIMA INTERFACCE */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex items-center justify-between gap-4">
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#E52B6D]">
+                    Accesso Rapido UI
+                  </span>
+                  <h2 className="text-xl font-black text-[#1E2046] mt-1">
+                    Interfaccia Famiglia / Genitore
+                  </h2>
+                  <p className="text-slate-500 text-xs font-medium mt-1">
+                    Apri subito la dashboard genitore anche senza selezionare un account specifico.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleAdminPreviewInterface('parent')}
+                  className="px-5 py-3 rounded-2xl bg-[#1E2046] hover:bg-[#2a2d5e] text-white font-bold text-sm shrink-0 transition-colors cursor-pointer flex items-center gap-2"
+                >
+                  Apri Vista <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex items-center justify-between gap-4">
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-sky-600">
+                    Accesso Rapido UI
+                  </span>
+                  <h2 className="text-xl font-black text-[#1E2046] mt-1">
+                    Interfaccia Centro Sportivo
+                  </h2>
+                  <p className="text-slate-500 text-xs font-medium mt-1">
+                    Apri subito la dashboard club anche senza selezionare un account specifico.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleAdminPreviewInterface('club')}
+                  className="px-5 py-3 rounded-2xl bg-[#E52B6D] hover:bg-[#c9205b] text-white font-bold text-sm shrink-0 transition-colors cursor-pointer flex items-center gap-2"
+                >
+                  Apri Vista <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* LISTA UTENTI REALE CON IMPERSONATION */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-2xl font-black text-[#1E2046]">
+                    Account Registrati nel Database ({adminUsers.length})
+                  </h2>
+                  <p className="text-slate-500 text-sm font-medium">
+                    Clicca su "Entra come questo utente" per generare un token JWT reale e operare nel suo profilo.
+                  </p>
+                </div>
+                <button
+                  onClick={loadAdminUsers}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  {isAdminLoading ? 'Aggiornamento...' : 'Aggiorna Lista'}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 mb-6">
+                <input
+                  type="text"
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                  placeholder="Cerca per nome, cognome o email..."
+                  className="flex-1 min-w-[240px] px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] text-sm font-medium"
+                />
+                <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
+                  {(['all', 'parent', 'club'] as const).map(roleTab => (
+                    <button
+                      key={roleTab}
+                      onClick={() => setAdminRoleFilter(roleTab)}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                        adminRoleFilter === roleTab
+                          ? 'bg-white text-[#1E2046] shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {roleTab === 'all' ? 'Tutti' : roleTab === 'parent' ? 'Genitori' : 'Club Sportivi'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {filteredAdminUsers.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 font-medium text-sm">
+                  Nessun utente trovato con questi filtri.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {filteredAdminUsers.map(u => (
+                    <div
+                      key={u.id}
+                      className="py-4 flex flex-wrap items-center justify-between gap-4 hover:bg-slate-50/70 px-3 rounded-2xl transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-sm ${
+                            u.role === 'club'
+                              ? 'bg-gradient-to-br from-sky-500 to-blue-700'
+                              : u.role === 'admin'
+                              ? 'bg-gradient-to-br from-amber-500 to-orange-600'
+                              : 'bg-gradient-to-br from-[#1E2046] to-[#E52B6D]'
+                          }`}
+                        >
+                          {(u.first_name?.[0] || u.email[0]).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-[#1E2046]">
+                              {u.first_name} {u.last_name}
+                            </span>
+                            <span
+                              className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                                u.role === 'club'
+                                  ? 'bg-sky-100 text-sky-700'
+                                  : u.role === 'admin'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-pink-100 text-[#E52B6D]'
+                              }`}
+                            >
+                              {u.role === 'club' ? 'Club' : u.role === 'admin' ? 'Admin' : 'Genitore'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium">{u.email}</p>
+                        </div>
+                      </div>
+
+                      {u.role !== 'admin' && (
+                        <button
+                          onClick={() => handleImpersonate(u)}
+                          className="px-4 py-2.5 rounded-xl bg-[#1E2046] hover:bg-[#E52B6D] text-white font-bold text-xs transition-colors cursor-pointer flex items-center gap-2"
+                        >
+                          Entra come questo {u.role === 'club' ? 'Club' : 'Genitore'}{' '}
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      ) : isLoggedInAs === 'parent' ? (
         <motion.div key="parent-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>
           <ParentDashboard onLogout={handleLogout} />
+          {(impersonatedUser || isAdminPreviewMode || getAdminToken()) && (
+            <div className="fixed bottom-5 right-5 z-50 bg-[#1E2046] text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/15 flex items-center gap-4">
+              <div className="text-xs">
+                <span className="font-black text-amber-300 uppercase tracking-wider block">
+                  Modalità Admin Attiva
+                </span>
+                <span className="text-slate-200 font-medium">
+                  {impersonatedUser
+                    ? `Stai operando come: ${impersonatedUser.first_name} ${impersonatedUser.last_name} (${impersonatedUser.email})`
+                    : 'Anteprima Interfaccia Genitore'}
+                </span>
+              </div>
+              <button
+                onClick={handleReturnToAdmin}
+                className="px-3.5 py-2 rounded-xl bg-[#E52B6D] hover:bg-[#FF4F8B] text-white font-bold text-xs transition-colors cursor-pointer shrink-0"
+              >
+                Torna ad Admin
+              </button>
+            </div>
+          )}
         </motion.div>
       ) : isLoggedInAs === 'club' ? (
         <motion.div key="club-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>
           <ClubDashboard onLogout={handleLogout} />
+          {(impersonatedUser || isAdminPreviewMode || getAdminToken()) && (
+            <div className="fixed bottom-5 right-5 z-50 bg-[#1E2046] text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/15 flex items-center gap-4">
+              <div className="text-xs">
+                <span className="font-black text-amber-300 uppercase tracking-wider block">
+                  Modalità Admin Attiva
+                </span>
+                <span className="text-slate-200 font-medium">
+                  {impersonatedUser
+                    ? `Stai operando come: ${impersonatedUser.first_name} ${impersonatedUser.last_name} (${impersonatedUser.email})`
+                    : 'Anteprima Interfaccia Club'}
+                </span>
+              </div>
+              <button
+                onClick={handleReturnToAdmin}
+                className="px-3.5 py-2 rounded-xl bg-[#E52B6D] hover:bg-[#FF4F8B] text-white font-bold text-xs transition-colors cursor-pointer shrink-0"
+              >
+                Torna ad Admin
+              </button>
+            </div>
+          )}
         </motion.div>
       ) : (
         <motion.div key="landing-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease: "easeOut" }} className="min-h-screen text-white font-sans antialiased relative selection:bg-[#E52B6D] selection:text-white">

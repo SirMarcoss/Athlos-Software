@@ -2,6 +2,7 @@
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const TOKEN_STORAGE_KEY = 'athlos_token';
+const ADMIN_TOKEN_STORAGE_KEY = 'athlos_admin_token';
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -13,6 +14,18 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
+export function getAdminToken(): string | null {
+  return localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+}
+
+export function setAdminToken(token: string): void {
+  localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+}
+
+export function clearAdminToken(): void {
+  localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
 }
 
 // === TIPI CONDIVISI ALLINEATI AGLI SCHEMI PYDANTIC DEL BACK-END ===
@@ -237,6 +250,18 @@ export async function registerClubUser(payload: {
 
 export async function getCurrentUser(): Promise<ApiUserResponse> {
   return apiFetch<ApiUserResponse>('/auth/me');
+}
+
+export async function getAllUsers(): Promise<ApiUserResponse[]> {
+  return apiFetch<ApiUserResponse[]>('/auth/users');
+}
+
+export async function impersonateUser(
+  userId: string
+): Promise<{ access_token: string; token_type: string }> {
+  return apiFetch<{ access_token: string; token_type: string }>(`/auth/impersonate/${userId}`, {
+    method: 'POST'
+  });
 }
 
 // === 2. ENDPOINT GENITORE (/parent) ===
