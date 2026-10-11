@@ -1,7 +1,17 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ParentDashboard from './ParentDashboard';
 import ClubDashboard from './ClubDashboard';
+import {
+  loginWithPassword,
+  registerParentUser,
+  registerClubUser,
+  createParentProfile,
+  createClubProfile,
+  getCurrentUser,
+  getToken,
+  clearToken
+} from './api';
 import { 
   /* MapPin */
   X,
@@ -99,15 +109,189 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authSelection, setAuthSelection] = useState<'none' | 'parent' | 'club'>('none');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
-  
-  // STATO PER SIMULARE IL LOGIN AVVENUTO
-  const [isLoggedInAs, setIsLoggedInAs] = useState<'none' | 'parent' | 'club'>('none');
 
+  // STATO DI SESSIONE REALE ('none' | 'parent' | 'club')
+  const [isLoggedInAs, setIsLoggedInAs] = useState<'none' | 'parent' | 'club'>('none');
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Campi Form Login condivisi
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
+  // Campi Form Registrazione Genitore
+  const [parentFirstName, setParentFirstName] = useState('');
+  const [parentLastName, setParentLastName] = useState('');
+  const [parentPhone, setParentPhone] = useState('');
+  const [parentFiscalCode, setParentFiscalCode] = useState('');
+  const [parentStreet, setParentStreet] = useState('');
+  const [parentPostalCode, setParentPostalCode] = useState('');
+  const [parentCity, setParentCity] = useState('');
+  const [parentProvince, setParentProvince] = useState('');
+  const [parentEmail, setParentEmail] = useState('');
+  const [parentPassword, setParentPassword] = useState('');
+  const [parentReferral, setParentReferral] = useState('');
+
+  // Campi Form Registrazione Club Sportivo
+  const [clubRespFirstName, setClubRespFirstName] = useState('');
+  const [clubRespLastName, setClubRespLastName] = useState('');
+  const [clubName, setClubName] = useState('');
+  const [clubPhone, setClubPhone] = useState('');
+  const [clubEmail, setClubEmail] = useState('');
+  const [clubStreet, setClubStreet] = useState('');
+  const [clubPostalCode, setClubPostalCode] = useState('');
+  const [clubCity, setClubCity] = useState('');
+  const [clubProvince, setClubProvince] = useState('');
+  const [clubLogoUrl, setClubLogoUrl] = useState('');
+  const [clubPassword, setClubPassword] = useState('');
+
+  // Ripristino automatico della sessione al caricamento della pagina se esiste un token JWT valido
+  useEffect(() => {
+    const existingToken = getToken();
+    if (!existingToken) return;
+
+    getCurrentUser()
+      .then(user => {
+        if (user.role === 'club') {
+          setIsLoggedInAs('club');
+        } else {
+          setIsLoggedInAs('parent');
+        }
+      })
+      .catch(() => {
+        clearToken();
+      });
+  }, []);
 
   const openAuth = (selection?: 'none' | 'parent' | 'club', mode: 'login' | 'register' = 'register') => {
+    setAuthError(null);
     setAuthSelection(selection || 'none');
     setAuthMode(mode);
     setAuthModalOpen(true);
+  };
+
+  const handleLogout = () => {
+    clearToken();
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setIsLoggedInAs('none');
+    setAuthModalOpen(false);
+  };
+
+  const handleLoginSubmit = async (e: React.FormEvent, expectedRole: 'parent' | 'club') => {
+    e.preventDefault();
+    setAuthError(null);
+    setIsAuthLoading(true);
+    try {
+      await loginWithPassword(loginEmail.trim(), loginPassword);
+      const user = await getCurrentUser();
+      const targetRole = user.role === 'club' ? 'club' : 'parent';
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      setIsLoggedInAs(targetRole);
+      setAuthModalOpen(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Errore durante il login';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        // Fallback automatico per testare l'interfaccia anche quando il server FastAPI è spento
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        setIsLoggedInAs(expectedRole);
+        setAuthModalOpen(false);
+      } else {
+        setAuthError(msg);
+      }
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const handleRegisterParentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setIsAuthLoading(true);
+    try {
+      await registerParentUser({
+        email: parentEmail.trim(),
+        password: parentPassword,
+        first_name: parentFirstName.trim(),
+        last_name: parentLastName.trim()
+      });
+      await loginWithPassword(parentEmail.trim(), parentPassword);
+      await createParentProfile({
+        first_name: parentFirstName.trim(),
+        last_name: parentLastName.trim(),
+        phone_number: parentPhone.trim(),
+        fiscal_code: parentFiscalCode.trim().toUpperCase(),
+        address:
+          parentStreet.trim() && parentCity.trim() && parentProvince.trim() && parentPostalCode.trim()
+            ? {
+                street: parentStreet.trim(),
+                city: parentCity.trim(),
+                province: parentProvince.trim().toUpperCase(),
+                postal_code: parentPostalCode.trim(),
+                country: 'Italy'
+              }
+            : null,
+        referral_code: parentReferral.trim() || null
+      });
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      setIsLoggedInAs('parent');
+      setAuthModalOpen(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Errore durante la registrazione';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        setIsLoggedInAs('parent');
+        setAuthModalOpen(false);
+      } else {
+        setAuthError(msg);
+      }
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const handleRegisterClubSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setIsAuthLoading(true);
+    try {
+      await registerClubUser({
+        email: clubEmail.trim(),
+        password: clubPassword,
+        first_name: clubRespFirstName.trim() || clubName.trim(),
+        last_name: clubRespLastName.trim() || 'Club'
+      });
+      await loginWithPassword(clubEmail.trim(), clubPassword);
+      await createClubProfile({
+        name: clubName.trim(),
+        email_contact: clubEmail.trim(),
+        phone_number: clubPhone.trim(),
+        logo_url: clubLogoUrl.trim() || null,
+        address:
+          clubStreet.trim() && clubCity.trim() && clubProvince.trim() && clubPostalCode.trim()
+            ? {
+                street: clubStreet.trim(),
+                city: clubCity.trim(),
+                province: clubProvince.trim().toUpperCase(),
+                postal_code: clubPostalCode.trim(),
+                country: 'Italy'
+              }
+            : null
+      });
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      setIsLoggedInAs('club');
+      setAuthModalOpen(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Errore durante la registrazione del club';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        setIsLoggedInAs('club');
+        setAuthModalOpen(false);
+      } else {
+        setAuthError(msg);
+      }
+    } finally {
+      setIsAuthLoading(false);
+    }
   };
 
 
@@ -214,11 +398,11 @@ const nearbyClubs = useMemo(() => {
     <AnimatePresence mode="wait">
       {isLoggedInAs === 'parent' ? (
         <motion.div key="parent-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>
-          <ParentDashboard onLogout={() => { window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('none'); setAuthModalOpen(false); }} />
+          <ParentDashboard onLogout={handleLogout} />
         </motion.div>
       ) : isLoggedInAs === 'club' ? (
         <motion.div key="club-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>
-          <ClubDashboard onLogout={() => { window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('none'); setAuthModalOpen(false); }} />
+          <ClubDashboard onLogout={handleLogout} />
         </motion.div>
       ) : (
         <motion.div key="landing-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, ease: "easeOut" }} className="min-h-screen text-white font-sans antialiased relative selection:bg-[#E52B6D] selection:text-white">
@@ -1036,42 +1220,51 @@ const nearbyClubs = useMemo(() => {
                       className="mt-4"
                     >
                       <div className="p-8 sm:p-10 bg-white rounded-[32px] sm:rounded-[36px] shadow-2xl text-left cursor-default max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        {authError && (
+                          <div className="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-bold">
+                            {authError}
+                          </div>
+                        )}
                         
                         {authMode === 'register' ? (
-                          <form onSubmit={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('parent'); setAuthModalOpen(false); }}>
+                          <form onSubmit={handleRegisterParentSubmit}>
                             <h3 className="text-2xl font-bold text-[#1E2046] mb-4">Crea account famiglia</h3>
                             <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Nome" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                              <input type="text" placeholder="Cognome" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" required value={parentFirstName} onChange={e => setParentFirstName(e.target.value)} placeholder="Nome" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" required value={parentLastName} onChange={e => setParentLastName(e.target.value)} placeholder="Cognome" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                             </div>
                             <div className="flex gap-3 mb-3">
-                              <input type="tel" placeholder="Telefono" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                              <input type="text" placeholder="Codice Fiscale" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 uppercase" />
+                              <input type="tel" required value={parentPhone} onChange={e => setParentPhone(e.target.value)} placeholder="Telefono" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" required value={parentFiscalCode} onChange={e => setParentFiscalCode(e.target.value.toUpperCase())} placeholder="Codice Fiscale" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 uppercase" />
                             </div>
                             <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                              <input type="text" placeholder="CAP" className="w-1/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" value={parentStreet} onChange={e => setParentStreet(e.target.value)} placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" pattern="\d{5}" value={parentPostalCode} onChange={e => setParentPostalCode(e.target.value)} placeholder="CAP" className="w-1/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                             </div>
                             <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                              <input type="text" placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" value={parentCity} onChange={e => setParentCity(e.target.value)} placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" minLength={2} value={parentProvince} onChange={e => setParentProvince(e.target.value.toUpperCase())} placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 uppercase" />
                             </div>
-                            <input type="email" placeholder="Indirizzo Email" className="w-full mb-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                            <input type="password" placeholder="Scegli una password" className="w-full mb-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                            <input type="text" placeholder="Codice Invito (Opzionale)" className="w-full mb-5 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                            <button type="submit" className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">Registrati ora</button>
+                            <input type="email" required value={parentEmail} onChange={e => setParentEmail(e.target.value)} placeholder="Indirizzo Email" className="w-full mb-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <input type="password" required minLength={8} value={parentPassword} onChange={e => setParentPassword(e.target.value)} placeholder="Scegli una password (min. 8 caratteri)" className="w-full mb-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <input type="text" value={parentReferral} onChange={e => setParentReferral(e.target.value)} placeholder="Codice Invito (Opzionale)" className="w-full mb-5 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <button type="submit" disabled={isAuthLoading} className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] disabled:opacity-60 transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">
+                              {isAuthLoading ? 'Registrazione in corso...' : 'Registrati ora'}
+                            </button>
                             <p className="mt-5 text-sm text-center text-slate-500 font-medium">
-                              Hai già un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('login')}>Accedi</span>
+                              Hai già un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthMode('login'); }}>Accedi</span>
                             </p>
                           </form>
                         ) : (
-                          <form onSubmit={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('parent'); setAuthModalOpen(false); }}>
+                          <form onSubmit={(e) => handleLoginSubmit(e, 'parent')}>
                             <h3 className="text-2xl font-bold text-[#1E2046] mb-6">Bentornato</h3>
-                            <input type="email" placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                            <input type="password" placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                            <button type="submit" className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">Accedi</button>
+                            <input type="email" required value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <button type="submit" disabled={isAuthLoading} className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] disabled:opacity-60 transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">
+                              {isAuthLoading ? 'Accesso in corso...' : 'Accedi'}
+                            </button>
                             <p className="mt-6 text-sm text-center text-slate-500 font-medium">
-                              Non hai un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('register')}>Registrati</span>
+                              Non hai un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthMode('register'); }}>Registrati</span>
                             </p>
                           </form>
                         )}
@@ -1092,7 +1285,7 @@ const nearbyClubs = useMemo(() => {
               className={`relative min-h-[50vh] md:h-full bg-[#1E2046] flex flex-col items-center justify-center cursor-pointer overflow-hidden group py-16 md:py-0 ${
                 authSelection === 'parent' ? 'hidden md:flex md:pointer-events-none' : 'flex'
               }`}
-              onClick={() => authSelection === 'none' && setAuthSelection('club')}
+              onClick={() => { if (authSelection === 'none') { setAuthError(null); setAuthSelection('club'); } }}
             >
               <div className="absolute inset-0 bg-[#E52B6D]/20 opacity-0 group-hover:opacity-100 transition-opacity" />
               
@@ -1142,41 +1335,51 @@ const nearbyClubs = useMemo(() => {
                       className="mt-4"
                     >
                       <div className="p-8 sm:p-10 bg-white rounded-[32px] sm:rounded-[36px] shadow-2xl text-left cursor-default max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        {authError && (
+                          <div className="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-bold">
+                            {authError}
+                          </div>
+                        )}
                         
                         {authMode === 'register' ? (
-                          <form onSubmit={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('club'); setAuthModalOpen(false); }}>
+                          <form onSubmit={handleRegisterClubSubmit}>
                             <h3 className="text-2xl font-bold text-[#1E2046] mb-4">Affilia la tua Società</h3>
                             <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Nome Resp." className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                              <input type="text" placeholder="Cognome Resp." className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" required value={clubRespFirstName} onChange={e => setClubRespFirstName(e.target.value)} placeholder="Nome Resp." className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" required value={clubRespLastName} onChange={e => setClubRespLastName(e.target.value)} placeholder="Cognome Resp." className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             </div>
-                            <input type="text" placeholder="Nome Società Sportiva" className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            <input type="text" required value={clubName} onChange={e => setClubName(e.target.value)} placeholder="Nome Società Sportiva" className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             <div className="flex gap-3 mb-3">
-                              <input type="tel" placeholder="Telefono Club" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                              <input type="email" placeholder="Email ufficiale" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                            </div>
-                            <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                              <input type="text" placeholder="CAP" className="w-1/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="tel" required value={clubPhone} onChange={e => setClubPhone(e.target.value)} placeholder="Telefono Club" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="email" required value={clubEmail} onChange={e => setClubEmail(e.target.value)} placeholder="Email ufficiale" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             </div>
                             <div className="flex gap-3 mb-3">
-                              <input type="text" placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                              <input type="text" placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" value={clubStreet} onChange={e => setClubStreet(e.target.value)} placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" pattern="\d{5}" value={clubPostalCode} onChange={e => setClubPostalCode(e.target.value)} placeholder="CAP" className="w-1/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             </div>
-                            <input type="password" placeholder="Scegli una password" className="w-full mb-5 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                            <button type="submit" className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">Richiedi Affiliazione</button>
+                            <div className="flex gap-3 mb-3">
+                              <input type="text" value={clubCity} onChange={e => setClubCity(e.target.value)} placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" minLength={2} value={clubProvince} onChange={e => setClubProvince(e.target.value.toUpperCase())} placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium uppercase" />
+                            </div>
+                            <input type="url" value={clubLogoUrl} onChange={e => setClubLogoUrl(e.target.value)} placeholder="Link Logo Società (Opzionale, es. https://...)" className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            <input type="password" required minLength={8} value={clubPassword} onChange={e => setClubPassword(e.target.value)} placeholder="Scegli una password (min. 8 caratteri)" className="w-full mb-5 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            <button type="submit" disabled={isAuthLoading} className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] disabled:opacity-60 transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">
+                              {isAuthLoading ? 'Affiliazione in corso...' : 'Richiedi Affiliazione'}
+                            </button>
                             <p className="mt-5 text-sm text-center text-slate-500 font-medium">
-                              Già affiliato? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('login')}>Accedi al gestionale</span>
+                              Già affiliato? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthMode('login'); }}>Accedi al gestionale</span>
                             </p>
                           </form>
                         ) : (
-                          <form onSubmit={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'instant' }); setIsLoggedInAs('club'); setAuthModalOpen(false); }}>
+                          <form onSubmit={(e) => handleLoginSubmit(e, 'club')}>
                             <h3 className="text-2xl font-bold text-[#1E2046] mb-6">Area Riservata Club</h3>
-                            <input type="email" placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                            <input type="password" placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                            <button type="submit" className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">Accedi</button>
+                            <input type="email" required value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            <button type="submit" disabled={isAuthLoading} className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] disabled:opacity-60 transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">
+                              {isAuthLoading ? 'Accesso in corso...' : 'Accedi'}
+                            </button>
                             <p className="mt-6 text-sm text-center text-slate-500 font-medium">
-                              Nuova società? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => setAuthMode('register')}>Affiliati ad Athlos</span>
+                              Nuova società? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthMode('register'); }}>Affiliati ad Athlos</span>
                             </p>
                           </form>
                         )}

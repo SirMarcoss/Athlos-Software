@@ -1719,8 +1719,16 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               {activeModal === 'profile' && (
                 <div className="pt-2">
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center shadow-md">
-                      <Building2 className="w-6 h-6" />
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center shadow-md overflow-hidden shrink-0">
+                      {profileForm.logo_url ? (
+                        <img
+                          src={profileForm.logo_url}
+                          alt={profileForm.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Building2 className="w-6 h-6" />
+                      )}
                     </div>
                     <div>
                       <h3 className="text-2xl font-black text-[#1E2046]">Profilo Centro Sportivo</h3>
@@ -1779,6 +1787,19 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                           />
                         </div>
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                        URL Logo Centro (Opzionale)
+                      </label>
+                      <input
+                        type="url"
+                        value={profileForm.logo_url || ''}
+                        onChange={e => setProfileForm({ ...profileForm, logo_url: e.target.value })}
+                        placeholder="https://esempio.it/logo.png"
+                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                      />
                     </div>
 
                     {/* Sezione Indirizzo semplice e pulita */}
