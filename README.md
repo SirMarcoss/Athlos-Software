@@ -11,7 +11,7 @@ La particolarità di Athlos è l'uso dell'**Intelligenza Artificiale**: al termi
 * **ORM:** SQLAlchemy 2.0 (con operazioni asincrone via Asyncpg)
 * **Migrazioni:** Alembic
 * **Validazione:** Pydantic V2
-* **Sicurezza:** JWT Tokens (Autenticazione OAuth2) & [Guida Cookie & Security Enterprise](ENTERPRISE_COOKIE_SECURITY_README.md)
+* **Sicurezza & Session Architecture:** JWT Tokens (OAuth2) & [Enterprise Cookie Architecture & Session Security Specification](ENTERPRISE_COOKIE_SECURITY_README.md)
 
 ## 🗄 Struttura del Database (Entity-Relationship)
 
