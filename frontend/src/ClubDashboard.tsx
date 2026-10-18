@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Brain,
@@ -17,8 +17,26 @@ import {
   AlertTriangle,
   UserPlus,
   Play,
-  ClipboardCheck
+  ClipboardCheck,
+  Search,
+  Loader2
 } from 'lucide-react';
+import {
+  getMyClubProfile,
+  updateMyClubProfile,
+  createClubProfile,
+  deleteMyClubProfile,
+  getMyClubCourses,
+  createClubCourse,
+  updateClubCourse,
+  deleteClubCourse,
+  submitEvaluationSession,
+  getCourseEvaluations,
+  getCoursePhysicalTests,
+  getChildByFiscalCode,
+  autocompleteGeo,
+  type ApiEvaluationSessionCreate
+} from './api';
 
 // === INTERFACCE ALLINEATE AL BACK-END ===
 
@@ -478,6 +496,12 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
 
   // --- STATO MODALE AGGIUNGI BAMBINO ---
   const [targetCourseForAthlete, setTargetCourseForAthlete] = useState<string | null>(null);
+  const [athleteFiscalCode, setAthleteFiscalCode] = useState('');
+  const [isSearchingCf, setIsSearchingCf] = useState(false);
+  const [cfSearchMessage, setCfSearchMessage] = useState<{ text: string; isError: boolean } | null>(
+    null
+  );
+  const [targetChildId, setTargetChildId] = useState<string | null>(null);
   const [newAthleteFirstName, setNewAthleteFirstName] = useState('');
   const [newAthleteLastName, setNewAthleteLastName] = useState('');
   const [newAthleteAge, setNewAthleteAge] = useState(8);
@@ -496,6 +520,148 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   const analysisAthlete =
     courses.flatMap(c => c.athletes).find(a => a.id === analysisAthleteId) || null;
   const analysisEval = analysisAthleteId ? evaluations[analysisAthleteId] : null;
+
+  // --- CARICAMENTO DATI REALI DAL BACK-END ALL'AVVIO ---
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBackendData() {
+      // 1. Profilo Club
+      try {
+        const apiClub = await getMyClubProfile();
+        if (isMounted && apiClub) {
+          const loadedClub: ClubProfile = {
+            id: apiClub.id,
+            user_id: apiClub.user_id,
+            name: apiClub.name,
+            email_contact: apiClub.email_contact,
+            phone_number: apiClub.phone_number,
+            address: {
+              street: apiClub.address?.street || '',
+              number: apiClub.address?.number || undefined,
+              city: apiClub.address?.city || '',
+              province: apiClub.address?.province || '',
+              postal_code: apiClub.address?.postal_code || '',
+              country: apiClub.address?.country || 'Italy'
+            },
+            logo_url: apiClub.logo_url || undefined,
+            latitude: apiClub.latitude ?? 37.5785,
+            longitude: apiClub.longitude ?? 15.0953
+          };
+          setClub(loadedClub);
+          setProfileForm(loadedClub);
+        }
+      } catch (err) {
+        console.warn('Profilo club non trovato o errore:', err);
+      }
+
+      // 2. Corsi del Club e Valutazioni salvate
+      try {
+        const apiCourses = await getMyClubCourses();
+        if (isMounted && apiCourses && apiCourses.length > 0) {
+          const loadedCourses: ClubCourse[] = [];
+          const loadedEvals: Record<string, EvaluationSessionRecord> = {};
+          const loadedTests: Record<string, PhysicalTestItem[]> = {};
+
+          for (const ac of apiCourses) {
+            try {
+              const forms = await getCourseEvaluations(ac.id);
+              const pTests = await getCoursePhysicalTests(ac.id);
+
+              pTests.forEach(pt => {
+                const item: PhysicalTestItem = {
+                  id: pt.id,
+                  test_type: pt.test_type,
+                  score_value: pt.score_value,
+                  date: pt.date?.split('T')[0]
+                };
+                loadedTests[pt.child_id] = [...(loadedTests[pt.child_id] || []), item];
+              });
+
+              forms.forEach(f => {
+                loadedEvals[f.child_id] = {
+                  id: f.id,
+                  course_id: f.course_id,
+                  child_id: f.child_id,
+                  trimester_id: f.trimester_id,
+                  date: f.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+                  creativity_score: f.creativity_score,
+                  teamwork_score: f.teamwork_score,
+                  stress_management_score: f.stress_management_score,
+                  leadership_score: f.leadership_score ?? 7,
+                  game_reading_score: f.game_reading_score ?? 7,
+                  motivation_score: f.motivation_score ?? 8,
+                  coach_notes: f.coach_notes || '',
+                  ai_recommended_sport: f.ai_recommended_sport || '',
+                  physical_tests: loadedTests[f.child_id] || []
+                };
+              });
+            } catch {
+              // fallback silenzioso se il corso non ha ancora schede
+            }
+
+            loadedCourses.push({
+              id: ac.id,
+              clubs_id: ac.clubs_id,
+              name: ac.name,
+              sport_category: ac.name,
+              min_age: ac.min_age,
+              max_age: ac.max_age,
+              motor_tests: [],
+              athletes:
+                INITIAL_COURSES.find(c => c.name.toLowerCase() === ac.name.toLowerCase())
+                  ?.athletes || []
+            });
+          }
+
+          if (loadedCourses.length > 0) {
+            setCourses(loadedCourses);
+            setMotorCourseId(loadedCourses[0].id);
+            setPsychCourseId(loadedCourses[0].id);
+            setChildPhysicalTests(prev => ({ ...prev, ...loadedTests }));
+            setEvaluations(prev => ({ ...prev, ...loadedEvals }));
+          }
+        }
+      } catch (err) {
+        console.warn('Errore nel caricamento corsi dal backend:', err);
+      }
+    }
+
+    loadBackendData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleSearchAthleteByCf = async () => {
+    if (!athleteFiscalCode.trim()) return;
+    setIsSearchingCf(true);
+    setCfSearchMessage(null);
+    try {
+      const child = await getChildByFiscalCode(athleteFiscalCode.trim());
+      setNewAthleteFirstName(child.first_name);
+      setNewAthleteLastName(child.last_name);
+      if (child.date_of_birth) {
+        const birthYear = parseInt(child.date_of_birth.split('-')[0], 10);
+        const calculatedAge = new Date().getFullYear() - birthYear;
+        setNewAthleteAge(calculatedAge >= 5 && calculatedAge <= 13 ? calculatedAge : 8);
+      }
+      setNewAthleteFromAthlos(true);
+      setTargetChildId(child.id);
+      setCfSearchMessage({
+        text: `Atleta trovato: ${child.first_name} ${child.last_name}! Dati compilati.`,
+        isError: false
+      });
+    } catch {
+      setTargetChildId(null);
+      setCfSearchMessage({
+        text: 'Nessun atleta registrato con questo Codice Fiscale. Puoi inserire i dati manualmente.',
+        isError: true
+      });
+    } finally {
+      setIsSearchingCf(false);
+    }
+  };
 
   // === HANDLERS SEZIONE 2: TEST MOTORI PER SINGOLO CORSO ===
 
@@ -677,15 +843,61 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     setActiveTab('psych-form');
   };
 
-  const handleSubmitPsychForm = (e: React.FormEvent) => {
+  const handleSubmitPsychForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!psychCourse || !psychAthlete) return;
 
     setIsSubmittingEval(true);
     const athleteTests = childPhysicalTests[psychAthlete.id] || [];
 
-    setTimeout(() => {
-      const aiVerdict = generateLocalAIPassport(
+    const sessionPayload: ApiEvaluationSessionCreate = {
+      session_id: sessionId,
+      physical_tests: athleteTests.map(t => ({
+        test_type: t.test_type,
+        score_value: t.score_value
+      })),
+      psychological_form: {
+        creativity_score: creativityScore,
+        teamwork_score: teamworkScore,
+        stress_management_score: stressScore,
+        leadership_score: leadershipScore,
+        game_reading_score: gameReadingScore,
+        motivation_score: motivationScore
+      },
+      coach_notes: coachNotes.trim() || undefined
+    };
+
+    try {
+      // 1. Chiamata al Back-End FastAPI reale (e a Gemini AI)
+      const res = await submitEvaluationSession(psychCourse.id, psychAthlete.id, sessionPayload);
+
+      const newRecord: EvaluationSessionRecord = {
+        id: res.psychological_form_id || `eval-${crypto.randomUUID()}`,
+        course_id: psychCourse.id,
+        child_id: psychAthlete.id,
+        trimester_id: sessionId,
+        date: new Date().toISOString().split('T')[0],
+        creativity_score: creativityScore,
+        teamwork_score: teamworkScore,
+        stress_management_score: stressScore,
+        leadership_score: leadershipScore,
+        game_reading_score: gameReadingScore,
+        motivation_score: motivationScore,
+        coach_notes: coachNotes.trim() || 'Buon impegno e partecipazione durante il trimestre.',
+        ai_recommended_sport: res.ai_recommendation || 'Valutazione salvata con successo.',
+        physical_tests: athleteTests
+      };
+
+      setEvaluations(prev => ({
+        ...prev,
+        [psychAthlete.id]: newRecord
+      }));
+      setAnalysisAthleteId(psychAthlete.id);
+      setActiveModal('analysis');
+      showToast(`Passaporto AI generato per ${psychAthlete.first_name}!`);
+    } catch (err) {
+      console.warn('Chiamata server fallita, uso fallback locale:', err);
+      const localAi = generateLocalAIPassport(
         psychAthlete,
         psychCourse.name,
         creativityScore,
@@ -698,7 +910,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
         coachNotes
       );
 
-      const newRecord: EvaluationSessionRecord = {
+      const fallbackRecord: EvaluationSessionRecord = {
         id: `eval-${crypto.randomUUID()}`,
         course_id: psychCourse.id,
         child_id: psychAthlete.id,
@@ -711,19 +923,20 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
         game_reading_score: gameReadingScore,
         motivation_score: motivationScore,
         coach_notes: coachNotes.trim() || 'Buon impegno e partecipazione durante il trimestre.',
-        ai_recommended_sport: aiVerdict,
+        ai_recommended_sport: localAi,
         physical_tests: athleteTests
       };
 
       setEvaluations(prev => ({
         ...prev,
-        [psychAthlete.id]: newRecord
+        [psychAthlete.id]: fallbackRecord
       }));
-      setIsSubmittingEval(false);
       setAnalysisAthleteId(psychAthlete.id);
       setActiveModal('analysis');
-      showToast(`Valutazione salvata per ${psychAthlete.first_name}!`);
-    }, 400);
+      showToast(`Valutazione salvata in locale per ${psychAthlete.first_name}!`);
+    } finally {
+      setIsSubmittingEval(false);
+    }
   };
 
   // === HANDLERS PROFILO E CORSI ===
@@ -735,12 +948,9 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       return;
     }
     try {
-      const res = await fetch(
-        `http://localhost:8000/geo/autocomplete?q=${encodeURIComponent(query)}&limit=5`
-      );
-      if (res.ok) {
-        const data: GeoSearchResult[] = await res.json();
-        setGeoResults(data);
+      const results = await autocompleteGeo(query, 5);
+      if (results && results.length > 0) {
+        setGeoResults(results);
         return;
       }
     } catch {
@@ -773,11 +983,49 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     setGeoResults([]);
   };
 
-  const handleSaveClubProfile = (e: React.FormEvent) => {
+  const handleSaveClubProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setClub(profileForm);
-    setActiveModal('none');
-    showToast('Dati del centro sportivo salvati!');
+    try {
+      const payload = {
+        name: profileForm.name.trim(),
+        email_contact: profileForm.email_contact.trim(),
+        phone_number: profileForm.phone_number.trim(),
+        address: {
+          street: profileForm.address.street.trim(),
+          number: profileForm.address.number?.trim() || undefined,
+          city: profileForm.address.city.trim(),
+          province: profileForm.address.province.trim().toUpperCase(),
+          postal_code: profileForm.address.postal_code.trim(),
+          country: profileForm.address.country || 'Italy'
+        },
+        latitude: profileForm.latitude,
+        longitude: profileForm.longitude,
+        logo_url: profileForm.logo_url || undefined
+      };
+
+      try {
+        await updateMyClubProfile(payload);
+      } catch {
+        await createClubProfile(payload);
+      }
+
+      setClub(profileForm);
+      setActiveModal('none');
+      showToast('Dati del centro sportivo salvati sul server!');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Errore nel salvataggio del profilo');
+    }
+  };
+
+  const handleDeleteClubProfile = async () => {
+    try {
+      await deleteMyClubProfile();
+      showToast('Profilo eliminato dal database.');
+    } catch (err) {
+      console.warn('Errore durante cancellazione profilo:', err);
+    } finally {
+      onLogout();
+    }
   };
 
   const openCreateCourseModal = () => {
@@ -800,7 +1048,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     setActiveModal('course-form');
   };
 
-  const handleSaveCourse = (e: React.FormEvent) => {
+  const handleSaveCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     setCourseFormError(null);
 
@@ -813,63 +1061,80 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       return;
     }
 
-    const duplicate = courses.find(
-      c => c.name.toLowerCase() === courseName.trim().toLowerCase() && c.id !== editingCourseId
-    );
-    if (duplicate) {
-      setCourseFormError('Esiste già un corso con questo nome.');
-      return;
-    }
-
-    if (editingCourseId) {
-      setCourses(prev =>
-        prev.map(c =>
-          c.id === editingCourseId
-            ? {
-                ...c,
-                name: courseName.trim(),
-                sport_category: courseSportCategory,
-                min_age: courseMinAge,
-                max_age: courseMaxAge
-              }
-            : c
-        )
+    try {
+      if (editingCourseId) {
+        const updated = await updateClubCourse(editingCourseId, {
+          name: courseName.trim(),
+          min_age: courseMinAge,
+          max_age: courseMaxAge
+        });
+        setCourses(prev =>
+          prev.map(c =>
+            c.id === editingCourseId
+              ? {
+                  ...c,
+                  name: updated.name,
+                  sport_category: courseSportCategory,
+                  min_age: updated.min_age,
+                  max_age: updated.max_age
+                }
+              : c
+          )
+        );
+        showToast(`Corso "${courseName.trim()}" modificato nel database!`);
+      } else {
+        const created = await createClubCourse({
+          name: courseName.trim(),
+          min_age: courseMinAge,
+          max_age: courseMaxAge
+        });
+        const newCourse: ClubCourse = {
+          id: created.id,
+          clubs_id: created.clubs_id,
+          name: created.name,
+          sport_category: courseSportCategory,
+          min_age: created.min_age,
+          max_age: created.max_age,
+          motor_tests: [],
+          athletes: []
+        };
+        setCourses(prev => [...prev, newCourse]);
+        showToast(`Corso "${newCourse.name}" creato nel database!`);
+      }
+      setActiveModal('none');
+    } catch (err) {
+      setCourseFormError(
+        err instanceof Error ? err.message : 'Errore durante il salvataggio del corso'
       );
-      showToast(`Corso "${courseName.trim()}" modificato!`);
-    } else {
-      const newCourse: ClubCourse = {
-        id: `corso-${crypto.randomUUID()}`,
-        clubs_id: club.id,
-        name: courseName.trim(),
-        sport_category: courseSportCategory,
-        min_age: courseMinAge,
-        max_age: courseMaxAge,
-        motor_tests: [],
-        athletes: []
-      };
-      setCourses(prev => [...prev, newCourse]);
-      showToast(`Corso "${newCourse.name}" creato!`);
     }
-    setActiveModal('none');
   };
 
-  const handleDeleteCourse = (courseId: string, name: string) => {
-    const remaining = courses.filter(c => c.id !== courseId);
-    setCourses(remaining);
-    if (motorCourseId === courseId) {
-      setMotorCourseId(remaining[0]?.id || '');
-      setSelectedMotorTestId(remaining[0]?.motor_tests[0]?.id || '');
-      setBatchScores({});
+  const handleDeleteCourse = async (courseId: string, name: string) => {
+    try {
+      await deleteClubCourse(courseId);
+      const remaining = courses.filter(c => c.id !== courseId);
+      setCourses(remaining);
+      if (motorCourseId === courseId) {
+        setMotorCourseId(remaining[0]?.id || '');
+        setSelectedMotorTestId(remaining[0]?.motor_tests[0]?.id || '');
+        setBatchScores({});
+      }
+      if (psychCourseId === courseId) {
+        setPsychCourseId(remaining[0]?.id || '');
+        setPsychChildId(remaining[0]?.athletes[0]?.id || '');
+      }
+      showToast(`Corso "${name}" rimosso dal database.`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Errore nella rimozione del corso');
     }
-    if (psychCourseId === courseId) {
-      setPsychCourseId(remaining[0]?.id || '');
-      setPsychChildId(remaining[0]?.athletes[0]?.id || '');
-    }
-    showToast(`Corso "${name}" rimosso.`);
   };
 
   const openAddAthleteModal = (courseId: string) => {
     setTargetCourseForAthlete(courseId);
+    setAthleteFiscalCode('');
+    setIsSearchingCf(false);
+    setCfSearchMessage(null);
+    setTargetChildId(null);
     setNewAthleteFirstName('');
     setNewAthleteLastName('');
     setNewAthleteAge(8);
@@ -883,8 +1148,9 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       return;
 
     const birthYear = new Date().getFullYear() - newAthleteAge;
+    const athleteId = targetChildId || `athlete-${crypto.randomUUID()}`;
     const newAthlete: Athlete = {
-      id: `athlete-${crypto.randomUUID()}`,
+      id: athleteId,
       first_name: newAthleteFirstName.trim(),
       last_name: newAthleteLastName.trim(),
       date_of_birth: `${birthYear}-05-15`,
@@ -2239,7 +2505,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                             </button>
                             <button
                               type="button"
-                              onClick={onLogout}
+                              onClick={handleDeleteClubProfile}
                               className="px-3 py-1 rounded-lg bg-rose-600 text-white text-xs font-bold cursor-pointer"
                             >
                               Conferma
@@ -2354,6 +2620,59 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                     Inserisci i dati del bambino iscritto al corso.
                   </p>
                   <form className="space-y-4" onSubmit={handleAddAthlete}>
+                    {/* Ricerca per Codice Fiscale (Bambino già censito su Athlos) */}
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                        Ricerca Veloce per Codice Fiscale (Athlos)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          maxLength={16}
+                          placeholder="Es. RSSMRA14A01H501Z"
+                          value={athleteFiscalCode}
+                          onChange={e => setAthleteFiscalCode(e.target.value.toUpperCase())}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleSearchAthleteByCf();
+                            }
+                          }}
+                          className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-mono font-bold text-sm text-[#1E2046] uppercase"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSearchAthleteByCf}
+                          disabled={isSearchingCf || !athleteFiscalCode.trim()}
+                          className="px-4 py-2.5 bg-[#1E2046] hover:bg-[#E52B6D] disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 cursor-pointer"
+                        >
+                          {isSearchingCf ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Search className="w-4 h-4" />
+                          )}
+                          <span>Cerca</span>
+                        </button>
+                      </div>
+                      {cfSearchMessage && (
+                        <p
+                          className={`text-xs font-semibold mt-1.5 ${
+                            cfSearchMessage.isError ? 'text-amber-600' : 'text-emerald-600'
+                          }`}
+                        >
+                          {cfSearchMessage.text}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="relative flex py-1 items-center">
+                      <div className="flex-grow border-t border-slate-200"></div>
+                      <span className="flex-shrink mx-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        oppure compila manualmente
+                      </span>
+                      <div className="flex-grow border-t border-slate-200"></div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">

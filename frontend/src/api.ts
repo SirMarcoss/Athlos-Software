@@ -86,6 +86,8 @@ export interface ApiClubCreate {
   address?: ApiAddress | null;
   phone_number: string;
   logo_url?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface ApiClubResponse extends ApiClubCreate {
@@ -326,6 +328,12 @@ export async function deleteChild(childId: string): Promise<void> {
   });
 }
 
+export async function getChildByFiscalCode(fiscalCode: string): Promise<ApiChildResponse> {
+  return apiFetch<ApiChildResponse>(
+    `/child/by-fiscal-code/${encodeURIComponent(fiscalCode.trim().toUpperCase())}`
+  );
+}
+
 // === 4. ENDPOINT CLUB SPORTIVO (/club) ===
 
 export async function createClubProfile(payload: ApiClubCreate): Promise<ApiClubResponse> {
@@ -424,6 +432,18 @@ export async function getChildPhysicalTests(
   childId: string
 ): Promise<ApiPhysicalTestResponse[]> {
   return apiFetch<ApiPhysicalTestResponse[]>(`/evaluations/child/${childId}/physical`);
+}
+
+export async function getCourseEvaluations(
+  courseId: string
+): Promise<ApiPsychologicalFormResponse[]> {
+  return apiFetch<ApiPsychologicalFormResponse[]>(`/evaluations/course/${courseId}`);
+}
+
+export async function getCoursePhysicalTests(
+  courseId: string
+): Promise<ApiPhysicalTestResponse[]> {
+  return apiFetch<ApiPhysicalTestResponse[]>(`/evaluations/course/${courseId}/physical`);
 }
 
 // === 7. ENDPOINT GEOLOCALIZZAZIONE (/geo) ===
