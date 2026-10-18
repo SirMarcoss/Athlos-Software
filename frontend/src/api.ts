@@ -187,6 +187,21 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
   });
 
   if (!response.ok) {
+    // Intercetta la scadenza del token o autenticazione invalida (401), escludendo il form di login stesso
+    if (response.status === 401 && !endpoint.includes('/auth/login')) {
+      clearToken();
+      clearAdminToken();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('athlos-session-expired', {
+            detail: {
+              message: 'La tua sessione è scaduta per inattività. Effettua nuovamente il login.'
+            }
+          })
+        );
+      }
+    }
+
     let errorMessage = `Errore del server (${response.status})`;
     try {
       const errBody = await response.json();
@@ -406,6 +421,28 @@ export async function deleteClubCourse(courseId: string): Promise<void> {
   });
 }
 
+export async function getCourseAthletes(courseId: string): Promise<ApiChildResponse[]> {
+  return apiFetch<ApiChildResponse[]>(`/courses/${courseId}/athletes`);
+}
+
+export async function enrollAthleteInCourse(
+  courseId: string,
+  childId: string
+): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/courses/${courseId}/athletes/${childId}`, {
+    method: 'POST'
+  });
+}
+
+export async function unenrollAthleteFromCourse(
+  courseId: string,
+  childId: string
+): Promise<void> {
+  return apiFetch<void>(`/courses/${courseId}/athletes/${childId}`, {
+    method: 'DELETE'
+  });
+}
+
 // === 6. ENDPOINT VALUTAZIONI AI (/evaluations) ===
 
 export async function submitEvaluationSession(
@@ -444,6 +481,14 @@ export async function getCoursePhysicalTests(
   courseId: string
 ): Promise<ApiPhysicalTestResponse[]> {
   return apiFetch<ApiPhysicalTestResponse[]>(`/evaluations/course/${courseId}/physical`);
+}
+
+export async function sendEvaluationEmail(
+  evaluationId: string
+): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/evaluations/${evaluationId}/send-email`, {
+    method: 'POST'
+  });
 }
 
 // === 7. ENDPOINT GEOLOCALIZZAZIONE (/geo) ===

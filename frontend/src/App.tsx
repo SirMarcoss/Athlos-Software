@@ -194,6 +194,30 @@ export default function App() {
       });
   }, []);
 
+  // Intercettore sessione scaduta (401 da backend durante l'uso)
+  useEffect(() => {
+    const handleSessionExpired = (e: Event) => {
+      const customEvent = e as CustomEvent<{ message?: string }>;
+      clearToken();
+      clearAdminToken();
+      setImpersonatedUser(null);
+      setIsAdminPreviewMode(false);
+      setIsLoggedInAs('none');
+      setAuthError(
+        customEvent.detail?.message || 'La tua sessione è scaduta per inattività. Effettua nuovamente il login.'
+      );
+      setAuthMode('login');
+      setAuthSelection('none');
+      setAuthModalOpen(true);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    };
+
+    window.addEventListener('athlos-session-expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('athlos-session-expired', handleSessionExpired);
+    };
+  }, []);
+
   const openAuth = (selection?: 'none' | 'parent' | 'club', mode: 'login' | 'register' = 'register') => {
     setAuthError(null);
     setAuthSelection(selection || 'none');

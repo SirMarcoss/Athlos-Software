@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     ALGORITHM : str
     ACCESS_TOKEN_EXPIRE_MINUTES : int = 30
     GEMINI_API_KEY: str = Field(...)
+    RESEND_API_KEY: str = Field(default="")
+    EMAIL_FROM: str = Field(default="Athlos <onboarding@resend.dev>")
 
 
     @field_validator('SECRET_KEY')

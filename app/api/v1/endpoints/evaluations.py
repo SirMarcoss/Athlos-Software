@@ -131,3 +131,44 @@ async def get_course_physical_tests(
         return await eval_service.get_physical_tests_for_course(course_id, club.id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/{evaluation_id}/send-email", status_code=status.HTTP_200_OK)
+async def send_evaluation_email(
+    evaluation_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
+):
+    """
+    Invia via email al genitore la scheda di valutazione e il report generato dall'AI.
+    Verifica che il club richiedente sia proprietario del corso a cui appartiene l'atleta.
+    """
+    club_service = ClubService(db)
+    eval_service = EvaluationService(db)
+    # 1. Recupera il club associato all'allenatore loggato
+    club = await club_service.get_club_by_user_id(current_user.id)
+    if not club:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Profilo società sportiva non trovato per questo utente"
+        )
+    # 2. Chiama il service che valida i permessi e invia la mail tramite Resend
+    try:
+        success = await eval_service.send_evaluation_email_to_parent(
+            evaluation_id=evaluation_id,
+            club_id=club.id,
+            user=current_user
+        )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Impossibile inviare l'email."
+            )
+        return {"message": "Email con la scheda inviata con successo al genitore!"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Errore durante l'invio dell'email: {str(e)}"
+        )

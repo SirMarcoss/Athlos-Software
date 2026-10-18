@@ -6,6 +6,7 @@ from app.models.user import User, UserRoleEnum
 from app.api.deps import require_role, get_optional_current_user
 from app.core.database import get_db
 from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate
+from app.schemas.child import ChildResponse
 from app.services.course_service import CourseService
 from app.services.club_service import ClubService
 from app.services.parent_service import ParentService
@@ -158,3 +159,69 @@ async def delete_my_course(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND)
+
+
+# --- 4. GESTIONE ATLETI ISCRITTI AL CORSO ---
+
+@router.get("/{course_id}/athletes", response_model=List[ChildResponse])
+async def get_course_athletes(
+    course_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
+):
+    """Restituisce tutti gli atleti iscritti a un determinato corso del club."""
+    club_service = ClubService(db)
+    course_service = CourseService(db)
+
+    club = await club_service.get_club_by_user_id(current_user.id)
+    if not club:
+        raise HTTPException(status_code=400, detail="Profilo club mancante")
+
+    try:
+        athletes = await course_service.get_course_athletes(course_id, club.id)
+        return athletes
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/{course_id}/athletes/{child_id}", status_code=status.HTTP_201_CREATED)
+async def enroll_athlete_in_course(
+    course_id: UUID,
+    child_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
+):
+    """Iscrive formalmente un atleta al corso del club."""
+    club_service = ClubService(db)
+    course_service = CourseService(db)
+
+    club = await club_service.get_club_by_user_id(current_user.id)
+    if not club:
+        raise HTTPException(status_code=400, detail="Profilo club mancante")
+
+    try:
+        await course_service.enroll_child_in_course(course_id, child_id, club.id)
+        return {"message": "Atleta iscritto al corso con successo"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{course_id}/athletes/{child_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unenroll_athlete_from_course(
+    course_id: UUID,
+    child_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
+):
+    """Rimuove l'iscrizione di un atleta dal corso."""
+    club_service = ClubService(db)
+    course_service = CourseService(db)
+
+    club = await club_service.get_club_by_user_id(current_user.id)
+    if not club:
+        raise HTTPException(status_code=400, detail="Profilo club mancante")
+
+    try:
+        await course_service.unenroll_child_from_course(course_id, child_id, club.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

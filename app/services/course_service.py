@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from app.models.course import Course
+from app.models.course import Course, CourseEnrollment
+from app.models.child import Child
 from app.models.club import Club
 from app.schemas.course import CourseCreate, CourseUpdate
 import uuid
@@ -120,5 +121,103 @@ class CourseService:
 
         await self.db.delete(course)
         await self.db.commit()
+
+
+    async def enroll_child_in_course(
+        self,
+        course_id: uuid.UUID,
+        child_id: uuid.UUID,
+        club_id: uuid.UUID
+    ) -> CourseEnrollment:
+        """
+        Iscrive un bambino a un corso sportivo verificando la proprietà del club
+        ed evitando doppie iscrizioni.
+        """
+        # 1. Verifica che il corso esista e appartenga al club loggato
+        course = await self.get_course_by_id(course_id)
+        if not course:
+            raise ValueError("Corso non trovato")
+        if course.clubs_id != club_id:
+            raise ValueError("Non autorizzato a modificare questo corso")
+
+        # 2. Verifica che l'atleta esista nel database
+        stmt_child = select(Child).where(Child.id == child_id)
+        res_child = await self.db.execute(stmt_child)
+        child = res_child.scalars().first()
+        if not child:
+            raise ValueError("Atleta non trovato")
+
+        # 3. Verifica se è già iscritto
+        stmt_check = select(CourseEnrollment).where(
+            CourseEnrollment.course_id == course_id,
+            CourseEnrollment.child_id == child_id
+        )
+        res_check = await self.db.execute(stmt_check)
+        if res_check.scalars().first():
+            raise ValueError(f"{child.first_name} {child.last_name} è già iscritto a questo corso")
+
+        # 4. Creazione dell'iscrizione
+        enrollment = CourseEnrollment(
+            course_id=course_id,
+            child_id=child_id
+        )
+        self.db.add(enrollment)
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+        return enrollment
+
+
+    async def get_course_athletes(
+        self,
+        course_id: uuid.UUID,
+        club_id: uuid.UUID
+    ) -> list[Child]:
+        """
+        Restituisce tutti gli atleti (Child) iscritti a un determinato corso del club.
+        """
+        course = await self.get_course_by_id(course_id)
+        if not course:
+            raise ValueError("Corso non trovato")
+        if course.clubs_id != club_id:
+            raise ValueError("Non autorizzato a visualizzare gli atleti di questo corso")
+
+        # Join tra Child e CourseEnrollment filtrato per course_id
+        stmt = (
+            select(Child)
+            .join(CourseEnrollment, CourseEnrollment.child_id == Child.id)
+            .where(CourseEnrollment.course_id == course_id)
+            .order_by(Child.last_name, Child.first_name)
+        )
+        res = await self.db.execute(stmt)
+        return list(res.scalars().all())
+
+
+    async def unenroll_child_from_course(
+        self,
+        course_id: uuid.UUID,
+        child_id: uuid.UUID,
+        club_id: uuid.UUID
+    ) -> bool:
+        """
+        Rimuove un atleta dal corso sportivo.
+        """
+        course = await self.get_course_by_id(course_id)
+        if not course:
+            raise ValueError("Corso non trovato")
+        if course.clubs_id != club_id:
+            raise ValueError("Non autorizzato")
+
+        stmt = select(CourseEnrollment).where(
+            CourseEnrollment.course_id == course_id,
+            CourseEnrollment.child_id == child_id
+        )
+        res = await self.db.execute(stmt)
+        enrollment = res.scalars().first()
+        if not enrollment:
+            raise ValueError("Iscrizione non trovata")
+
+        await self.db.delete(enrollment)
+        await self.db.commit()
+        return True
 
 

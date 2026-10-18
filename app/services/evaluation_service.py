@@ -1,5 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from app.models.parent import Parent
+from app.services.email_service import EmailService
 from datetime import date
 import uuid
 
@@ -173,3 +175,90 @@ class EvaluationService:
         stmt = select(PhysicalTest).where(PhysicalTest.course_id == course_id)
         res = await self.db.execute(stmt)
         return list(res.scalars().all())
+
+
+    async def send_evaluation_email_to_parent(
+        self,
+        evaluation_id: uuid.UUID,
+        club_id: uuid.UUID,
+        user: User
+    ) -> bool:
+        """
+        Recupera la scheda di valutazione, verifica i permessi del club,
+        trova il genitore associato al bambino e invia l'email tramite EmailService.
+        """
+        # 1. Recupera la PsychologicalForm per ID
+        stmt_eval = select(PsychologicalForm).where(PsychologicalForm.id == evaluation_id)
+        res_eval = await self.db.execute(stmt_eval)
+        eval_form = res_eval.scalars().first()
+        if not eval_form:
+            raise ValueError("Scheda di valutazione non trovata")
+
+        # 2. Recupera il corso e verifica la sicurezza multi-tenancy del club
+        stmt_course = select(Course).where(Course.id == eval_form.course_id)
+        res_course = await self.db.execute(stmt_course)
+        course = res_course.scalars().first()
+        if not course:
+            raise ValueError("Corso associato alla valutazione non trovato")
+
+        if user.role == UserRoleEnum.CLUB and course.clubs_id != club_id:
+            raise ValueError("Non autorizzato a inviare l'email per un corso di un'altra società")
+        elif user.role not in [UserRoleEnum.CLUB, UserRoleEnum.ADMIN]:
+            raise ValueError("Ruolo non autorizzato all'invio")
+
+        # 3. Recupera l'atleta (Child)
+        stmt_child = select(Child).where(Child.id == eval_form.child_id)
+        res_child = await self.db.execute(stmt_child)
+        child = res_child.scalars().first()
+        if not child:
+            raise ValueError("Atleta non trovato")
+
+        # 4. Recupera il profilo genitore (Parent) e l'account collegato (User) per avere l'email
+        stmt_parent = select(Parent).where(Parent.id == child.parent_id)
+        res_parent = await self.db.execute(stmt_parent)
+        parent = res_parent.scalars().first()
+        if not parent:
+            raise ValueError("Profilo genitore non associato a questo atleta")
+
+        stmt_user = select(User).where(User.id == parent.user_id)
+        res_user = await self.db.execute(stmt_user)
+        parent_user = res_user.scalars().first()
+        if not parent_user or not parent_user.email:
+            raise ValueError("Indirizzo email del genitore non presente nel database")
+
+        # 5. Recupera i test motori svolti per questo corso e trimestre
+        stmt_tests = select(PhysicalTest).where(
+            PhysicalTest.course_id == eval_form.course_id,
+            PhysicalTest.child_id == eval_form.child_id,
+            PhysicalTest.trimester_id == eval_form.trimester_id
+        )
+        res_tests = await self.db.execute(stmt_tests)
+        tests = res_tests.scalars().all()
+        if tests:
+            physical_summary = ", ".join([f"{t.test_type}: {t.score_value}" for t in tests])
+        else:
+            physical_summary = "Nessun test motorio registrato per questo trimestre."
+
+        # 6. Prepara il dizionario con tutti e 6 i punteggi
+        scores = {
+            "creativity": eval_form.creativity_score,
+            "teamwork": eval_form.teamwork_score,
+            "stress": eval_form.stress_management_score,
+            "leadership": eval_form.leadership_score,
+            "game_reading": eval_form.game_reading_score,
+            "motivation": eval_form.motivation_score,
+        }
+
+        # 7. Invio effettivo tramite EmailService
+        email_service = EmailService()
+        return email_service.send_evaluation_email_to_parent(
+            parent_email=parent_user.email,
+            parent_name=f"{parent.first_name} {parent.last_name}",
+            child_name=f"{child.first_name} {child.last_name}",
+            course_name=course.name,
+            trimester_id=eval_form.trimester_id,
+            scores=scores,
+            physical_summary=physical_summary,
+            ai_recommendation=eval_form.ai_recommended_sport or "Valutazione completata con successo.",
+            coach_notes=eval_form.coach_notes
+        )

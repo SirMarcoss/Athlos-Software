@@ -31,10 +31,14 @@ import {
   updateClubCourse,
   deleteClubCourse,
   submitEvaluationSession,
+  sendEvaluationEmail,
   getCourseEvaluations,
   getCoursePhysicalTests,
   getChildByFiscalCode,
   autocompleteGeo,
+  getCourseAthletes,
+  enrollAthleteInCourse,
+  unenrollAthleteFromCourse,
   type ApiEvaluationSessionCreate
 } from './api';
 
@@ -479,6 +483,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
 
   // --- STATO MODALE ANALISI AI ---
   const [analysisAthleteId, setAnalysisAthleteId] = useState<string | null>(null);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   // --- STATO MODALE PROFILO CENTRO ---
   const [profileForm, setProfileForm] = useState<ClubProfile>(INITIAL_CLUB);
@@ -600,6 +605,37 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               // fallback silenzioso se il corso non ha ancora schede
             }
 
+            let enrolledAthletes: Athlete[] = [];
+            try {
+              const apiAthletes = await getCourseAthletes(ac.id);
+              if (apiAthletes && apiAthletes.length > 0) {
+                enrolledAthletes = apiAthletes.map(a => {
+                  const birthYear = a.date_of_birth
+                    ? parseInt(a.date_of_birth.split('-')[0], 10)
+                    : 2016;
+                  const calculatedAge = new Date().getFullYear() - birthYear;
+                  return {
+                    id: a.id,
+                    first_name: a.first_name,
+                    last_name: a.last_name,
+                    date_of_birth: a.date_of_birth,
+                    age: calculatedAge >= 5 && calculatedAge <= 18 ? calculatedAge : 8,
+                    gender: (a.gender as 'M' | 'F') || 'M',
+                    from_athlos: true,
+                    skills: a.skills || []
+                  };
+                });
+              }
+            } catch {
+              // fallback silenzioso se la chiamata fallisce
+            }
+
+            if (enrolledAthletes.length === 0) {
+              enrolledAthletes =
+                INITIAL_COURSES.find(c => c.name.toLowerCase() === ac.name.toLowerCase())
+                  ?.athletes || [];
+            }
+
             loadedCourses.push({
               id: ac.id,
               clubs_id: ac.clubs_id,
@@ -608,9 +644,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               min_age: ac.min_age,
               max_age: ac.max_age,
               motor_tests: [],
-              athletes:
-                INITIAL_COURSES.find(c => c.name.toLowerCase() === ac.name.toLowerCase())
-                  ?.athletes || []
+              athletes: enrolledAthletes
             });
           }
 
@@ -894,7 +928,20 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       }));
       setAnalysisAthleteId(psychAthlete.id);
       setActiveModal('analysis');
-      showToast(`Passaporto AI generato per ${psychAthlete.first_name}!`);
+
+      // 2. Invio automatico dell'email al genitore tramite la nuova API Resend
+      if (res.psychological_form_id) {
+        sendEvaluationEmail(res.psychological_form_id)
+          .then(() => {
+            showToast(`Scheda salvata ed inviata via email al genitore di ${psychAthlete.first_name}!`);
+          })
+          .catch(emailErr => {
+            console.warn('Invio email automatico non riuscito:', emailErr);
+            showToast(`Scheda salvata per ${psychAthlete.first_name}! (Configurare Resend per l'invio email)`);
+          });
+      } else {
+        showToast(`Passaporto AI generato per ${psychAthlete.first_name}!`);
+      }
     } catch (err) {
       console.warn('Chiamata server fallita, uso fallback locale:', err);
       const localAi = generateLocalAIPassport(
@@ -936,6 +983,18 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       showToast(`Valutazione salvata in locale per ${psychAthlete.first_name}!`);
     } finally {
       setIsSubmittingEval(false);
+    }
+  };
+
+  const handleResendEmail = async (evaluationId: string) => {
+    setIsSendingEmail(true);
+    try {
+      await sendEvaluationEmail(evaluationId);
+      showToast('Email inviata con successo al genitore!');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Errore durante l'invio dell'email");
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -1142,7 +1201,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     setActiveModal('add-athlete');
   };
 
-  const handleAddAthlete = (e: React.FormEvent) => {
+  const handleAddAthlete = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetCourseForAthlete || !newAthleteFirstName.trim() || !newAthleteLastName.trim())
       return;
@@ -1160,13 +1219,44 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       skills: []
     };
 
+    if (targetChildId) {
+      try {
+        await enrollAthleteInCourse(targetCourseForAthlete, targetChildId);
+        showToast(`${newAthlete.first_name} iscritto al corso nel database!`);
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Iscrizione remota fallita, aggiunto in locale');
+      }
+    } else {
+      showToast(`${newAthlete.first_name} aggiunto al corso (in locale).`);
+    }
+
     setCourses(prev =>
       prev.map(c =>
         c.id === targetCourseForAthlete ? { ...c, athletes: [...c.athletes, newAthlete] } : c
       )
     );
     setActiveModal('none');
-    showToast(`${newAthlete.first_name} ${newAthlete.last_name} aggiunto al corso!`);
+  };
+
+  const handleRemoveAthleteFromCourse = async (
+    courseId: string,
+    athleteId: string,
+    athleteName: string
+  ) => {
+    try {
+      await unenrollAthleteFromCourse(courseId, athleteId);
+      showToast(`${athleteName} rimosso dal corso.`);
+    } catch {
+      showToast(`${athleteName} rimosso dal corso.`);
+    }
+
+    setCourses(prev =>
+      prev.map(c =>
+        c.id === courseId
+          ? { ...c, athletes: c.athletes.filter(a => a.id !== athleteId) }
+          : c
+      )
+    );
   };
 
   return (
@@ -1420,6 +1510,15 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                                       className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-[#E52B6D] text-[#1E2046] font-bold text-xs transition-colors cursor-pointer"
                                     >
                                       Valuta
+                                    </button>
+                                    <button
+                                      title={`Rimuovi ${athlete.first_name} dal corso`}
+                                      onClick={() =>
+                                        handleRemoveAthleteFromCourse(course.id, athlete.id, athlete.first_name)
+                                      }
+                                      className="p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
                                 </div>
@@ -2910,13 +3009,28 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                             )}
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => setActiveModal('none')}
-                            className="w-full py-3.5 bg-[#1E2046] hover:bg-[#E52B6D] text-white rounded-xl font-bold text-sm transition-colors cursor-pointer"
-                          >
-                            Chiudi Scheda
-                          </button>
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <button
+                              type="button"
+                              disabled={isSendingEmail}
+                              onClick={() => handleResendEmail(analysisEval.id)}
+                              className="flex-1 py-3.5 bg-white border border-slate-200 hover:border-[#E52B6D] hover:text-[#E52B6D] text-[#1E2046] rounded-xl font-bold text-sm transition-colors cursor-pointer flex items-center justify-center gap-2"
+                            >
+                              {isSendingEmail ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-[#E52B6D]" />
+                              ) : (
+                                <Mail className="w-4 h-4 text-[#E52B6D]" />
+                              )}
+                              <span>{isSendingEmail ? 'Invio in corso...' : 'Rinvia Email Genitore'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveModal('none')}
+                              className="flex-1 py-3.5 bg-[#1E2046] hover:bg-[#E52B6D] text-white rounded-xl font-bold text-sm transition-colors cursor-pointer"
+                            >
+                              Chiudi Scheda
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
