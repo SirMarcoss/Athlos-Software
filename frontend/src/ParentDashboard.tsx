@@ -58,6 +58,9 @@ interface PsychForm {
   creativity_score: number;
   teamwork_score: number;
   stress_management_score: number;
+  leadership_score?: number;
+  game_reading_score?: number;
+  motivation_score?: number;
   ai_recommended_sport: string;
   coach_notes: string;
   course_id: string;
@@ -102,6 +105,9 @@ const MOCK_LATEST_FORMS: Record<string, PsychForm> = {
     creativity_score: 8,
     teamwork_score: 5,
     stress_management_score: 6,
+    leadership_score: 6,
+    game_reading_score: 8,
+    motivation_score: 9,
     ai_recommended_sport: `1.  SPORT CONSIGLIATO: Scherma
 2.  OBIETTIVO MOTORIO: La crescita a 8 anni richiede un affinamento della coordinazione oculo-manuale. La scherma esalta i suoi eccellenti riflessi permettendogli di canalizzare lo stress individualmente, compensando le difficoltà nelle dinamiche di squadra.
 3.  CONSIGLIO PER I GENITORI: Non forzatelo a fare il 'giocatore di squadra' in questa fase. La sua tranquillità emotiva nella pedana è una dote rara: valorizzatela.`,
@@ -818,29 +824,53 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                             <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">
                               Punteggi Trimestre
                             </h4>
-                            <div className="grid grid-cols-3 gap-3">
-                              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-                                <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
                                   Creatività
                                 </div>
-                                <div className="text-3xl font-black text-[#1E2046]">
+                                <div className="text-2xl font-black text-[#E52B6D]">
                                   {selectedForm.creativity_score}
                                 </div>
                               </div>
-                              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-                                <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
-                                  Gruppo
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
+                                  Squadra
                                 </div>
-                                <div className="text-3xl font-black text-[#1E2046]">
+                                <div className="text-2xl font-black text-sky-600">
                                   {selectedForm.teamwork_score}
                                 </div>
                               </div>
-                              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-                                <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
                                   Stress
                                 </div>
-                                <div className="text-3xl font-black text-[#1E2046]">
+                                <div className="text-2xl font-black text-amber-500">
                                   {selectedForm.stress_management_score}
+                                </div>
+                              </div>
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
+                                  Leadership
+                                </div>
+                                <div className="text-2xl font-black text-purple-600">
+                                  {selectedForm.leadership_score ?? 7}
+                                </div>
+                              </div>
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
+                                  Tattica
+                                </div>
+                                <div className="text-2xl font-black text-emerald-600">
+                                  {selectedForm.game_reading_score ?? 7}
+                                </div>
+                              </div>
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
+                                  Grinta
+                                </div>
+                                <div className="text-2xl font-black text-rose-500">
+                                  {selectedForm.motivation_score ?? 8}
                                 </div>
                               </div>
                             </div>
@@ -1021,32 +1051,59 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       <span className="text-sky-200/50 text-sm font-medium">{form.date}</span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4 mb-6 relative z-10">
-                      <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/5 text-center">
-                        <div className="text-sky-300 text-[10px] font-bold uppercase tracking-widest mb-1">
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5 mb-6 relative z-10">
+                      <div className="bg-white/10 rounded-xl p-2.5 backdrop-blur-sm border border-white/5 text-center">
+                        <div className="text-sky-300 text-[9px] font-bold uppercase tracking-widest mb-1 truncate">
                           Creatività
                         </div>
-                        <div className="text-2xl font-black">
+                        <div className="text-xl font-black">
                           {form.creativity_score}
-                          <span className="text-sm text-sky-200/50 font-medium">/10</span>
+                          <span className="text-xs text-sky-200/50 font-medium">/10</span>
                         </div>
                       </div>
-                      <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/5 text-center">
-                        <div className="text-sky-300 text-[10px] font-bold uppercase tracking-widest mb-1">
-                          Gruppo
+                      <div className="bg-white/10 rounded-xl p-2.5 backdrop-blur-sm border border-white/5 text-center">
+                        <div className="text-sky-300 text-[9px] font-bold uppercase tracking-widest mb-1 truncate">
+                          Squadra
                         </div>
-                        <div className="text-2xl font-black">
+                        <div className="text-xl font-black">
                           {form.teamwork_score}
-                          <span className="text-sm text-sky-200/50 font-medium">/10</span>
+                          <span className="text-xs text-sky-200/50 font-medium">/10</span>
                         </div>
                       </div>
-                      <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/5 text-center">
-                        <div className="text-sky-300 text-[10px] font-bold uppercase tracking-widest mb-1">
+                      <div className="bg-white/10 rounded-xl p-2.5 backdrop-blur-sm border border-white/5 text-center">
+                        <div className="text-sky-300 text-[9px] font-bold uppercase tracking-widest mb-1 truncate">
                           Stress
                         </div>
-                        <div className="text-2xl font-black">
+                        <div className="text-xl font-black">
                           {form.stress_management_score}
-                          <span className="text-sm text-sky-200/50 font-medium">/10</span>
+                          <span className="text-xs text-sky-200/50 font-medium">/10</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/10 rounded-xl p-2.5 backdrop-blur-sm border border-white/5 text-center">
+                        <div className="text-sky-300 text-[9px] font-bold uppercase tracking-widest mb-1 truncate">
+                          Leadership
+                        </div>
+                        <div className="text-xl font-black">
+                          {form.leadership_score ?? 7}
+                          <span className="text-xs text-sky-200/50 font-medium">/10</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/10 rounded-xl p-2.5 backdrop-blur-sm border border-white/5 text-center">
+                        <div className="text-sky-300 text-[9px] font-bold uppercase tracking-widest mb-1 truncate">
+                          Tattica
+                        </div>
+                        <div className="text-xl font-black">
+                          {form.game_reading_score ?? 7}
+                          <span className="text-xs text-sky-200/50 font-medium">/10</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/10 rounded-xl p-2.5 backdrop-blur-sm border border-white/5 text-center">
+                        <div className="text-sky-300 text-[9px] font-bold uppercase tracking-widest mb-1 truncate">
+                          Grinta
+                        </div>
+                        <div className="text-xl font-black">
+                          {form.motivation_score ?? 8}
+                          <span className="text-xs text-sky-200/50 font-medium">/10</span>
                         </div>
                       </div>
                     </div>

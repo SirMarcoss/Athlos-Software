@@ -22,6 +22,9 @@ class PsychologicalFormCreate(BaseModel):
     creativity_score: int = Field(ge=0, le=10)
     teamwork_score: int = Field(ge=0, le=10)
     stress_management_score: int = Field(ge=0, le=10)
+    leadership_score: int = Field(default=7, ge=0, le=10)
+    game_reading_score: int = Field(default=7, ge=0, le=10)
+    motivation_score: int = Field(default=7, ge=0, le=10)
 
 class PsychologicalFormResponse(PsychologicalFormCreate):
     id: UUID

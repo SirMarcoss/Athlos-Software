@@ -122,6 +122,9 @@ export interface ApiPsychologicalFormCreate {
   creativity_score: number;
   teamwork_score: number;
   stress_management_score: number;
+  leadership_score?: number;
+  game_reading_score?: number;
+  motivation_score?: number;
 }
 
 export interface ApiPsychologicalFormResponse extends ApiPsychologicalFormCreate {

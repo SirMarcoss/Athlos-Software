@@ -55,6 +55,9 @@ class PsychologicalForm(Base):
         CheckConstraint("creativity_score >= 0 AND creativity_score <= 10", name="chk_creativity_valido"),
         CheckConstraint("teamwork_score >= 0 AND teamwork_score <= 10", name="chk_teamwork_valido"),
         CheckConstraint("stress_management_score >= 0 AND stress_management_score <= 10", name="chk_stress_valido"),
+        CheckConstraint("leadership_score >= 0 AND leadership_score <= 10", name="chk_leadership_valido"),
+        CheckConstraint("game_reading_score >= 0 AND game_reading_score <= 10", name="chk_game_reading_valido"),
+        CheckConstraint("motivation_score >= 0 AND motivation_score <= 10", name="chk_motivation_valido"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -74,10 +77,13 @@ class PsychologicalForm(Base):
     )
 
     trimester_id: Mapped[str] = mapped_column(String(50), nullable=False) # e.g., "Q1_2026"
-    
-    creativity_score: Mapped[int] = mapped_column(Integer)
-    teamwork_score: Mapped[int] = mapped_column(Integer)
-    stress_management_score: Mapped[int] = mapped_column(Integer)
+
+    creativity_score: Mapped[int] = mapped_column(Integer, server_default="7", default=7)
+    teamwork_score: Mapped[int] = mapped_column(Integer, server_default="7", default=7)
+    stress_management_score: Mapped[int] = mapped_column(Integer, server_default="7", default=7)
+    leadership_score: Mapped[int] = mapped_column(Integer, server_default="7", default=7)
+    game_reading_score: Mapped[int] = mapped_column(Integer, server_default="7", default=7)
+    motivation_score: Mapped[int] = mapped_column(Integer, server_default="7", default=7)
 
     coach_notes: Mapped[str] = mapped_column(String(255), nullable=True)
     ai_recommended_sport: Mapped[str] = mapped_column(Text, nullable=True) # Computed at end of trimester

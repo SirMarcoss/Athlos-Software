@@ -15,6 +15,9 @@ class AIService:
             creativity_score: int,
             teamwork_score: int,
             stress_management_score: int,
+            leadership_score: int,
+            game_reading_score: int,
+            motivation_score: int,
             available_sports: list[str],
             coach_notes: str | None = None
     ) -> str:
@@ -33,10 +36,12 @@ class AIService:
         - Sintesi Test Fisici: {physical_summary}
         - Parametri Attitudinali/Psicologici (scala 0-10):
           * Creatività e Iniziativa: {creativity_score}/10
-          * Intelligenza Relazionale / Cooperazione (Teamwork): {teamwork_score}/10
+          * Intelligenza Relazionale / Cooperazione: {teamwork_score}/10
           * Gestione dello Stress e delle Regole: {stress_management_score}/10
-        - Report Clinico / Osservazioni dell'Istruttore: "{coach_notes or 'Profilo nella norma, nessun vincolo posturale segnalato'}"
-
+          * Leadership e Influenza sul Gruppo: {leadership_score}/10
+          * Lettura del Gioco ed Intelligenza Tattica: {game_reading_score}/10
+          * Coinvolgimento, Motivazione e Grinta: {motivation_score}/10
+          
         VINCOLO DISPONIBILITA' SPORT (CRITICO):
         L'algoritmo DEVE restituire come sport consigliato ESCLUSIVAMENTE uno o più sport presi da questa esatta lista di sport attualmente disponibili nei club limitrofi:
         [{', '.join(available_sports) if available_sports else 'Nessuno sport disponibile in zona, suggerire attività motoria di base a casa'}]
@@ -55,7 +60,7 @@ class AIService:
         """
 
         response = await self.client.aio.models.generate_content(
-            model='gemini-3.7-flash',
+            model='gemini-3.8-flash',
             contents=prompt
         )
 

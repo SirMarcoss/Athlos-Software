@@ -74,6 +74,9 @@ class EvaluationService:
             creativity_score=session_in.psychological_form.creativity_score,
             teamwork_score=session_in.psychological_form.teamwork_score,
             stress_management_score=session_in.psychological_form.stress_management_score,
+            leadership_score=session_in.psychological_form.leadership_score,
+            game_reading_score=session_in.psychological_form.game_reading_score,
+            motivation_score=session_in.psychological_form.motivation_score,
             available_sports=available_sports_mock,
             coach_notes=session_in.coach_notes
         )
@@ -100,8 +103,11 @@ class EvaluationService:
             creativity_score=session_in.psychological_form.creativity_score,
             teamwork_score=session_in.psychological_form.teamwork_score,
             stress_management_score=session_in.psychological_form.stress_management_score,
+            leadership_score=session_in.psychological_form.leadership_score,
+            game_reading_score=session_in.psychological_form.game_reading_score,
+            motivation_score=session_in.psychological_form.motivation_score,
             coach_notes=session_in.coach_notes,
-            ai_recommended_sport=ai_sport # 👈 Il verdetto di Gemini costretto ai club locali!
+            ai_recommended_sport=ai_sport
         )
         self.db.add(db_pf)
         

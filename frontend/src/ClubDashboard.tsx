@@ -54,10 +54,17 @@ interface GeoSearchResult {
   longitude: number;
 }
 
-interface CourseMotorTest {
+interface MotorTestMetric {
   id: string;
   name: string;
   unit: string;
+}
+
+interface CourseMotorTest {
+  id: string;
+  name: string;
+  unit?: string;
+  metrics: MotorTestMetric[];
 }
 
 interface PhysicalTestItem {
@@ -77,6 +84,9 @@ interface EvaluationSessionRecord {
   creativity_score: number;
   teamwork_score: number;
   stress_management_score: number;
+  leadership_score?: number;
+  game_reading_score?: number;
+  motivation_score?: number;
   coach_notes: string;
   ai_recommended_sport: string;
   physical_tests: PhysicalTestItem[];
@@ -254,6 +264,9 @@ const INITIAL_EVALUATIONS: Record<string, EvaluationSessionRecord> = {
     creativity_score: 8,
     teamwork_score: 5,
     stress_management_score: 6,
+    leadership_score: 6,
+    game_reading_score: 8,
+    motivation_score: 9,
     coach_notes: 'Riflessi eccellenti e grande creatività, ma patisce le dinamiche di squadra.',
     physical_tests: [],
     ai_recommended_sport: `1.  SPORT CONSIGLIATO: Scherma
@@ -335,6 +348,9 @@ const generateLocalAIPassport = (
   creativity: number,
   teamwork: number,
   stress: number,
+  leadership: number,
+  gameReading: number,
+  motivation: number,
   physicalTests: PhysicalTestItem[],
   coachNotes: string
 ): string => {
@@ -342,7 +358,11 @@ const generateLocalAIPassport = (
   let objective = '';
   let tip = '';
 
-  if (teamwork >= 7 && creativity >= 7) {
+  if (leadership >= 8 && gameReading >= 7) {
+    recommended = currentCourseName.toLowerCase().includes('basket') ? 'Pallavolo' : 'Mini-Basket';
+    objective = `A ${athlete.age} anni, ${athlete.first_name} mostra spiccate doti di leadership (${leadership}/10), intelligenza tattica (${gameReading}/10) e spirito di squadra (${teamwork}/10). Uno sport di situazione come ${recommended} permetterà di esaltare la sua capacità di lettura e guida dei compagni.`;
+    tip = `Incoraggiate il suo ruolo propositivo nel gruppo senza caricarlo di responsabilità premature: il gioco deve rimanere divertimento e condivisione.`;
+  } else if (teamwork >= 7 && creativity >= 7) {
     recommended = currentCourseName.toLowerCase().includes('basket') ? 'Pallavolo' : 'Mini-Basket';
     objective = `A ${athlete.age} anni, ${athlete.first_name} mostra spiccate doti di creatività (${creativity}/10) e spirito di squadra (${teamwork}/10). Provare anche ${recommended} aiuterà a sviluppare ancora meglio la visione di gioco e la collaborazione con i compagni.`;
     tip = `Incoraggiate la sua naturale propensione al gioco di gruppo e all'iniziativa personale, lasciandolo divertire senza pressioni sul risultato.`;
@@ -350,13 +370,13 @@ const generateLocalAIPassport = (
     recommended = 'Scherma';
     objective = `Dai test emerge un ottimo autocontrollo (${stress}/10) e una preferenza per le attività individuali. La Scherma valorizza la rapidità di riflessi e la precisione senza metterlo a disagio nelle dinamiche di squadra.`;
     tip = `Rispettate i suoi tempi di socializzazione: praticare uno sport individuale strutturato rafforzerà la sua fiducia in sé stesso.`;
-  } else if (stress <= 5 && creativity >= 7) {
+  } else if (motivation >= 8 && stress <= 5) {
     recommended = 'Judo';
-    objective = `A ${athlete.age} anni la grande energia e creatività (${creativity}/10) traggono beneficio da regole chiare per allenare la gestione dell'emotività (${stress}/10). Il Judo aiuta a incanalare la vivacità fisica migliorando equilibrio e concentrazione.`;
+    objective = `L'altissima motivazione (${motivation}/10) unita all'esigenza di canalizzare lo stress e l'emotività (${stress}/10) trova nel Judo la disciplina ideale per equilibrio, rispetto delle regole e autoconsapevolezza corporea.`;
     tip = `Valorizzate ogni piccolo progresso nel rispetto dei turni e delle regole: sarà una bellissima palestra di crescita personale.`;
   } else {
     recommended = 'Nuoto Formativo';
-    objective = `Unendo i ${physicalTests.length} test motori svolti in campo con le osservazioni dell'allenatore, si consiglia di arricchire il percorso con il Nuoto Formativo per sviluppare coordinazione e armonia motoria.`;
+    objective = `Unendo i ${physicalTests.length} test motori svolti in campo con le osservazioni dell'allenatore (motivazione ${motivation}/10, intelligenza tattica ${gameReading}/10), si consiglia di arricchire il percorso con il Nuoto Formativo per sviluppare coordinazione e armonia motoria.`;
     tip = `Accompagnate ${athlete.first_name} nella scoperta di più sport: variare movimento a questa età è il modo migliore per crescere sani e felici.`;
   }
 
@@ -411,8 +431,20 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   const [motorCourseId, setMotorCourseId] = useState<string>(INITIAL_COURSES[0].id);
   const [selectedMotorTestId, setSelectedMotorTestId] = useState<string>('');
   const [newMotorTestName, setNewMotorTestName] = useState<string>('');
-  const [newMotorTestUnit, setNewMotorTestUnit] = useState<string>('sec');
+  const [newTestMetrics, setNewTestMetrics] = useState<MotorTestMetric[]>([
+    { id: 'm1', name: 'Misura Principale', unit: 'sec' }
+  ]);
+  const [addingMetricToTestId, setAddingMetricToTestId] = useState<string | null>(null);
+  const [extraMetricName, setExtraMetricName] = useState<string>('');
+  const [extraMetricUnit, setExtraMetricUnit] = useState<string>('sec');
   const [batchScores, setBatchScores] = useState<Record<string, string>>({});
+
+  // Helper per ottenere le misure di un test motorio (retrocompatibile con test vecchi)
+  const getTestMetrics = (test: CourseMotorTest | null | undefined): MotorTestMetric[] => {
+    if (!test) return [];
+    if (test.metrics && test.metrics.length > 0) return test.metrics;
+    return [{ id: 'default-metric', name: 'Misura', unit: test.unit || 'sec' }];
+  };
 
   // --- STATO SEZIONE 3: FORM FINE TRIMESTRE ---
   const [psychCourseId, setPsychCourseId] = useState<string>(INITIAL_COURSES[0].id);
@@ -421,6 +453,9 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   const [creativityScore, setCreativityScore] = useState<number>(8);
   const [teamworkScore, setTeamworkScore] = useState<number>(7);
   const [stressScore, setStressScore] = useState<number>(7);
+  const [leadershipScore, setLeadershipScore] = useState<number>(7);
+  const [gameReadingScore, setGameReadingScore] = useState<number>(7);
+  const [motivationScore, setMotivationScore] = useState<number>(8);
   const [coachNotes, setCoachNotes] = useState<string>('');
   const [isSubmittingEval, setIsSubmittingEval] = useState<boolean>(false);
 
@@ -489,10 +524,24 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       return;
     }
 
+    const cleanMetrics = newTestMetrics
+      .map((m, idx) => ({
+        id: m.id || `metric-${idx}-${crypto.randomUUID()}`,
+        name: m.name.trim() || `Misura ${idx + 1}`,
+        unit: m.unit || 'sec'
+      }))
+      .filter(m => m.name.length > 0);
+
+    if (cleanMetrics.length === 0) {
+      showToast('Aggiungi almeno una misura per il test.');
+      return;
+    }
+
     const newTest: CourseMotorTest = {
       id: `mtest-${crypto.randomUUID()}`,
       name: trimmedName,
-      unit: newMotorTestUnit
+      unit: cleanMetrics[0].unit,
+      metrics: cleanMetrics
     };
 
     setCourses(prev =>
@@ -502,8 +551,37 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     );
     setSelectedMotorTestId(newTest.id);
     setNewMotorTestName('');
+    setNewTestMetrics([{ id: 'm1', name: 'Misura Principale', unit: 'sec' }]);
     setBatchScores({});
-    showToast(`Test "${newTest.name}" aggiunto a ${motorCourse.name}!`);
+    showToast(`Test "${newTest.name}" creato con ${cleanMetrics.length} misura/e!`);
+  };
+
+  const handleAddMetricToExistingTest = (testId: string) => {
+    if (!motorCourse || !extraMetricName.trim()) return;
+    const metricToAdd: MotorTestMetric = {
+      id: `metric-${crypto.randomUUID()}`,
+      name: extraMetricName.trim(),
+      unit: extraMetricUnit
+    };
+    setCourses(prev =>
+      prev.map(c => {
+        if (c.id !== motorCourse.id) return c;
+        return {
+          ...c,
+          motor_tests: c.motor_tests.map(t => {
+            if (t.id !== testId) return t;
+            const currentMetrics = getTestMetrics(t);
+            return {
+              ...t,
+              metrics: [...currentMetrics, metricToAdd]
+            };
+          })
+        };
+      })
+    );
+    setExtraMetricName('');
+    setAddingMetricToTestId(null);
+    showToast(`Misura "${metricToAdd.name} (${metricToAdd.unit})" aggiunta al test!`);
   };
 
   const handleDeleteMotorTestFromCourse = (testId: string, testName: string) => {
@@ -522,26 +600,36 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     e.preventDefault();
     if (!motorCourse || !activeCourseTest) return;
 
+    const metrics = getTestMetrics(activeCourseTest);
     const today = new Date().toISOString().split('T')[0];
     let savedCount = 0;
 
     const updatedTests = { ...childPhysicalTests };
     motorCourse.athletes.forEach(athlete => {
-      const rawVal = batchScores[athlete.id];
-      if (rawVal !== undefined && rawVal.trim() !== '') {
-        const numVal = parseFloat(rawVal.replace(',', '.'));
-        if (!isNaN(numVal) && numVal >= 0) {
-          const newItem: PhysicalTestItem = {
-            id: `pt-${crypto.randomUUID()}-${athlete.id}`,
-            test_type: activeCourseTest.name,
-            unit: activeCourseTest.unit,
-            score_value: numVal,
-            date: today
-          };
-          updatedTests[athlete.id] = [...(updatedTests[athlete.id] || []), newItem];
-          savedCount++;
+      metrics.forEach(metric => {
+        const key = `${athlete.id}_${metric.id}`;
+        const rawVal = batchScores[key];
+        if (rawVal !== undefined && rawVal.trim() !== '') {
+          const numVal = parseFloat(rawVal.replace(',', '.'));
+          if (!isNaN(numVal) && numVal >= 0) {
+            // Strada A: codifichiamo nome test e sottomisura con unità
+            const testTypeName =
+              metrics.length > 1
+                ? `${activeCourseTest.name} - ${metric.name} (${metric.unit})`
+                : `${activeCourseTest.name} (${metric.unit})`;
+
+            const newItem: PhysicalTestItem = {
+              id: `pt-${crypto.randomUUID()}-${athlete.id}-${metric.id}`,
+              test_type: testTypeName,
+              unit: metric.unit,
+              score_value: numVal,
+              date: today
+            };
+            updatedTests[athlete.id] = [...(updatedTests[athlete.id] || []), newItem];
+            savedCount++;
+          }
         }
-      }
+      });
     });
 
     if (savedCount === 0) {
@@ -551,7 +639,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
 
     setChildPhysicalTests(updatedTests);
     setBatchScores({});
-    showToast(`Salvati ${savedCount} risultati per "${activeCourseTest.name}"!`);
+    showToast(`Salvate ${savedCount} misure per "${activeCourseTest.name}"!`);
   };
 
   const handleRemoveSinglePhysicalTest = (childId: string, testIndex: number) => {
@@ -572,12 +660,18 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       setCreativityScore(existing.creativity_score);
       setTeamworkScore(existing.teamwork_score);
       setStressScore(existing.stress_management_score);
+      setLeadershipScore(existing.leadership_score ?? 7);
+      setGameReadingScore(existing.game_reading_score ?? 7);
+      setMotivationScore(existing.motivation_score ?? 8);
       setCoachNotes(existing.coach_notes);
     } else {
       setSessionId('Autunno');
       setCreativityScore(7);
       setTeamworkScore(7);
       setStressScore(7);
+      setLeadershipScore(7);
+      setGameReadingScore(7);
+      setMotivationScore(8);
       setCoachNotes('');
     }
     setActiveTab('psych-form');
@@ -597,6 +691,9 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
         creativityScore,
         teamworkScore,
         stressScore,
+        leadershipScore,
+        gameReadingScore,
+        motivationScore,
         athleteTests,
         coachNotes
       );
@@ -610,6 +707,9 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
         creativity_score: creativityScore,
         teamwork_score: teamworkScore,
         stress_management_score: stressScore,
+        leadership_score: leadershipScore,
+        game_reading_score: gameReadingScore,
+        motivation_score: motivationScore,
         coach_notes: coachNotes.trim() || 'Buon impegno e partecipazione durante il trimestre.',
         ai_recommended_sport: aiVerdict,
         physical_tests: athleteTests
@@ -880,10 +980,10 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           </div>
 
           {/* Menu delle 3 Sezioni */}
-          <div className="bg-white/10 backdrop-blur-md p-1.5 rounded-2xl border border-white/20 flex flex-wrap gap-1.5">
+          <div className="bg-white/10 backdrop-blur-md p-1.5 rounded-2xl border border-white/20 flex flex-nowrap items-center shrink-0 overflow-x-auto whitespace-nowrap gap-1.5">
             <button
               onClick={() => setActiveTab('courses')}
-              className={`px-5 py-3 rounded-xl font-black text-sm transition-colors flex items-center gap-2 cursor-pointer ${
+              className={`px-5 py-3 rounded-xl font-black text-sm transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'courses'
                   ? 'bg-white text-[#1E2046] shadow-lg'
                   : 'text-white hover:bg-white/10'
@@ -894,7 +994,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
             </button>
             <button
               onClick={() => setActiveTab('motor-tests')}
-              className={`px-5 py-3 rounded-xl font-black text-sm transition-colors flex items-center gap-2 cursor-pointer ${
+              className={`px-5 py-3 rounded-xl font-black text-sm transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'motor-tests'
                   ? 'bg-white text-[#1E2046] shadow-lg'
                   : 'text-white hover:bg-white/10'
@@ -905,7 +1005,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
             </button>
             <button
               onClick={() => setActiveTab('psych-form')}
-              className={`px-5 py-3 rounded-xl font-black text-sm transition-colors flex items-center gap-2 cursor-pointer ${
+              className={`px-5 py-3 rounded-xl font-black text-sm transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'psych-form'
                   ? 'bg-white text-[#1E2046] shadow-lg'
                   : 'text-white hover:bg-white/10'
@@ -1154,60 +1254,122 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                     </div>
                   </div>
 
-                  {/* Form per creare un nuovo test motorio per il corso selezionato */}
+                  {/* Form per creare un nuovo test motorio per il corso selezionato con misure multiple */}
                   <form
                     onSubmit={handleAddMotorTestToCourse}
-                    className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs"
+                    className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4"
                   >
-                    <div className="sm:col-span-6">
+                    <div>
                       <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block mb-1">
-                        Nome del Nuovo Test per {motorCourse?.sport_category}
+                        Nome del Nuovo Test per {motorCourse?.sport_category || 'questo corso'}
                       </label>
                       <input
                         type="text"
-                        placeholder={`Es. prova specifica di ${motorCourse?.sport_category || 'questo sport'}...`}
+                        placeholder={`Es. Percorso Agilità e Precisione, Salto in Lungo, Prova di ${motorCourse?.sport_category || 'questo sport'}...`}
                         value={newMotorTestName}
                         onChange={e => setNewMotorTestName(e.target.value)}
                         className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-[#1E2046] text-sm focus:bg-white focus:outline-none focus:border-[#E52B6D]"
                       />
                     </div>
 
-                    <div className="sm:col-span-3">
-                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block mb-1">
-                        Unità di misura
-                      </label>
-                      <select
-                        value={newMotorTestUnit}
-                        onChange={e => setNewMotorTestUnit(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-[#1E2046] text-sm focus:bg-white focus:outline-none focus:border-[#E52B6D]"
-                      >
-                        {STANDARD_UNITS.map(u => (
-                          <option key={u.value} value={u.value}>
-                            {u.label}
-                          </option>
+                    {/* Lista Misure e Unità di Misura del test */}
+                    <div className="space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">
+                          Misure / Parametri da rilevare ({newTestMetrics.length})
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNewTestMetrics(prev => [
+                              ...prev,
+                              {
+                                id: `metric-${prev.length + 1}-${crypto.randomUUID()}`,
+                                name: `Misura ${prev.length + 1}`,
+                                unit: 'sec'
+                              }
+                            ])
+                          }
+                          className="text-xs font-black text-[#E52B6D] hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Aggiungi altra misura (con altra unità)
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {newTestMetrics.map((metric, idx) => (
+                          <div
+                            key={metric.id}
+                            className="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200"
+                          >
+                            <span className="text-xs font-black text-slate-400 w-6 text-center shrink-0">
+                              #{idx + 1}
+                            </span>
+                            <input
+                              type="text"
+                              placeholder="Nome misura (es. Tempo, Distanza, Bersagli centrati...)"
+                              value={metric.name}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setNewTestMetrics(prev =>
+                                  prev.map((m, i) => (i === idx ? { ...m, name: val } : m))
+                                );
+                              }}
+                              className="flex-1 px-3 py-2 rounded-lg bg-white border border-slate-200 font-bold text-[#1E2046] text-xs focus:outline-none focus:border-[#E52B6D]"
+                            />
+                            <select
+                              value={metric.unit}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setNewTestMetrics(prev =>
+                                  prev.map((m, i) => (i === idx ? { ...m, unit: val } : m))
+                                );
+                              }}
+                              className="w-44 px-3 py-2 rounded-lg bg-white border border-slate-200 font-bold text-[#1E2046] text-xs focus:outline-none focus:border-[#E52B6D] shrink-0"
+                            >
+                              {STANDARD_UNITS.map(u => (
+                                <option key={u.value} value={u.value}>
+                                  {u.label}
+                                </option>
+                              ))}
+                            </select>
+                            {newTestMetrics.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setNewTestMetrics(prev => prev.filter((_, i) => i !== idx))
+                                }
+                                className="p-2 text-slate-400 hover:text-rose-500 cursor-pointer shrink-0"
+                                title="Rimuovi questa misura"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         ))}
-                      </select>
+                      </div>
                     </div>
 
-                    <div className="sm:col-span-3">
-                      <button
-                        type="submit"
-                        className="w-full py-2.5 px-4 rounded-xl bg-[#E52B6D] hover:bg-[#1E2046] text-white font-black text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                      >
-                        <Plus className="w-4 h-4" /> Aggiungi Test
-                      </button>
-                    </div>
+                    <button
+                      type="submit"
+                      className="py-3 px-6 rounded-xl bg-[#E52B6D] hover:bg-[#1E2046] text-white font-black text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                    >
+                      <Plus className="w-4 h-4" /> Crea Test Motorio per {motorCourse?.name}
+                    </button>
                   </form>
 
                   {/* Elenco dei test motori già aggiunti a questo corso */}
                   {courseMotorTests.length > 0 ? (
                     <div>
-                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block mb-2">
-                        Seleziona quale test compilare ora:
-                      </label>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">
+                          Seleziona quale test compilare ora:
+                        </label>
+                      </div>
                       <div className="flex flex-wrap gap-2.5">
                         {courseMotorTests.map(test => {
                           const isSelected = activeCourseTest?.id === test.id;
+                          const metrics = getTestMetrics(test);
                           return (
                             <div
                               key={test.id}
@@ -1222,25 +1384,47 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                                 onClick={() => {
                                   setSelectedMotorTestId(test.id);
                                   setBatchScores({});
+                                  setAddingMetricToTestId(null);
                                 }}
-                                className="px-4 py-2.5 font-black text-sm flex items-center gap-2 cursor-pointer"
+                                className="px-4 py-2.5 font-black text-sm flex items-center gap-2 cursor-pointer flex-wrap"
                               >
                                 <span>{test.name}</span>
-                                <span
-                                  className={`px-2 py-0.5 rounded-lg text-[11px] font-black uppercase ${
-                                    isSelected
-                                      ? 'bg-white/15 text-sky-200'
-                                      : 'bg-slate-100 text-slate-500'
-                                  }`}
-                                >
-                                  {test.unit}
-                                </span>
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {metrics.map(m => (
+                                    <span
+                                      key={m.id}
+                                      className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase ${
+                                        isSelected
+                                          ? 'bg-white/15 text-sky-200'
+                                          : 'bg-slate-100 text-slate-500'
+                                      }`}
+                                    >
+                                      {m.name}: {m.unit}
+                                    </span>
+                                  ))}
+                                </div>
                               </button>
+
+                              {isSelected && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setAddingMetricToTestId(
+                                      addingMetricToTestId === test.id ? null : test.id
+                                    )
+                                  }
+                                  title="Aggiungi un'altra misura a questo test"
+                                  className="px-2 py-2 text-xs font-black text-sky-300 hover:text-white flex items-center gap-0.5 cursor-pointer border-l border-white/20"
+                                >
+                                  <Plus className="w-3.5 h-3.5" /> Misura
+                                </button>
+                              )}
+
                               <button
                                 type="button"
                                 onClick={() => handleDeleteMotorTestFromCourse(test.id, test.name)}
                                 title="Rimuovi test dal corso"
-                                className={`pr-3 pl-1 py-2.5 transition-colors cursor-pointer ${
+                                className={`pr-3 pl-2 py-2.5 transition-colors cursor-pointer ${
                                   isSelected
                                     ? 'text-white/60 hover:text-rose-300'
                                     : 'text-slate-400 hover:text-rose-500'
@@ -1252,6 +1436,47 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                           );
                         })}
                       </div>
+
+                      {/* Box per aggiungere al volo una misura ad un test esistente */}
+                      {addingMetricToTestId && (
+                        <div className="mt-3 p-3.5 bg-sky-50 rounded-2xl border border-sky-200 flex flex-wrap items-center gap-3">
+                          <span className="text-xs font-black text-sky-900">
+                            Aggiungi una nuova misura a "{activeCourseTest?.name}":
+                          </span>
+                          <input
+                            type="text"
+                            placeholder="Nome misura (es. Tempo, Precisione...)"
+                            value={extraMetricName}
+                            onChange={e => setExtraMetricName(e.target.value)}
+                            className="px-3 py-1.5 rounded-xl bg-white border border-sky-200 font-bold text-xs text-[#1E2046] focus:outline-none"
+                          />
+                          <select
+                            value={extraMetricUnit}
+                            onChange={e => setExtraMetricUnit(e.target.value)}
+                            className="px-3 py-1.5 rounded-xl bg-white border border-sky-200 font-bold text-xs text-[#1E2046] focus:outline-none"
+                          >
+                            {STANDARD_UNITS.map(u => (
+                              <option key={u.value} value={u.value}>
+                                {u.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => handleAddMetricToExistingTest(addingMetricToTestId)}
+                            className="px-4 py-1.5 rounded-xl bg-[#1E2046] hover:bg-[#E52B6D] text-white font-black text-xs cursor-pointer transition-colors"
+                          >
+                            Salva Misura
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAddingMetricToTestId(null)}
+                            className="text-xs text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
+                          >
+                            Annulla
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="bg-white rounded-2xl p-6 border border-dashed border-slate-300 text-center">
@@ -1273,13 +1498,14 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                       <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <h4 className="text-lg font-black text-[#1E2046]">
-                            3. Risultati dei Bambini — {activeCourseTest.name} ({activeCourseTest.unit})
+                            3. Risultati dei Bambini — {activeCourseTest.name}
                           </h4>
                           <p className="text-xs text-slate-400 font-medium">
-                            Inserisci il valore ottenuto da ciascun bambino iscritto a{' '}
+                            Inserisci le misure per ciascun bambino iscritto a{' '}
                             <strong>
                               {motorCourse?.name} ({motorCourse?.min_age}-{motorCourse?.max_age} anni)
                             </strong>
+                            : {getTestMetrics(activeCourseTest).map(m => `${m.name} (${m.unit})`).join(' • ')}
                           </p>
                         </div>
                       </div>
@@ -1288,12 +1514,14 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                         <div className="space-y-3">
                           {motorCourse.athletes.map(athlete => {
                             const previousTests = childPhysicalTests[athlete.id] || [];
+                            const metrics = getTestMetrics(activeCourseTest);
+
                             return (
                               <div
                                 key={athlete.id}
-                                className="bg-white rounded-2xl p-4 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs"
+                                className="bg-white rounded-2xl p-5 border border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-5 shadow-xs"
                               >
-                                <div className="flex items-center gap-3.5">
+                                <div className="flex items-start sm:items-center gap-3.5">
                                   <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white font-black flex items-center justify-center text-sm shrink-0">
                                     {athlete.first_name.charAt(0)}
                                     {athlete.last_name.charAt(0)}
@@ -1314,7 +1542,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                                     </div>
 
                                     {previousTests.length > 0 ? (
-                                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                      <div className="flex flex-wrap gap-1.5 mt-2">
                                         {previousTests.map((pt, idx) => (
                                           <span
                                             key={idx}
@@ -1336,32 +1564,44 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                                         ))}
                                       </div>
                                     ) : (
-                                      <p className="text-xs text-slate-400 font-medium">
+                                      <p className="text-xs text-slate-400 font-medium mt-1">
                                         Nessun risultato ancora registrato
                                       </p>
                                     )}
                                   </div>
                                 </div>
 
-                                {/* Input numerico pulito + Unità di misura in riquadro separato */}
-                                <div className="flex items-stretch md:w-64 shrink-0">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    placeholder="Valore..."
-                                    value={batchScores[athlete.id] || ''}
-                                    onChange={e =>
-                                      setBatchScores(prev => ({
-                                        ...prev,
-                                        [athlete.id]: e.target.value
-                                      }))
-                                    }
-                                    className="w-full px-4 py-3 rounded-l-xl bg-slate-50 border border-r-0 border-slate-200 focus:bg-white focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046] text-base [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  />
-                                  <div className="px-4 rounded-r-xl bg-slate-100 border border-slate-200 flex items-center justify-center font-black text-xs text-[#1E2046] uppercase select-none shrink-0">
-                                    {activeCourseTest.unit}
-                                  </div>
+                                {/* Input per ogni misura definita nel test */}
+                                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                                  {metrics.map(metric => {
+                                    const key = `${athlete.id}_${metric.id}`;
+                                    return (
+                                      <div key={metric.id} className="flex flex-col gap-1 w-full sm:w-auto">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                          {metric.name}
+                                        </span>
+                                        <div className="flex items-stretch w-full sm:w-44">
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            placeholder="Valore..."
+                                            value={batchScores[key] || ''}
+                                            onChange={e =>
+                                              setBatchScores(prev => ({
+                                                ...prev,
+                                                [key]: e.target.value
+                                              }))
+                                            }
+                                            className="w-full px-3.5 py-2.5 rounded-l-xl bg-slate-50 border border-r-0 border-slate-200 focus:bg-white focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046] text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                          <div className="px-3 rounded-r-xl bg-slate-100 border border-slate-200 flex items-center justify-center font-black text-xs text-[#1E2046] uppercase select-none shrink-0">
+                                            {metric.unit}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             );
@@ -1379,7 +1619,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                           className="px-8 py-4 rounded-2xl bg-[#1E2046] hover:bg-[#E52B6D] text-white font-black text-base transition-colors shadow-lg flex items-center gap-2 cursor-pointer"
                         >
                           <CheckCircle2 className="w-5 h-5" />
-                          Salva Risultati di {activeCourseTest.name}
+                          Salva Misure di {activeCourseTest.name}
                         </button>
                       </div>
                     </div>
@@ -1582,12 +1822,12 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                       </button>
                     </div>
 
-                    {/* I 3 Punteggi del Form Trimestrale (scala 0 - 10) */}
+                      {/* I 6 Punteggi del Form Trimestrale (scala 0 - 10) */}
                     <div className="space-y-4">
                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                         Valutazione dell'Allenatore (da 0 a 10)
                       </label>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80">
                           <div className="flex justify-between items-center mb-2">
                             <span className="text-xs font-black text-[#1E2046] uppercase tracking-wider">
@@ -1642,6 +1882,63 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                             value={stressScore}
                             onChange={e => setStressScore(Number(e.target.value))}
                             className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                          />
+                        </div>
+
+                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-black text-[#1E2046] uppercase tracking-wider">
+                              Leadership e Influenza
+                            </span>
+                            <span className="text-2xl font-black text-purple-600">
+                              {leadershipScore}/10
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={10}
+                            value={leadershipScore}
+                            onChange={e => setLeadershipScore(Number(e.target.value))}
+                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                          />
+                        </div>
+
+                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-black text-[#1E2046] uppercase tracking-wider">
+                              Intelligenza Tattica
+                            </span>
+                            <span className="text-2xl font-black text-emerald-600">
+                              {gameReadingScore}/10
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={10}
+                            value={gameReadingScore}
+                            onChange={e => setGameReadingScore(Number(e.target.value))}
+                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                          />
+                        </div>
+
+                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-black text-[#1E2046] uppercase tracking-wider">
+                              Coinvolgimento e Grinta
+                            </span>
+                            <span className="text-2xl font-black text-rose-500">
+                              {motivationScore}/10
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={10}
+                            value={motivationScore}
+                            onChange={e => setMotivationScore(Number(e.target.value))}
+                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
                           />
                         </div>
                       </div>
@@ -2162,29 +2459,53 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                             <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">
                               Valutazione Trimestrale
                             </h4>
-                            <div className="grid grid-cols-3 gap-3">
-                              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-                                <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
                                   Creatività
                                 </div>
-                                <div className="text-3xl font-black text-[#1E2046]">
+                                <div className="text-2xl font-black text-[#E52B6D]">
                                   {analysisEval.creativity_score}
                                 </div>
                               </div>
-                              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-                                <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
                                   Squadra
                                 </div>
-                                <div className="text-3xl font-black text-[#1E2046]">
+                                <div className="text-2xl font-black text-sky-600">
                                   {analysisEval.teamwork_score}
                                 </div>
                               </div>
-                              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
-                                <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
                                   Stress
                                 </div>
-                                <div className="text-3xl font-black text-[#1E2046]">
+                                <div className="text-2xl font-black text-amber-500">
                                   {analysisEval.stress_management_score}
+                                </div>
+                              </div>
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
+                                  Leadership
+                                </div>
+                                <div className="text-2xl font-black text-purple-600">
+                                  {analysisEval.leadership_score ?? 7}
+                                </div>
+                              </div>
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
+                                  Tattica
+                                </div>
+                                <div className="text-2xl font-black text-emerald-600">
+                                  {analysisEval.game_reading_score ?? 7}
+                                </div>
+                              </div>
+                              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
+                                <div className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 truncate">
+                                  Grinta
+                                </div>
+                                <div className="text-2xl font-black text-rose-500">
+                                  {analysisEval.motivation_score ?? 8}
                                 </div>
                               </div>
                             </div>

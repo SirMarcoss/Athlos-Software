@@ -26,7 +26,8 @@ class Course(Base):
     
     sport_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("sports.id", ondelete="RESTRICT"),
-        nullable=False
+        nullable=True,
+        default=None
     )
 
     name : Mapped[str] = mapped_column(String(100), nullable=False)
