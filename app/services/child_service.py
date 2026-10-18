@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.sql.functions import func
 from app.models.child import Child
 from app.schemas.child import ChildCreate, ChildUpdate
 import uuid
@@ -29,6 +30,14 @@ class ChildService:
         await self.db.commit()
         await self.db.refresh(db_child)
         return db_child
+
+
+    async def get_children_by_fiscal_code(self, fiscal_code: str) -> Child | None:
+        """Trova un bambino tramite codice fiscale (case-insensitive)."""
+
+        stmt = select(Child).where(func.upper(Child.fiscal_code) == fiscal_code.strip().upper())
+        child = await self.db.execute(stmt)
+        return child.scalars().first()
 
 
     async def get_children_by_parent(self, parent_id: uuid.UUID) -> list[Child]:

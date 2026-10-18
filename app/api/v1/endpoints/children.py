@@ -33,6 +33,23 @@ async def add_child(
     return child
 
 
+@router.get("/by-fiscal-code/{fiscal_code}", response_model=ChildResponse)
+async def get_child_by_cf(
+        fiscal_code : str,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(require_role([UserRoleEnum.CLUB, UserRoleEnum.ADMIN]))
+):
+    """Permette al centro sportivo di trovare un bambino dal codice fiscale per iscriverlo al corso."""
+
+    child_service = ChildService(db)
+    child = await child_service.get_children_by_fiscal_code(fiscal_code)
+    if not child:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nessun atleta registrato con questo Codice Fiscale"
+        )
+    return child
+
 @router.get("/", response_model=List[ChildResponse])
 async def list_my_children(
         db: AsyncSession = Depends(get_db),

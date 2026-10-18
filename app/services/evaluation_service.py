@@ -144,3 +144,32 @@ class EvaluationService:
         stmt_eval = select(PhysicalTest).where(PhysicalTest.child_id == child_id)
         res_eval = await self.db.execute(stmt_eval)
         return list(res_eval.scalars().all())
+
+    async def get_evaluations_for_course(self, course_id: uuid.UUID, club_id: uuid.UUID) -> list[PsychologicalForm]:
+        """Restituisce le schede trimestrali salvate per un determinato corso verificando la proprietà."""
+        stmt_course = select(Course).where(Course.id == course_id)
+        res_course = await self.db.execute(stmt_course)
+        course = res_course.scalars().first()
+        if not course:
+            raise ValueError("Corso non trovato")
+        if course.clubs_id != club_id:
+            raise ValueError("Non sei autorizzato a visualizzare i dati di questo corso")
+
+        stmt = select(PsychologicalForm).where(PsychologicalForm.course_id == course_id)
+        res = await self.db.execute(stmt)
+        return list(res.scalars().all())
+
+
+    async def get_physical_tests_for_course(self, course_id: uuid.UUID, club_id: uuid.UUID) -> list[PhysicalTest]:
+        """Restituisce tutti i test motori registrati per un determinato corso verificando la proprietà."""
+        stmt_course = select(Course).where(Course.id == course_id)
+        res_course = await self.db.execute(stmt_course)
+        course = res_course.scalars().first()
+        if not course:
+            raise ValueError("Corso non trovato")
+        if course.clubs_id != club_id:
+            raise ValueError("Non sei autorizzato a visualizzare i dati di questo corso")
+
+        stmt = select(PhysicalTest).where(PhysicalTest.course_id == course_id)
+        res = await self.db.execute(stmt)
+        return list(res.scalars().all())

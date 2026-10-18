@@ -95,3 +95,39 @@ async def get_child_physical_tests(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=str(e))
+
+
+@router.get("/course/{course_id}", response_model=List[PsychologicalFormResponse])
+async def get_course_evaluations(
+    course_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
+):
+    """Il club recupera le pagelle salvate per gli atleti del corso."""
+    club_service = ClubService(db)
+    eval_service = EvaluationService(db)
+    club = await club_service.get_club_by_user_id(current_user.id)
+    if not club:
+        raise HTTPException(status_code=400, detail="Profilo società sportiva non trovato")
+    try:
+        return await eval_service.get_evaluations_for_course(course_id, club.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/course/{course_id}/physical", response_model=List[PhysicalTestResponse])
+async def get_course_physical_tests(
+    course_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB))
+):
+    """Il club recupera tutti i test motori registrati per gli atleti del corso."""
+    club_service = ClubService(db)
+    eval_service = EvaluationService(db)
+    club = await club_service.get_club_by_user_id(current_user.id)
+    if not club:
+        raise HTTPException(status_code=400, detail="Profilo società sportiva non trovato")
+    try:
+        return await eval_service.get_physical_tests_for_course(course_id, club.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
