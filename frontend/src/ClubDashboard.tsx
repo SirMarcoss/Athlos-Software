@@ -138,164 +138,25 @@ interface ClubCourse {
 
 // === DATI INIZIALI REALISTICI ===
 
-const INITIAL_CLUB: ClubProfile = {
-  id: 'club-uuid-01',
-  user_id: 'user-club-01',
-  name: 'Polisportiva Punta Etnea',
-  email_contact: 'segreteria@puntaetnea.it',
-  phone_number: '+39 095 7418520',
+const DEFAULT_EMPTY_CLUB: ClubProfile = {
+  id: '',
+  user_id: '',
+  name: 'Centro Sportivo',
+  email_contact: '',
+  phone_number: '',
   address: {
-    street: 'Via Roma',
-    number: '45',
-    city: 'San Giovanni La Punta',
-    province: 'CT',
-    postal_code: '95037',
+    street: '',
+    number: '',
+    city: '',
+    province: '',
+    postal_code: '',
     country: 'Italy'
   },
   logo_url: '',
-  latitude: 37.5794,
-  longitude: 15.0956
+  latitude: 0,
+  longitude: 0
 };
 
-// All'inizio ogni corso ha 0 test motori configurati: verranno aggiunti dal club in base allo sport
-const INITIAL_COURSES: ClubCourse[] = [
-  {
-    id: 'corso-basket-6-10',
-    clubs_id: 'club-uuid-01',
-    name: 'Corso Basket',
-    sport_category: 'Basket',
-    min_age: 6,
-    max_age: 10,
-    motor_tests: [],
-    athletes: [
-      {
-        id: 'uuid-1',
-        first_name: 'Lorenzo',
-        last_name: 'Mazzone',
-        date_of_birth: '2018-04-12',
-        age: 8,
-        gender: 'M',
-        from_athlos: true,
-        skills: ['Riflessi rapidi', 'Coordinazione']
-      },
-      {
-        id: 'uuid-2',
-        first_name: 'Matteo',
-        last_name: 'Greco',
-        date_of_birth: '2017-09-22',
-        age: 9,
-        gender: 'M',
-        from_athlos: false,
-        skills: ['Spirito di squadra', 'Resistenza']
-      },
-      {
-        id: 'uuid-3',
-        first_name: 'Edoardo',
-        last_name: 'Ferretti',
-        date_of_birth: '2019-01-15',
-        age: 7,
-        gender: 'M',
-        from_athlos: true,
-        skills: ['Agilità', 'Creatività']
-      }
-    ]
-  },
-  {
-    id: 'corso-pallavolo-7-10',
-    clubs_id: 'club-uuid-01',
-    name: 'Corso Pallavolo Pulcini',
-    sport_category: 'Pallavolo',
-    min_age: 7,
-    max_age: 10,
-    motor_tests: [],
-    athletes: [
-      {
-        id: 'uuid-4',
-        first_name: 'Sofia',
-        last_name: 'Mazzone',
-        date_of_birth: '2018-02-18',
-        age: 8,
-        gender: 'F',
-        from_athlos: true,
-        skills: ['Elevazione', 'Gioco di squadra']
-      },
-      {
-        id: 'uuid-5',
-        first_name: 'Chiara',
-        last_name: 'Bellini',
-        date_of_birth: '2017-06-30',
-        age: 9,
-        gender: 'F',
-        from_athlos: false,
-        skills: ['Leadership', 'Precisione']
-      },
-      {
-        id: 'uuid-6',
-        first_name: 'Giorgia',
-        last_name: 'Lombardo',
-        date_of_birth: '2018-11-05',
-        age: 8,
-        gender: 'F',
-        from_athlos: true,
-        skills: ['Riflessi', 'Equilibrio']
-      }
-    ]
-  },
-  {
-    id: 'corso-calcio-6-10',
-    clubs_id: 'club-uuid-01',
-    name: 'Scuola Calcio Primi Calci',
-    sport_category: 'Calcio',
-    min_age: 6,
-    max_age: 10,
-    motor_tests: [],
-    athletes: [
-      {
-        id: 'uuid-7',
-        first_name: 'Alessandro',
-        last_name: 'Russo',
-        date_of_birth: '2017-11-05',
-        age: 9,
-        gender: 'M',
-        from_athlos: true,
-        skills: ['Scatto veloce', 'Dribbling']
-      },
-      {
-        id: 'uuid-8',
-        first_name: 'Davide',
-        last_name: 'Conti',
-        date_of_birth: '2018-08-19',
-        age: 8,
-        gender: 'M',
-        from_athlos: false,
-        skills: ['Visione di gioco', 'Cooperazione']
-      }
-    ]
-  }
-];
-
-const INITIAL_CHILD_PHYSICAL_TESTS: Record<string, PhysicalTestItem[]> = {};
-
-const INITIAL_EVALUATIONS: Record<string, EvaluationSessionRecord> = {
-  'uuid-1': {
-    id: 'form-1',
-    course_id: 'corso-basket-6-10',
-    child_id: 'uuid-1',
-    trimester_id: 'Autunno',
-    date: '2026-09-15',
-    creativity_score: 8,
-    teamwork_score: 5,
-    stress_management_score: 6,
-    leadership_score: 6,
-    game_reading_score: 8,
-    motivation_score: 9,
-    coach_notes: 'Riflessi eccellenti e grande creatività, ma patisce le dinamiche di squadra.',
-    physical_tests: [],
-    ai_recommended_sport: `1.  SPORT CONSIGLIATO: Scherma
-2.  OBIETTIVO MOTORIO: La crescita a 8 anni richiede un affinamento della coordinazione oculo-manuale. La scherma esalta i suoi eccellenti riflessi permettendogli di canalizzare lo stress individualmente, compensando le difficoltà nelle dinamiche di squadra.
-3.  CONSIGLIO PER I GENITORI: Non forzatelo a fare il 'giocatore di squadra' in questa fase. La sua tranquillità emotiva nella pedana è una dote rara: valorizzatela.`
-  }
-};
 
 // Unità di misura standard selezionabili da menu a tendina
 const STANDARD_UNITS = [
@@ -423,14 +284,10 @@ const getSportEmoji = (sport: string) => {
 };
 
 export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
-  const [club, setClub] = useState<ClubProfile>(INITIAL_CLUB);
-  const [courses, setCourses] = useState<ClubCourse[]>(INITIAL_COURSES);
-  const [childPhysicalTests, setChildPhysicalTests] = useState<Record<string, PhysicalTestItem[]>>(
-    INITIAL_CHILD_PHYSICAL_TESTS
-  );
-  const [evaluations, setEvaluations] = useState<Record<string, EvaluationSessionRecord>>(
-    INITIAL_EVALUATIONS
-  );
+  const [club, setClub] = useState<ClubProfile>(DEFAULT_EMPTY_CLUB);
+  const [courses, setCourses] = useState<ClubCourse[]>([]);
+  const [childPhysicalTests, setChildPhysicalTests] = useState<Record<string, PhysicalTestItem[]>>({});
+  const [evaluations, setEvaluations] = useState<Record<string, EvaluationSessionRecord>>({});
 
   // Navigazione principale tra le 3 sezioni
   const [activeTab, setActiveTab] = useState<'courses' | 'motor-tests' | 'psych-form'>('courses');
@@ -450,7 +307,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   // --- STATO SEZIONE 2: TEST MOTORI (SPECIFICI PER CORSO) ---
-  const [motorCourseId, setMotorCourseId] = useState<string>(INITIAL_COURSES[0].id);
+  const [motorCourseId, setMotorCourseId] = useState<string>('');
   const [selectedMotorTestId, setSelectedMotorTestId] = useState<string>('');
   const [newMotorTestName, setNewMotorTestName] = useState<string>('');
   const [newTestMetrics, setNewTestMetrics] = useState<MotorTestMetric[]>([
@@ -469,8 +326,8 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   // --- STATO SEZIONE 3: FORM FINE TRIMESTRE ---
-  const [psychCourseId, setPsychCourseId] = useState<string>(INITIAL_COURSES[0].id);
-  const [psychChildId, setPsychChildId] = useState<string>(INITIAL_COURSES[0].athletes[0].id);
+  const [psychCourseId, setPsychCourseId] = useState<string>('');
+  const [psychChildId, setPsychChildId] = useState<string>('');
   const [sessionId, setSessionId] = useState<string>('Autunno');
   const [creativityScore, setCreativityScore] = useState<number>(8);
   const [teamworkScore, setTeamworkScore] = useState<number>(7);
@@ -486,7 +343,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   // --- STATO MODALE PROFILO CENTRO ---
-  const [profileForm, setProfileForm] = useState<ClubProfile>(INITIAL_CLUB);
+  const [profileForm, setProfileForm] = useState<ClubProfile>(DEFAULT_EMPTY_CLUB);
   const [geoQuery, setGeoQuery] = useState('');
   const [geoResults, setGeoResults] = useState<GeoSearchResult[]>([]);
   const [confirmDeleteClub, setConfirmDeleteClub] = useState(false);
@@ -513,12 +370,12 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   const [newAthleteFromAthlos, setNewAthleteFromAthlos] = useState(true);
 
   // Riferimenti correnti
-  const motorCourse = courses.find(c => c.id === motorCourseId) || courses[0];
+  const motorCourse = courses.find(c => c.id === motorCourseId) || courses[0] || null;
   const courseMotorTests = motorCourse?.motor_tests || [];
   const activeCourseTest =
     courseMotorTests.find(t => t.id === selectedMotorTestId) || courseMotorTests[0] || null;
 
-  const psychCourse = courses.find(c => c.id === psychCourseId) || courses[0];
+  const psychCourse = courses.find(c => c.id === psychCourseId) || courses[0] || null;
   const psychAthlete =
     psychCourse?.athletes.find(a => a.id === psychChildId) || psychCourse?.athletes[0] || null;
 
@@ -630,12 +487,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               // fallback silenzioso se la chiamata fallisce
             }
 
-            if (enrolledAthletes.length === 0) {
-              enrolledAthletes =
-                INITIAL_COURSES.find(c => c.name.toLowerCase() === ac.name.toLowerCase())
-                  ?.athletes || [];
-            }
-
             loadedCourses.push({
               id: ac.id,
               clubs_id: ac.clubs_id,
@@ -648,13 +499,26 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
             });
           }
 
+          setCourses(loadedCourses);
           if (loadedCourses.length > 0) {
-            setCourses(loadedCourses);
-            setMotorCourseId(loadedCourses[0].id);
-            setPsychCourseId(loadedCourses[0].id);
-            setChildPhysicalTests(prev => ({ ...prev, ...loadedTests }));
-            setEvaluations(prev => ({ ...prev, ...loadedEvals }));
+            setMotorCourseId(prev => (prev && loadedCourses.some(c => c.id === prev) ? prev : loadedCourses[0].id));
+            setPsychCourseId(prev => (prev && loadedCourses.some(c => c.id === prev) ? prev : loadedCourses[0].id));
+            const firstWithAthletes = loadedCourses.find(c => c.athletes.length > 0);
+            if (firstWithAthletes && firstWithAthletes.athletes.length > 0) {
+              setPsychChildId(prev => {
+                const allAthletes = loadedCourses.flatMap(c => c.athletes);
+                return prev && allAthletes.some(a => a.id === prev) ? prev : firstWithAthletes.athletes[0].id;
+              });
+            } else {
+              setPsychChildId('');
+            }
+          } else {
+            setMotorCourseId('');
+            setPsychCourseId('');
+            setPsychChildId('');
           }
+          setChildPhysicalTests(loadedTests);
+          setEvaluations(loadedEvals);
         }
       } catch (err) {
         console.warn('Errore nel caricamento corsi dal backend:', err);
@@ -1385,8 +1249,25 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             >
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {courses.map((course, idx) => (
+              {courses.length === 0 ? (
+                <div className="bg-white rounded-[32px] p-12 text-center border border-slate-100 shadow-xl max-w-xl mx-auto my-8">
+                  <div className="w-16 h-16 rounded-2xl bg-sky-50 text-[#E52B6D] flex items-center justify-center mx-auto mb-4 font-black text-2xl">
+                    🏆
+                  </div>
+                  <h3 className="text-2xl font-black text-[#1E2046] mb-2">Nessun corso creato</h3>
+                  <p className="text-slate-500 mb-6 text-sm">
+                    Non hai ancora creato nessun corso. Inizia subito creando il tuo primo corso per aggiungere i bambini e registrare le loro prove.
+                  </p>
+                  <button
+                    onClick={openCreateCourseModal}
+                    className="px-6 py-3 bg-[#E52B6D] hover:bg-[#FF4F8B] text-white rounded-full font-bold text-sm shadow-md transition-colors cursor-pointer inline-flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> Crea il tuo primo Corso
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {courses.map((course, idx) => (
                   <motion.div
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1554,7 +1435,8 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                   </motion.div>
                 ))}
               </div>
-            </motion.div>
+            )}
+          </motion.div>
           )}
 
           {/* =====================================================================
@@ -1569,7 +1451,24 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               className="space-y-8"
             >
-              <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-[#E52B6D]/10 border border-sky-50">
+              {courses.length === 0 ? (
+                <div className="bg-white rounded-[32px] p-12 text-center border border-slate-100 shadow-xl max-w-xl mx-auto my-8">
+                  <div className="w-16 h-16 rounded-2xl bg-sky-50 text-[#E52B6D] flex items-center justify-center mx-auto mb-4 font-black text-2xl">
+                    ⏱️
+                  </div>
+                  <h3 className="text-2xl font-black text-[#1E2046] mb-2">Nessun corso disponibile</h3>
+                  <p className="text-slate-500 mb-6 text-sm">
+                    Per poter configurare i test motori e registrare i risultati, crea prima almeno un corso nella sezione "I Nostri Corsi".
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('courses')}
+                    className="px-6 py-3 bg-[#1E2046] hover:bg-[#E52B6D] text-white rounded-full font-bold text-sm shadow-md transition-colors cursor-pointer"
+                  >
+                    Vai a I Nostri Corsi
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-[#E52B6D]/10 border border-sky-50">
                 <div className="pb-6 border-b border-slate-100">
                   <span className="bg-sky-100 text-[#E52B6D] px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider">
                     Specifici per ogni disciplina
@@ -1991,7 +1890,8 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                   </form>
                 )}
               </div>
-            </motion.div>
+            )}
+          </motion.div>
           )}
 
           {/* =====================================================================
@@ -2004,10 +1904,27 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="grid grid-cols-1 lg:grid-cols-12 gap-8"
             >
-              {/* Colonna Sinistra: Scelta Corso e Bambino */}
-              <div className="lg:col-span-4 bg-white rounded-[32px] p-6 sm:p-8 shadow-xl shadow-[#E52B6D]/10 border border-sky-50 h-fit space-y-6">
+              {courses.length === 0 ? (
+                <div className="bg-white rounded-[32px] p-12 text-center border border-slate-100 shadow-xl max-w-xl mx-auto my-8">
+                  <div className="w-16 h-16 rounded-2xl bg-sky-50 text-[#E52B6D] flex items-center justify-center mx-auto mb-4 font-black text-2xl">
+                    🧠
+                  </div>
+                  <h3 className="text-2xl font-black text-[#1E2046] mb-2">Nessun corso disponibile</h3>
+                  <p className="text-slate-500 mb-6 text-sm">
+                    Per poter compilare la valutazione di fine trimestre e generare il passaporto con l'AI, crea prima un corso e aggiungi gli atleti.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('courses')}
+                    className="px-6 py-3 bg-[#1E2046] hover:bg-[#E52B6D] text-white rounded-full font-bold text-sm shadow-md transition-colors cursor-pointer"
+                  >
+                    Vai a I Nostri Corsi
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  {/* Colonna Sinistra: Scelta Corso e Bambino */}
+                  <div className="lg:col-span-4 bg-white rounded-[32px] p-6 sm:p-8 shadow-xl shadow-[#E52B6D]/10 border border-sky-50 h-fit space-y-6">
                 <div>
                   <span className="bg-sky-100 text-[#E52B6D] px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider">
                     Valutazione Finale
@@ -2046,66 +1963,87 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                   <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                     Bambini Iscritti ({psychCourse?.athletes.length || 0})
                   </label>
-                  {psychCourse?.athletes.map(athlete => {
-                    const isSelected = psychAthlete?.id === athlete.id;
-                    const isDone = Boolean(evaluations[athlete.id]);
-                    return (
-                      <button
-                        key={athlete.id}
-                        type="button"
-                        onClick={() => selectChildForPsychForm(psychCourse.id, athlete)}
-                        className={`w-full text-left p-3.5 rounded-2xl border transition-colors flex items-center justify-between cursor-pointer ${
-                          isSelected
-                            ? 'bg-[#1E2046] text-white border-[#1E2046] shadow-lg'
-                            : 'bg-slate-50 hover:bg-sky-50 text-[#1E2046] border-slate-200/80'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-9 h-9 rounded-xl font-black text-xs flex items-center justify-center shrink-0 ${
-                              isSelected ? 'bg-[#E52B6D] text-white' : 'bg-white text-[#1E2046]'
-                            }`}
-                          >
-                            {athlete.first_name.charAt(0)}
-                            {athlete.last_name.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-black text-sm">
-                                {athlete.first_name} {athlete.last_name}
-                              </span>
-                              {athlete.from_athlos && (
-                                <span
-                                  className={`px-2 py-0.2 rounded-full text-[10px] font-black ${
-                                    isSelected
-                                      ? 'bg-white/20 text-white'
-                                      : 'bg-[#E52B6D]/10 text-[#E52B6D]'
-                                  }`}
-                                >
-                                  Athlos
-                                </span>
-                              )}
-                            </div>
+                  {psychCourse?.athletes && psychCourse.athletes.length > 0 ? (
+                    psychCourse.athletes.map(athlete => {
+                      const isSelected = psychAthlete?.id === athlete.id;
+                      const isDone = Boolean(evaluations[athlete.id]);
+                      return (
+                        <button
+                          key={athlete.id}
+                          type="button"
+                          onClick={() => selectChildForPsychForm(psychCourse.id, athlete)}
+                          className={`w-full text-left p-3.5 rounded-2xl border transition-colors flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#1E2046] text-white border-[#1E2046] shadow-lg'
+                              : 'bg-slate-50 hover:bg-sky-50 text-[#1E2046] border-slate-200/80'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
                             <div
-                              className={`text-[11px] font-bold ${
-                                isSelected ? 'text-sky-200' : 'text-slate-400'
+                              className={`w-9 h-9 rounded-xl font-black text-xs flex items-center justify-center shrink-0 ${
+                                isSelected ? 'bg-[#E52B6D] text-white' : 'bg-white text-[#1E2046]'
                               }`}
                             >
-                              {athlete.age} anni • {(childPhysicalTests[athlete.id] || []).length} test
-                              motori
+                              {athlete.first_name.charAt(0)}
+                              {athlete.last_name.charAt(0)}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-black text-sm">
+                                  {athlete.first_name} {athlete.last_name}
+                                </span>
+                                {athlete.from_athlos && (
+                                  <span
+                                    className={`px-2 py-0.2 rounded-full text-[10px] font-black ${
+                                      isSelected
+                                        ? 'bg-white/20 text-white'
+                                        : 'bg-[#E52B6D]/10 text-[#E52B6D]'
+                                    }`}
+                                  >
+                                    Athlos
+                                  </span>
+                                )}
+                              </div>
+                              <div
+                                className={`text-[11px] font-bold ${
+                                  isSelected ? 'text-sky-200' : 'text-slate-400'
+                                }`}
+                              >
+                                {athlete.age} anni • {(childPhysicalTests[athlete.id] || []).length} test
+                                motori
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        {isDone && (
-                          <CheckCircle2
-                            className={`w-5 h-5 shrink-0 ${
-                              isSelected ? 'text-emerald-400' : 'text-emerald-500'
-                            }`}
-                          />
-                        )}
+                          {isDone && (
+                            <CheckCircle2
+                              className={`w-5 h-5 shrink-0 ${
+                                isSelected ? 'text-emerald-400' : 'text-emerald-500'
+                              }`}
+                            />
+                          )}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="p-5 text-center bg-slate-50 rounded-2xl border border-slate-200">
+                      <p className="text-slate-500 font-bold text-xs mb-1">
+                        Nessun bambino iscritto a questo corso
+                      </p>
+                      <p className="text-[11px] text-slate-400 mb-3">
+                        Iscrivi un bambino dalla sezione Corsi per compilare la valutazione.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('courses');
+                          if (psychCourse) openAddAthleteModal(psychCourse.id);
+                        }}
+                        className="px-3 py-1.5 bg-[#1E2046] hover:bg-[#E52B6D] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        + Iscrivi Bambino
                       </button>
-                    );
-                  })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2346,7 +2284,9 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                   </p>
                 )}
               </div>
-            </motion.div>
+            </div>
+          )}
+        </motion.div>
           )}
         </AnimatePresence>
       </main>

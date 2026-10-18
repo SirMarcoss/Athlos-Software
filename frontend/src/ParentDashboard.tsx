@@ -79,64 +79,6 @@ interface Club {
   courses: Course[];
 }
 
-const MOCK_CHILDREN: Child[] = [
-  {
-    id: 'uuid-1',
-    first_name: 'Lorenzo',
-    last_name: 'Mazzone',
-    date_of_birth: '2018-04-12',
-    gender: 'M',
-    sport: 'Basket'
-  },
-  {
-    id: 'uuid-4',
-    first_name: 'Sofia',
-    last_name: 'Mazzone',
-    date_of_birth: '2018-02-18',
-    gender: 'F',
-    sport: 'Pallavolo'
-  }
-];
-
-const MOCK_LATEST_FORMS: Record<string, PsychForm> = {
-  'uuid-1': {
-    id: 'form-1',
-    date: '2026-09-15',
-    creativity_score: 8,
-    teamwork_score: 5,
-    stress_management_score: 6,
-    leadership_score: 6,
-    game_reading_score: 8,
-    motivation_score: 9,
-    ai_recommended_sport: `1.  SPORT CONSIGLIATO: Scherma
-2.  OBIETTIVO MOTORIO: La crescita a 8 anni richiede un affinamento della coordinazione oculo-manuale. La scherma esalta i suoi eccellenti riflessi permettendogli di canalizzare lo stress individualmente, compensando le difficoltà nelle dinamiche di squadra.
-3.  CONSIGLIO PER I GENITORI: Non forzatelo a fare il 'giocatore di squadra' in questa fase. La sua tranquillità emotiva nella pedana è una dote rara: valorizzatela.`,
-    coach_notes: 'Riflessi eccellenti, ma patisce le dinamiche di squadra.',
-    course_id: 'corso-basket-1'
-  }
-};
-
-const MOCK_CLUBS: Club[] = [
-  {
-    name: 'Polisportiva Punta Etnea',
-    address: 'Via Roma 45, San Giovanni La Punta',
-    distance: '0.8 km',
-    courses: [
-      { name: 'Scuola Calcio Base', age_range: '6-12', sport: 'Calcio' },
-      { name: 'Mini-Basket', age_range: '5-10', sport: 'Basket' }
-    ]
-  },
-  {
-    name: 'Centro Nuoto & Scherma Jonica',
-    address: 'Corso Italia 112, Acireale',
-    distance: '7.2 km',
-    courses: [
-      { name: 'Nuoto Formativo', age_range: '4-14', sport: 'Nuoto' },
-      { name: 'Scherma Agonistica', age_range: '8-16', sport: 'Scherma' }
-    ]
-  }
-];
-
 const parseGeminiAnalysis = (text: string | undefined) => {
   if (!text) return { sportName: 'N/A', objective: null, tip: null };
   const sportMatch = text.match(/1\.\s*(?:🏅\s*)?SPORT CONSIGLIATO:\s*(.*?)(?=\n2\.|$)/s);
@@ -153,22 +95,22 @@ const parseGeminiAnalysis = (text: string | undefined) => {
 };
 
 export default function ParentDashboard({ onLogout }: { onLogout: () => void }) {
-  const [children, setChildren] = useState<Child[]>(MOCK_CHILDREN);
-  const [forms, setForms] = useState<Record<string, PsychForm>>(MOCK_LATEST_FORMS);
+  const [children, setChildren] = useState<Child[]>([]);
+  const [forms, setForms] = useState<Record<string, PsychForm>>({});
   const [physicalTestsByChild, setPhysicalTestsByChild] = useState<
     Record<string, ApiPhysicalTestResponse[]>
   >({});
-  const [nearbyClubs, setNearbyClubs] = useState<Club[]>(MOCK_CLUBS);
+  const [nearbyClubs, setNearbyClubs] = useState<Club[]>([]);
 
   const [parentProfile, setParentProfile] = useState<ParentProfileState>({
-    first_name: 'Marco',
-    last_name: 'Mazzone',
-    phone: '+39 333 1234567',
-    fiscal_code: 'MZZMRC85A01C351X',
-    street: 'Via Roma 1',
-    city: 'Catania',
-    province: 'CT',
-    postal_code: '95100',
+    first_name: '',
+    last_name: '',
+    phone: '',
+    fiscal_code: '',
+    street: '',
+    city: '',
+    province: '',
+    postal_code: '',
     extra_notes: ''
   });
 
@@ -177,12 +119,12 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
   >('none');
   const [selectedAnalysisChildId, setSelectedAnalysisChildId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [myReferralCode, setMyReferralCode] = useState('ATH-A1B2C3');
-  const [myReferralLink, setMyReferralLink] = useState('https://athlos.it/register?ref=ATH-A1B2C3');
+  const [myReferralCode, setMyReferralCode] = useState('');
+  const [myReferralLink, setMyReferralLink] = useState('');
 
   // Stato nuovo figlio
   const [newChildFirstName, setNewChildFirstName] = useState('');
-  const [newChildLastName, setNewChildLastName] = useState('Mazzone');
+  const [newChildLastName, setNewChildLastName] = useState('');
   const [newChildDob, setNewChildDob] = useState('2018-05-10');
   const [newChildGender, setNewChildGender] = useState('M');
   const [newChildSport, setNewChildSport] = useState('Basket');
@@ -447,7 +389,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
         >
           <img src="/logo-light.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
           <p className="text-sky-200 font-medium text-sm group-hover:text-white transition-colors mt-2">
-            Area Famiglia • {parentProfile.first_name} {parentProfile.last_name}
+            Area Famiglia • {parentProfile.first_name ? `${parentProfile.first_name} ${parentProfile.last_name}` : 'Genitore'}
           </p>
         </button>
         <div className="flex flex-wrap gap-3 sm:gap-4">
@@ -977,8 +919,25 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {children.map((child, idx) => {
+        {children.length === 0 ? (
+          <div className="bg-white rounded-[32px] p-12 text-center border border-sky-100 shadow-xl max-w-xl mx-auto my-8">
+            <div className="w-16 h-16 rounded-2xl bg-sky-50 text-[#E52B6D] flex items-center justify-center mx-auto mb-4 font-black text-2xl">
+              🏃‍♂️
+            </div>
+            <h3 className="text-2xl font-black text-[#1E2046] mb-2">Nessun figlio registrato</h3>
+            <p className="text-slate-500 mb-6 text-sm">
+              Non hai ancora aggiunto i tuoi figli. Clicca sul pulsante qui sotto per registrarli con il loro codice fiscale e iniziare a monitorare i loro progressi sportivi.
+            </p>
+            <button
+              onClick={() => setActiveModal('add-child')}
+              className="px-6 py-3 bg-[#E52B6D] hover:bg-[#FF4F8B] text-white rounded-full font-bold text-sm shadow-md transition-colors cursor-pointer inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Aggiungi Figlio
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {children.map((child, idx) => {
             const form = forms[child.id];
 
             return (
@@ -1131,18 +1090,20 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
             );
           })}
         </div>
+      )}
 
-        {/* SEZIONE: ESPLORA E ISCRIVI (CLUB LIMITROFI) */}
-        <section className="mt-20">
-          <div className="flex justify-between items-end mb-8">
-            <div>
-              <h2 className="text-3xl font-black text-[#1E2046] tracking-tight">Club Vicino a Te</h2>
-              <p className="text-slate-500 font-medium mt-1">
-                Scopri dove iscrivere i tuoi figli per esplorare nuovi sport.
-              </p>
-            </div>
+      {/* SEZIONE: ESPLORA E ISCRIVI (CLUB LIMITROFI) */}
+      <section className="mt-20">
+        <div className="flex justify-between items-end mb-8">
+          <div>
+            <h2 className="text-3xl font-black text-[#1E2046] tracking-tight">Club Vicino a Te</h2>
+            <p className="text-slate-500 font-medium mt-1">
+              Scopri dove iscrivere i tuoi figli per esplorare nuovi sport.
+            </p>
           </div>
+        </div>
 
+        {nearbyClubs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {nearbyClubs.map((club, i) => (
               <div
@@ -1190,6 +1151,13 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
               </div>
             ))}
           </div>
+        ) : (
+          <div className="bg-white rounded-[24px] border border-slate-200 p-8 text-center text-slate-400">
+            <MapPin className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="font-bold text-[#1E2046]">Nessun centro sportivo convenzionato nelle vicinanze al momento.</p>
+            <p className="text-xs text-slate-400 mt-1">I nuovi club registrati su Athlos compariranno qui automaticamente.</p>
+          </div>
+        )}
         </section>
       </main>
     </div>
