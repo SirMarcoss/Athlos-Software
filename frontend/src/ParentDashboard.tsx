@@ -11,7 +11,8 @@ import {
   User as UserIcon,
   Phone,
   Info,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
 import {
   getToken,
@@ -22,10 +23,13 @@ import {
   getCatalogCourses,
   getMyChildren,
   createChild,
+  deleteChild,
   getChildEvaluations,
   getChildPhysicalTests,
+  autocompleteGeo,
   type ApiAddress,
-  type ApiPhysicalTestResponse
+  type ApiPhysicalTestResponse,
+  type ApiGeoSearchResult
 } from './api';
 
 // === INTERFACCE ===
@@ -81,16 +85,35 @@ interface Club {
 
 const parseGeminiAnalysis = (text: string | undefined) => {
   if (!text) return { sportName: 'N/A', objective: null, tip: null };
-  const sportMatch = text.match(/1\.\s*(?:🏅\s*)?SPORT CONSIGLIATO:\s*(.*?)(?=\n2\.|$)/s);
-  const objectiveMatch = text.match(/2\.\s*(?:🎯\s*)?OBIETTIVO MOTORIO:\s*(.*?)(?=\n3\.|$)/s);
-  const tipMatch = text.match(/3\.\s*(?:💡\s*)?CONSIGLIO PER I GENITORI:\s*(.*?)(?=$)/s);
+  const cleaned = text.trim().replace(/^["']|["']$/g, '');
+
+  const cleanMd = (t: string | undefined | null) => {
+    if (!t) return null;
+    return t
+      .replace(/#{1,6}\s*/g, '')
+      .replace(/---/g, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/^\s*[0-9]\.\s*/gm, '')
+      .trim();
+  };
+
+  const sportMatch = cleaned.match(/(?:SPORT CONSIGLIATO|Sport consigliato)[:\s*]+([^\n\r]+)/i);
+  const overviewMatch = cleaned.match(
+    /(?:PANORAMICA ABILIT[AÀ]|OBIETTIVO MOTORIO)[:\s*]+(.*?)(?=(?:CONSIGLIO PER (?:I GENITORI|LA FAMIGLIA)|### 3\.|$))/is
+  );
+  const tipMatch = cleaned.match(/(?:CONSIGLIO PER (?:I GENITORI|LA FAMIGLIA))[:\s*]+(.*)$/is);
+
+  let rawSport = sportMatch ? sportMatch[1].split('*(')[0].split('---')[0] : cleaned.split('\n')[0];
+  rawSport = cleanMd(rawSport) || 'Attività Consigliata';
+
+  const overview = cleanMd(overviewMatch ? overviewMatch[1] : null);
+  const tip = cleanMd(tipMatch ? tipMatch[1] : null);
 
   return {
-    sportName: sportMatch
-      ? sportMatch[1].trim()
-      : text.split('\n')[0].replace(/1\.\s*(?:🏅\s*)?SPORT CONSIGLIATO:\s*/, '').trim(),
-    objective: objectiveMatch ? objectiveMatch[1].trim() : null,
-    tip: tipMatch ? tipMatch[1].trim() : null
+    sportName: rawSport,
+    objective: overview || (cleaned && !tip ? cleanMd(cleaned) : null),
+    tip: tip
   };
 };
 
@@ -127,9 +150,75 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
   const [newChildLastName, setNewChildLastName] = useState('');
   const [newChildDob, setNewChildDob] = useState('2018-05-10');
   const [newChildGender, setNewChildGender] = useState('M');
-  const [newChildSport, setNewChildSport] = useState('Basket');
+  const [newChildSport, setNewChildSport] = useState('Nessuno');
   const [newChildFiscalCode, setNewChildFiscalCode] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Autocomplete indirizzi OpenStreetMap per Profilo Genitore
+  const [parentGeoResults, setParentGeoResults] = useState<ApiGeoSearchResult[]>([]);
+
+  const handleParentGeoSearch = async (query: string) => {
+    if (query.trim().length < 2) {
+      setParentGeoResults([]);
+      return;
+    }
+    try {
+      const results = await autocompleteGeo(query, 5);
+      if (results && results.length > 0) {
+        setParentGeoResults(results);
+        return;
+      }
+    } catch {
+      // Fallback
+    }
+    setParentGeoResults([]);
+  };
+
+  const selectParentGeo = (geo: ApiGeoSearchResult) => {
+    setParentProfile(prev => ({
+      ...prev,
+      street: geo.street || geo.display_name.split(',')[0]?.trim() || prev.street,
+      city: geo.city || prev.city,
+      province: geo.province ? geo.province.toUpperCase() : prev.province,
+      postal_code: geo.postal_code && /^\d{5}$/.test(geo.postal_code) ? geo.postal_code : prev.postal_code
+    }));
+    setParentGeoResults([]);
+  };
+
+  const loadClubsAndCourses = async () => {
+    let clubsRes: any[] = [];
+    let coursesRes: any[] = [];
+    try {
+      clubsRes = await getMyNearbyClubs();
+    } catch {
+      // Nessun club limitrofo trovato o indirizzo non impostato
+    }
+
+    try {
+      coursesRes = await getCatalogCourses();
+    } catch {
+      // Corsi generali non trovati
+    }
+
+    if (clubsRes.length > 0) {
+      const mappedClubs: Club[] = clubsRes.map(cl => {
+        const clubCourses = coursesRes.filter(cr => cr.clubs_id === cl.id);
+        const minDistance = clubCourses.find(cr => cr.distance_km != null)?.distance_km;
+        const addrParts = [cl.address?.street, cl.address?.city].filter(Boolean);
+        return {
+          name: cl.name,
+          address: addrParts.join(', ') || 'Indirizzo del centro',
+          distance: minDistance != null ? `${minDistance} km` : 'Vicino a te',
+          courses: clubCourses.map(cr => ({
+            name: cr.name,
+            age_range: `${cr.min_age}-${cr.max_age}`,
+            sport: cr.name
+          }))
+        };
+      });
+      setNearbyClubs(mappedClubs);
+    }
+  };
 
   // Toast di conferma con cleanup del timer
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -228,25 +317,29 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
       .catch(() => {});
 
     // 4. Club Vicini e Corsi Disponibili
-    Promise.all([getMyNearbyClubs(), getCatalogCourses()])
-      .then(([clubsRes, coursesRes]) => {
+    getMyNearbyClubs()
+      .then(clubsRes => {
         if (clubsRes.length > 0) {
-          const mappedClubs: Club[] = clubsRes.map(cl => {
-            const clubCourses = coursesRes.filter(cr => cr.clubs_id === cl.id);
-            const minDistance = clubCourses.find(cr => cr.distance_km != null)?.distance_km;
-            const addrParts = [cl.address?.street, cl.address?.city].filter(Boolean);
-            return {
-              name: cl.name,
-              address: addrParts.join(', ') || 'Indirizzo del centro',
-              distance: minDistance != null ? `${minDistance} km` : 'Vicino a te',
-              courses: clubCourses.map(cr => ({
-                name: cr.name,
-                age_range: `${cr.min_age}-${cr.max_age}`,
-                sport: cr.name
-              }))
-            };
-          });
-          setNearbyClubs(mappedClubs);
+          getCatalogCourses()
+            .then(coursesRes => {
+              const mappedClubs: Club[] = clubsRes.map(cl => {
+                const clubCourses = coursesRes.filter(cr => cr.clubs_id === cl.id);
+                const minDistance = clubCourses.find(cr => cr.distance_km != null)?.distance_km;
+                const addrParts = [cl.address?.street, cl.address?.city].filter(Boolean);
+                return {
+                  name: cl.name,
+                  address: addrParts.join(', ') || 'Indirizzo del centro',
+                  distance: minDistance != null ? `${minDistance} km` : 'Vicino a te',
+                  courses: clubCourses.map(cr => ({
+                    name: cr.name,
+                    age_range: `${cr.min_age}-${cr.max_age}`,
+                    sport: cr.name
+                  }))
+                };
+              });
+              setNearbyClubs(mappedClubs);
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {});
@@ -321,6 +414,23 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     }
   };
 
+  const handleDeleteChild = async (childId: string, childName: string) => {
+    if (
+      !window.confirm(
+        `Sei sicuro di voler eliminare ${childName}? Questa operazione cancellerà il profilo del bambino e lo storico delle sue valutazioni.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteChild(childId);
+      setChildren(prev => prev.filter(c => c.id !== childId));
+      showToast(`${childName} rimosso con successo.`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Errore durante l'eliminazione del figlio");
+    }
+  };
+
   const handleSaveParentProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -350,6 +460,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
       }
       setActiveModal('none');
       showToast('Profilo aggiornato con successo!');
+      loadClubsAndCourses();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore salvataggio profilo';
       showToast(msg);
@@ -561,6 +672,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                           onChange={e => setNewChildSport(e.target.value)}
                           className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-bold text-[#1E2046]"
                         >
+                          <option value="Nessuno">⚪ Nessuno (in cerca del primo sport)</option>
                           <option value="Basket">🏀 Basket</option>
                           <option value="Pallavolo">🏐 Pallavolo</option>
                           <option value="Calcio">⚽ Calcio</option>
@@ -640,23 +752,44 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       </div>
                     </div>
 
+                    {/* Indirizzo di Residenza con completamento automatico */}
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="col-span-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                          Via e Numero
+                      <div className="col-span-2 relative">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Via e Numero Civico
                         </label>
                         <div className="relative">
-                          <MapPin className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
+                          <MapPin className="w-4 h-4 absolute left-3 top-3 text-slate-400 pointer-events-none" />
                           <input
                             type="text"
                             required
+                            placeholder="Cerca via e civico (es. Via Imperia 25)..."
                             value={parentProfile.street}
-                            onChange={e =>
-                              setParentProfile({ ...parentProfile, street: e.target.value })
-                            }
-                            className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                            onChange={e => {
+                              const val = e.target.value;
+                              setParentProfile({ ...parentProfile, street: val });
+                              handleParentGeoSearch(val);
+                            }}
+                            className="w-full pl-9 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
                           />
                         </div>
+                        {parentGeoResults.length > 0 && (
+                          <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                            {parentGeoResults.map((g, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => selectParentGeo(g)}
+                                className="w-full text-left px-3.5 py-2 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer"
+                              >
+                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D] shrink-0" />
+                                <span className="text-xs font-bold text-[#1E2046] truncate">
+                                  {g.display_name}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
@@ -666,6 +799,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                           type="text"
                           pattern="\d{5}"
                           required
+                          placeholder="95037"
                           value={parentProfile.postal_code}
                           onChange={e =>
                             setParentProfile({ ...parentProfile, postal_code: e.target.value })
@@ -877,10 +1011,10 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                           {aiData.objective && (
                             <div>
                               <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                                Obiettivo di Crescita e Motorio
+                                Panoramica sulle Abilità di {selectedChild.first_name}
                               </h4>
                               <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-                                <p className="text-slate-600 font-medium leading-relaxed">
+                                <p className="text-slate-600 font-medium leading-relaxed whitespace-pre-line">
                                   {aiData.objective}
                                 </p>
                               </div>
@@ -967,24 +1101,36 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                                 ? '🤸'
                                 : child.sport === 'Arti Marziali' || child.sport === 'Judo'
                                   ? '🥋'
-                                  : '🏅'}
+                                  : child.sport === 'Nessuno'
+                                    ? '👟'
+                                    : '🏅'}
                 </div>
 
-                <div className="flex items-center gap-5 mb-8 relative z-10">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center font-black text-2xl shadow-lg">
-                    {child.first_name.charAt(0)}
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black text-[#1E2046]">
-                      {child.first_name} {child.last_name}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="bg-sky-100 text-[#E52B6D] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
-                        {child.sport}
-                      </span>
-                      <span className="text-slate-400 font-medium text-sm flex items-center gap-1">
-                        <MapPin className="w-4 h-4" /> Iscritto tramite Athlos
-                      </span>
+                <div className="flex items-center mb-8 relative z-10">
+                  <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center font-black text-2xl shadow-lg shrink-0">
+                      {child.first_name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-2xl font-black text-[#1E2046] truncate">
+                        {child.first_name} {child.last_name}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        {child.sport === 'Nessuno' ? (
+                          <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+                            In cerca di uno sport
+                          </span>
+                        ) : (
+                          <span className="bg-sky-100 text-[#E52B6D] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+                            {child.sport}
+                          </span>
+                        )}
+                        {child.fiscal_code && (
+                          <span className="bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold">
+                            CF: {child.fiscal_code}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1086,6 +1232,18 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                     </p>
                   </div>
                 )}
+
+                <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between relative z-10">
+                  <span className="text-xs text-slate-400 font-medium">Gestione atleta</span>
+                  <button
+                    onClick={() => handleDeleteChild(child.id, child.first_name)}
+                    title={`Elimina ${child.first_name}`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Elimina profilo</span>
+                  </button>
+                </div>
               </motion.div>
             );
           })}
@@ -1151,11 +1309,31 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
               </div>
             ))}
           </div>
+        ) : !parentProfile.street ? (
+          <div className="bg-white rounded-[24px] border border-amber-200/80 bg-amber-50/20 p-8 text-center">
+            <MapPin className="w-10 h-10 text-[#E52B6D] mx-auto mb-3" />
+            <h4 className="font-bold text-[#1E2046] text-lg mb-1">
+              Imposta il tuo indirizzo di residenza
+            </h4>
+            <p className="text-sm text-slate-500 max-w-md mx-auto mb-5">
+              Athlos calcola in tempo reale la distanza dai centri sportivi affiliati entro 15 km dalla tua abitazione.
+            </p>
+            <button
+              onClick={() => setActiveModal('profile')}
+              className="px-6 py-2.5 bg-[#E52B6D] hover:bg-[#FF4F8B] text-white font-bold text-sm rounded-xl transition-colors shadow-md cursor-pointer inline-flex items-center gap-2"
+            >
+              <MapPin className="w-4 h-4" /> Completa Indirizzo nel Profilo
+            </button>
+          </div>
         ) : (
           <div className="bg-white rounded-[24px] border border-slate-200 p-8 text-center text-slate-400">
             <MapPin className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="font-bold text-[#1E2046]">Nessun centro sportivo convenzionato nelle vicinanze al momento.</p>
-            <p className="text-xs text-slate-400 mt-1">I nuovi club registrati su Athlos compariranno qui automaticamente.</p>
+            <p className="font-bold text-[#1E2046]">
+              Nessun centro sportivo convenzionato registrato entro 15 km da {parentProfile.city || 'te'} al momento.
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              I nuovi club che si affiliano ad Athlos nella tua zona compariranno qui automaticamente.
+            </p>
           </div>
         )}
         </section>

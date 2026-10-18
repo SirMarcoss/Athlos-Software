@@ -57,9 +57,17 @@ class EvaluationService:
         dob = child.date_of_birth
         age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
-        # 4. PREPARAZIONE DATI PER L'AI (Filtro Geografico)
-        # Mock per ora: in produzione faremo query spaziale (PostGIS) sui club nel raggio di 20km
-        available_sports_mock = ["Mini-Basket", "Scuola Calcio", "Ginnastica Artistica", "Scherma", "Judo", "Nuoto Formativo"]
+        # 4. PREPARAZIONE SPORT DISPONIBILI (Discipline attive nel centro sportivo e strutture limitrofe)
+        stmt_sports = select(Course.sport_category).where(Course.sport_category.isnot(None)).distinct()
+        res_sports = await self.db.execute(stmt_sports)
+        active_sports = [row[0] for row in res_sports.all() if row[0]]
+
+        if not active_sports:
+            stmt_names = select(Course.name).distinct()
+            res_names = await self.db.execute(stmt_names)
+            active_sports = [row[0] for row in res_names.all() if row[0]]
+
+        available_sports = active_sports if active_sports else ["Basket", "Calcio", "Pallavolo", "Nuoto", "Ginnastica Artistica", "Judo", "Scherma", "Tennis"]
         
         # Sintesi dei test fisici da passare all'AI in formato stringa leggibile
         physical_summary = ", ".join([f"{pt.test_type}: {pt.score_value}" for pt in session_in.physical_tests])
@@ -79,7 +87,7 @@ class EvaluationService:
             leadership_score=session_in.psychological_form.leadership_score,
             game_reading_score=session_in.psychological_form.game_reading_score,
             motivation_score=session_in.psychological_form.motivation_score,
-            available_sports=available_sports_mock,
+            available_sports=available_sports,
             coach_notes=session_in.coach_notes
         )
 

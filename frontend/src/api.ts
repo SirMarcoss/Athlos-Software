@@ -497,7 +497,57 @@ export async function autocompleteGeo(
   query: string,
   limit = 5
 ): Promise<ApiGeoSearchResult[]> {
-  return apiFetch<ApiGeoSearchResult[]>(
-    `/geo/autocomplete?q=${encodeURIComponent(query)}&limit=${limit}`
-  );
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
+
+  try {
+    const res = await apiFetch<ApiGeoSearchResult[]>(
+      `/geo/autocomplete?q=${encodeURIComponent(trimmed)}&limit=${limit}`
+    );
+    if (res && res.length > 0) {
+      return res;
+    }
+  } catch {
+    // Fallback su Nominatim diretto
+  }
+
+  // Fallback client-side diretto su OpenStreetMap Nominatim
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+      trimmed
+    )}&addressdetails=1&countrycodes=it&limit=${limit}`;
+    const resp = await fetch(url, {
+      headers: {
+        'Accept-Language': 'it'
+      }
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((item: any) => {
+          const addr = item.address || {};
+          const streetName =
+            addr.road || addr.pedestrian || addr.street || addr.suburb || item.name || '';
+          const fullStreet = addr.house_number ? `${streetName} ${addr.house_number}` : streetName;
+          const city =
+            addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
+          const province = addr.county || addr.state_district || '';
+          return {
+            display_name: item.display_name,
+            street: fullStreet,
+            city: city,
+            province: province,
+            postal_code: addr.postcode || '',
+            country: addr.country || 'Italia',
+            latitude: parseFloat(item.lat),
+            longitude: parseFloat(item.lon)
+          };
+        });
+      }
+    }
+  } catch {
+    // Ignora errori di rete
+  }
+
+  return [];
 }

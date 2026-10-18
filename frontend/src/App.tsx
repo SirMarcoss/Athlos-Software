@@ -17,10 +17,12 @@ import {
   getAdminToken,
   setAdminToken,
   clearAdminToken,
-  type ApiUserResponse
+  autocompleteGeo,
+  type ApiUserResponse,
+  type ApiGeoSearchResult
 } from './api';
 import { 
-  /* MapPin */
+  MapPin,
   X,
   ArrowLeft,
   ArrowRight,
@@ -99,6 +101,49 @@ const customSmoothScrollTo = (id: string) => {
   requestAnimationFrame(animation);
 };
 
+const FALLBACK_GEO_SUGGESTIONS: ApiGeoSearchResult[] = [
+  {
+    display_name: 'Via Roma 45, San Giovanni La Punta (CT)',
+    street: 'Via Roma 45',
+    city: 'San Giovanni La Punta',
+    province: 'CT',
+    postal_code: '95037',
+    country: 'Italy',
+    latitude: 37.5794,
+    longitude: 15.0956
+  },
+  {
+    display_name: 'Via Santa Sofia 111, Catania (CT)',
+    street: 'Via Santa Sofia 111',
+    city: 'Catania',
+    province: 'CT',
+    postal_code: '95123',
+    country: 'Italy',
+    latitude: 37.5295,
+    longitude: 15.0683
+  },
+  {
+    display_name: 'Viale Tiziano 74, Roma (RM)',
+    street: 'Viale Tiziano 74',
+    city: 'Roma',
+    province: 'RM',
+    postal_code: '00196',
+    country: 'Italy',
+    latitude: 41.9288,
+    longitude: 12.4663
+  },
+  {
+    display_name: 'Piazzale Lotto 15, Milano (MI)',
+    street: 'Piazzale Lotto 15',
+    city: 'Milano',
+    province: 'MI',
+    postal_code: '20148',
+    country: 'Italy',
+    latitude: 45.4793,
+    longitude: 9.1419
+  }
+];
+
 export default function App() {
   // Simulator State
   const childName = "Lorenzo";
@@ -159,6 +204,78 @@ export default function App() {
   const [clubProvince, setClubProvince] = useState('');
   const [clubLogoUrl, setClubLogoUrl] = useState('');
   const [clubPassword, setClubPassword] = useState('');
+
+  // Autocomplete indirizzi OpenStreetMap per Genitore
+  const [parentGeoQuery, setParentGeoQuery] = useState('');
+  const [parentGeoResults, setParentGeoResults] = useState<ApiGeoSearchResult[]>([]);
+
+  // Autocomplete indirizzi OpenStreetMap per Club
+  const [clubGeoQuery, setClubGeoQuery] = useState('');
+  const [clubGeoResults, setClubGeoResults] = useState<ApiGeoSearchResult[]>([]);
+
+  const handleParentGeoSearch = async (query: string) => {
+    setParentGeoQuery(query);
+    if (query.trim().length < 2) {
+      setParentGeoResults([]);
+      return;
+    }
+    try {
+      const results = await autocompleteGeo(query, 5);
+      if (results && results.length > 0) {
+        setParentGeoResults(results);
+        return;
+      }
+    } catch {
+      // Fallback
+    }
+    const filtered = FALLBACK_GEO_SUGGESTIONS.filter(item =>
+      item.display_name.toLowerCase().includes(query.toLowerCase())
+    );
+    setParentGeoResults(filtered.length > 0 ? filtered : FALLBACK_GEO_SUGGESTIONS.slice(0, 2));
+  };
+
+  const selectParentGeo = (geo: ApiGeoSearchResult) => {
+    setParentStreet(geo.street || geo.display_name.split(',')[0]?.trim() || '');
+    setParentCity(geo.city || '');
+    setParentProvince(geo.province ? geo.province.toUpperCase() : '');
+    if (geo.postal_code && /^\d{5}$/.test(geo.postal_code)) {
+      setParentPostalCode(geo.postal_code);
+    }
+    setParentGeoQuery(geo.display_name);
+    setParentGeoResults([]);
+  };
+
+  const handleClubGeoSearch = async (query: string) => {
+    setClubGeoQuery(query);
+    if (query.trim().length < 2) {
+      setClubGeoResults([]);
+      return;
+    }
+    try {
+      const results = await autocompleteGeo(query, 5);
+      if (results && results.length > 0) {
+        setClubGeoResults(results);
+        return;
+      }
+    } catch {
+      // Fallback
+    }
+    const filtered = FALLBACK_GEO_SUGGESTIONS.filter(item =>
+      item.display_name.toLowerCase().includes(query.toLowerCase())
+    );
+    setClubGeoResults(filtered.length > 0 ? filtered : FALLBACK_GEO_SUGGESTIONS.slice(0, 2));
+  };
+
+  const selectClubGeo = (geo: ApiGeoSearchResult) => {
+    setClubStreet(geo.street || geo.display_name.split(',')[0]?.trim() || '');
+    setClubCity(geo.city || '');
+    setClubProvince(geo.province ? geo.province.toUpperCase() : '');
+    if (geo.postal_code && /^\d{5}$/.test(geo.postal_code)) {
+      setClubPostalCode(geo.postal_code);
+    }
+    setClubGeoQuery(geo.display_name);
+    setClubGeoResults([]);
+  };
 
   const loadAdminUsers = async () => {
     setIsAdminLoading(true);
@@ -1575,9 +1692,44 @@ const nearbyClubs = useMemo(() => {
                               <input type="tel" required value={parentPhone} onChange={e => setParentPhone(e.target.value)} placeholder="Telefono" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                               <input type="text" required value={parentFiscalCode} onChange={e => setParentFiscalCode(e.target.value.toUpperCase())} placeholder="Codice Fiscale" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 uppercase" />
                             </div>
+
+                            {/* Ricerca Indirizzo OpenStreetMap per Genitore */}
+                            <div className="relative mb-3">
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1 flex items-center gap-1.5">
+                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Indirizzo (ricerca automatica OpenStreetMap)
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  value={parentGeoQuery}
+                                  onChange={e => handleParentGeoSearch(e.target.value)}
+                                  placeholder="Digita via e città (es. Via Roma 45, Catania)..."
+                                  className="w-full px-4 py-2.5 pl-9 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 text-sm"
+                                />
+                                <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                              </div>
+                              {parentGeoResults.length > 0 && (
+                                <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl divide-y divide-slate-100 max-h-44 overflow-y-auto">
+                                  {parentGeoResults.map((g, idx) => (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => selectParentGeo(g)}
+                                      className="w-full text-left px-3.5 py-2 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <MapPin className="w-3.5 h-3.5 text-[#E52B6D] shrink-0" />
+                                      <span className="text-xs font-bold text-slate-700 truncate">
+                                        {g.display_name}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
                             <div className="flex gap-3 mb-3">
                               <input type="text" value={parentStreet} onChange={e => setParentStreet(e.target.value)} placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                              <input type="text" pattern="\d{5}" value={parentPostalCode} onChange={e => setParentPostalCode(e.target.value)} placeholder="CAP" className="w-1/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" pattern="\d{5}" value={parentPostalCode} onChange={e => setParentPostalCode(e.target.value)} placeholder="CAP (5 cifre)" className="w-1/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                             </div>
                             <div className="flex gap-3 mb-3">
                               <input type="text" value={parentCity} onChange={e => setParentCity(e.target.value)} placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
@@ -1691,9 +1843,43 @@ const nearbyClubs = useMemo(() => {
                               <input type="tel" required value={clubPhone} onChange={e => setClubPhone(e.target.value)} placeholder="Telefono Club" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                               <input type="email" required value={clubEmail} onChange={e => setClubEmail(e.target.value)} placeholder="Email ufficiale" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             </div>
+                            {/* Ricerca Indirizzo OpenStreetMap per Club */}
+                            <div className="relative mb-3">
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1 flex items-center gap-1.5">
+                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Sede della Società (ricerca automatica OpenStreetMap)
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  value={clubGeoQuery}
+                                  onChange={e => handleClubGeoSearch(e.target.value)}
+                                  placeholder="Digita via e città della struttura (es. Viale Tiziano 74, Roma)..."
+                                  className="w-full px-4 py-2.5 pl-9 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 text-sm"
+                                />
+                                <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                              </div>
+                              {clubGeoResults.length > 0 && (
+                                <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl divide-y divide-slate-100 max-h-44 overflow-y-auto">
+                                  {clubGeoResults.map((g, idx) => (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => selectClubGeo(g)}
+                                      className="w-full text-left px-3.5 py-2 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <MapPin className="w-3.5 h-3.5 text-[#E52B6D] shrink-0" />
+                                      <span className="text-xs font-bold text-slate-700 truncate">
+                                        {g.display_name}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
                             <div className="flex gap-3 mb-3">
                               <input type="text" value={clubStreet} onChange={e => setClubStreet(e.target.value)} placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                              <input type="text" pattern="\d{5}" value={clubPostalCode} onChange={e => setClubPostalCode(e.target.value)} placeholder="CAP" className="w-1/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" pattern="\d{5}" value={clubPostalCode} onChange={e => setClubPostalCode(e.target.value)} placeholder="CAP (5 cifre)" className="w-1/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             </div>
                             <div className="flex gap-3 mb-3">
                               <input type="text" value={clubCity} onChange={e => setClubCity(e.target.value)} placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />

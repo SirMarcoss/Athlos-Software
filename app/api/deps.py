@@ -69,23 +69,25 @@ async def get_current_user(
     return user
 
 
-def require_role(*allowed_roles: UserRoleEnum):
+def require_role(*roles):
     """
-    Dipendenza riutilizzabile per proteggere gli endpoint in base al ruolo.
-    Uso: Depends(require_role(UserRoleEnum.PARENT))
+    Dipendenza per proteggere gli endpoint in base al ruolo.
+    Accetta sia require_role(A, B) che require_role([A, B]).
     """
-
+    flat = []
+    for r in roles:
+        if isinstance(r, (list, tuple, set)):
+            flat.extend(r)
+        else:
+            flat.append(r)
+    allowed_roles = set(flat)
     async def role_checker(current_user: User = Depends(get_current_user)) -> User:
-        # Se l'utente è un ADMIN, lo lasciamo passare sempre (superpoteri!)
         if current_user.role == UserRoleEnum.ADMIN:
             return current_user
-
-        # Se il suo ruolo non è tra quelli ammessi, blocchiamo la richiesta
         if current_user.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Accesso negato. Questa azione richiede uno dei seguenti ruoli: {[r.value for r in allowed_roles]}"
             )
         return current_user
-
     return role_checker

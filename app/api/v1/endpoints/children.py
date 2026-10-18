@@ -37,7 +37,7 @@ async def add_child(
 async def get_child_by_cf(
         fiscal_code : str,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(require_role([UserRoleEnum.CLUB, UserRoleEnum.ADMIN]))
+        current_user: User = Depends(require_role(UserRoleEnum.CLUB, UserRoleEnum.ADMIN))
 ):
     """Permette al centro sportivo di trovare un bambino dal codice fiscale per iscriverlo al corso."""
 

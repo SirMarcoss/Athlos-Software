@@ -212,16 +212,35 @@ const FALLBACK_GEO_SUGGESTIONS: GeoSearchResult[] = [
 
 const parseGeminiAnalysis = (text: string | undefined) => {
   if (!text) return { sportName: 'N/A', objective: null, tip: null };
-  const sportMatch = text.match(/1\.\s*(?:🏅\s*)?SPORT CONSIGLIATO:\s*(.*?)(?=\n2\.|$)/s);
-  const objectiveMatch = text.match(/2\.\s*(?:🎯\s*)?OBIETTIVO MOTORIO:\s*(.*?)(?=\n3\.|$)/s);
-  const tipMatch = text.match(/3\.\s*(?:💡\s*)?CONSIGLIO PER I GENITORI:\s*(.*?)(?=$)/s);
+  const cleaned = text.trim().replace(/^["']|["']$/g, '');
+
+  const cleanMd = (t: string | undefined | null) => {
+    if (!t) return null;
+    return t
+      .replace(/#{1,6}\s*/g, '')
+      .replace(/---/g, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/^\s*[0-9]\.\s*/gm, '')
+      .trim();
+  };
+
+  const sportMatch = cleaned.match(/(?:SPORT CONSIGLIATO|Sport consigliato)[:\s*]+([^\n\r]+)/i);
+  const overviewMatch = cleaned.match(
+    /(?:PANORAMICA ABILIT[AÀ]|OBIETTIVO MOTORIO)[:\s*]+(.*?)(?=(?:CONSIGLIO PER (?:I GENITORI|LA FAMIGLIA)|### 3\.|$))/is
+  );
+  const tipMatch = cleaned.match(/(?:CONSIGLIO PER (?:I GENITORI|LA FAMIGLIA))[:\s*]+(.*)$/is);
+
+  let rawSport = sportMatch ? sportMatch[1].split('*(')[0].split('---')[0] : cleaned.split('\n')[0];
+  rawSport = cleanMd(rawSport) || 'Attività Consigliata';
+
+  const overview = cleanMd(overviewMatch ? overviewMatch[1] : null);
+  const tip = cleanMd(tipMatch ? tipMatch[1] : null);
 
   return {
-    sportName: sportMatch
-      ? sportMatch[1].trim()
-      : text.split('\n')[0].replace(/1\.\s*(?:🏅\s*)?SPORT CONSIGLIATO:\s*/, '').trim(),
-    objective: objectiveMatch ? objectiveMatch[1].trim() : null,
-    tip: tipMatch ? tipMatch[1].trim() : null
+    sportName: rawSport,
+    objective: overview || (cleaned && !tip ? cleanMd(cleaned) : null),
+    tip: tip
   };
 };
 
@@ -344,7 +363,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
 
   // --- STATO MODALE PROFILO CENTRO ---
   const [profileForm, setProfileForm] = useState<ClubProfile>(DEFAULT_EMPTY_CLUB);
-  const [geoQuery, setGeoQuery] = useState('');
   const [geoResults, setGeoResults] = useState<GeoSearchResult[]>([]);
   const [confirmDeleteClub, setConfirmDeleteClub] = useState(false);
 
@@ -801,7 +819,8 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           })
           .catch(emailErr => {
             console.warn('Invio email automatico non riuscito:', emailErr);
-            showToast(`Scheda salvata per ${psychAthlete.first_name}! (Configurare Resend per l'invio email)`);
+            const msg = emailErr instanceof Error ? emailErr.message : "Errore invio email";
+            showToast(`Scheda salvata! (${msg})`);
           });
       } else {
         showToast(`Passaporto AI generato per ${psychAthlete.first_name}!`);
@@ -865,7 +884,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   // === HANDLERS PROFILO E CORSI ===
 
   const handleGeoSearch = async (query: string) => {
-    setGeoQuery(query);
     if (query.trim().length < 2) {
       setGeoResults([]);
       return;
@@ -882,14 +900,14 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     const filtered = FALLBACK_GEO_SUGGESTIONS.filter(item =>
       item.display_name.toLowerCase().includes(query.toLowerCase())
     );
-    setGeoResults(filtered.length > 0 ? filtered : FALLBACK_GEO_SUGGESTIONS.slice(0, 2));
+    setGeoResults(filtered);
   };
 
   const selectGeoResult = (geo: GeoSearchResult) => {
     setProfileForm(prev => ({
       ...prev,
       address: {
-        street: geo.street || prev.address.street,
+        street: geo.street || (geo.display_name ? geo.display_name.split(',')[0].trim() : prev.address.street),
         number: prev.address.number,
         city: geo.city || prev.address.city,
         province: geo.province || prev.address.province,
@@ -902,7 +920,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       latitude: Number(geo.latitude.toFixed(4)),
       longitude: Number(geo.longitude.toFixed(4))
     }));
-    setGeoQuery(geo.display_name);
     setGeoResults([]);
   };
 
@@ -1169,7 +1186,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           <button
             onClick={() => {
               setProfileForm(club);
-              setGeoQuery('');
               setGeoResults([]);
               setConfirmDeleteClub(false);
               setActiveModal('profile');
@@ -2270,11 +2286,15 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                     <button
                       type="submit"
                       disabled={isSubmittingEval}
-                      className="w-full py-4 bg-gradient-to-r from-[#1E2046] to-[#E52B6D] hover:opacity-95 transition-opacity text-white rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-3 cursor-pointer"
+                      className="w-full py-4 bg-gradient-to-r from-[#1E2046] to-[#E52B6D] hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-white rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-3 cursor-pointer"
                     >
-                      <Sparkles className="w-5 h-5" />
+                      {isSubmittingEval ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-5 h-5" />
+                      )}
                       {isSubmittingEval
-                        ? 'Salvataggio in corso...'
+                        ? 'Salvataggio e Analisi AI in corso...'
                         : 'Salva Valutazione di Fine Trimestre'}
                     </button>
                   </form>
@@ -2404,112 +2424,104 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                       />
                     </div>
 
-                    {/* Sezione Indirizzo semplice e pulita */}
-                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <MapPin className="w-4 h-4 text-[#E52B6D]" />
-                        Indirizzo del Centro
-                      </label>
+                    {/* Sezione Indirizzo della Struttura con autocompletamento OpenStreetMap */}
+                    <div className="space-y-4 pt-1">
                       <div className="relative">
-                        <input
-                          type="text"
-                          value={geoQuery}
-                          onChange={e => handleGeoSearch(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') e.preventDefault();
-                          }}
-                          placeholder="Cerca il tuo indirizzo (es. Via Roma 45, Catania)..."
-                          className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-[#E52B6D] text-sm font-medium text-[#1E2046]"
-                        />
-                      </div>
-
-                      {geoResults.length > 0 && (
-                        <div className="bg-white rounded-xl border border-slate-200 shadow-lg divide-y divide-slate-100 overflow-hidden">
-                          {geoResults.map((g, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => selectGeoResult(g)}
-                              className="w-full text-left px-4 py-2.5 hover:bg-sky-50 transition-colors flex items-center gap-2 cursor-pointer"
-                            >
-                              <MapPin className="w-4 h-4 text-[#E52B6D] shrink-0" />
-                              <span className="text-sm font-bold text-[#1E2046] truncate">
-                                {g.display_name}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-3 gap-3 pt-1">
-                        <div className="col-span-2">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                            Via e Numero
-                          </label>
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Via e Numero Civico
+                        </label>
+                        <div className="relative">
+                          <MapPin className="w-4 h-4 absolute left-3 top-3 text-slate-400 pointer-events-none" />
                           <input
                             type="text"
+                            required
+                            placeholder="Cerca via e civico (es. Via Roma 45, Catania)..."
                             value={profileForm.address.street}
-                            onChange={e =>
-                              setProfileForm({
-                                ...profileForm,
-                                address: { ...profileForm.address, street: e.target.value }
-                              })
-                            }
-                            className="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm font-medium text-[#1E2046]"
+                            onChange={e => {
+                              const val = e.target.value;
+                              setProfileForm(prev => ({
+                                ...prev,
+                                address: { ...prev.address, street: val }
+                              }));
+                              handleGeoSearch(val);
+                            }}
+                            className="w-full pl-9 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
                           />
                         </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                        {geoResults.length > 0 && (
+                          <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                            {geoResults.map((g, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => selectGeoResult(g)}
+                                className="w-full text-left px-3.5 py-2.5 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer"
+                              >
+                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D] shrink-0" />
+                                <span className="text-xs font-bold text-[#1E2046] truncate">
+                                  {g.display_name}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
                             Città
                           </label>
                           <input
                             type="text"
+                            required
                             value={profileForm.address.city}
                             onChange={e =>
-                              setProfileForm({
-                                ...profileForm,
-                                address: { ...profileForm.address, city: e.target.value }
-                              })
+                              setProfileForm(prev => ({
+                                ...prev,
+                                address: { ...prev.address, city: e.target.value }
+                              }))
                             }
-                            className="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm font-medium text-[#1E2046]"
+                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                            Provincia (Sigla)
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={2}
+                            required
+                            value={profileForm.address.province}
+                            onChange={e =>
+                              setProfileForm(prev => ({
+                                ...prev,
+                                address: { ...prev.address, province: e.target.value.toUpperCase() }
+                              }))
+                            }
+                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046] uppercase"
                           />
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                            Provincia
-                          </label>
-                          <input
-                            type="text"
-                            value={profileForm.address.province}
-                            onChange={e =>
-                              setProfileForm({
-                                ...profileForm,
-                                address: { ...profileForm.address, province: e.target.value }
-                              })
-                            }
-                            className="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm font-medium text-[#1E2046]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                            CAP
-                          </label>
-                          <input
-                            type="text"
-                            pattern="\d{5}"
-                            value={profileForm.address.postal_code}
-                            onChange={e =>
-                              setProfileForm({
-                                ...profileForm,
-                                address: { ...profileForm.address, postal_code: e.target.value }
-                              })
-                            }
-                            className="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm font-medium text-[#1E2046]"
-                          />
-                        </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                          CAP (Codice Avviamento Postale)
+                        </label>
+                        <input
+                          type="text"
+                          pattern="\d{5}"
+                          required
+                          value={profileForm.address.postal_code}
+                          onChange={e =>
+                            setProfileForm(prev => ({
+                              ...prev,
+                              address: { ...prev.address, postal_code: e.target.value }
+                            }))
+                          }
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                        />
                       </div>
                     </div>
 
@@ -2925,10 +2937,10 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                             {aiData.objective && (
                               <div>
                                 <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                                  Obiettivo di Crescita
+                                  Panoramica sulle Abilità di {analysisAthlete.first_name}
                                 </h4>
                                 <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-                                  <p className="text-slate-600 font-medium leading-relaxed">
+                                  <p className="text-slate-600 font-medium leading-relaxed whitespace-pre-line">
                                     {aiData.objective}
                                   </p>
                                 </div>
