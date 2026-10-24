@@ -41,7 +41,7 @@ class ParentService:
         lat, lon = None, None
         if parent_in.address:
             geo_service = GeoService()
-            query_str = f"{parent_in.address.street}, {parent_in.address.city}"
+            query_str = f"{parent_in.address.street}, {parent_in.address.postal_code} {parent_in.address.city} {parent_in.address.province}"
             geo_results = await geo_service.autocomplete(query_str, limit=1)
             if geo_results:
                 lat = geo_results[0].latitude
@@ -81,7 +81,7 @@ class ParentService:
         # Se l'utente sta modificando l'indirizzo le ricalcoliamo automaticamente con GeoService
         if parent_in.address:
             geo_service = GeoService()
-            query_str = f"{parent_in.address.street}, {parent_in.address.city}"
+            query_str = f"{parent_in.address.street}, {parent_in.address.postal_code} {parent_in.address.city} {parent_in.address.province}"
             geo_results = await geo_service.autocomplete(query_str, limit=1)
             if geo_results:
                 update_data["latitude"] = geo_results[0].latitude

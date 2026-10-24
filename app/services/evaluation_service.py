@@ -58,14 +58,9 @@ class EvaluationService:
         age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
         # 4. PREPARAZIONE SPORT DISPONIBILI (Discipline attive nel centro sportivo e strutture limitrofe)
-        stmt_sports = select(Course.sport_category).where(Course.sport_category.isnot(None)).distinct()
-        res_sports = await self.db.execute(stmt_sports)
-        active_sports = [row[0] for row in res_sports.all() if row[0]]
-
-        if not active_sports:
-            stmt_names = select(Course.name).distinct()
-            res_names = await self.db.execute(stmt_names)
-            active_sports = [row[0] for row in res_names.all() if row[0]]
+        stmt_names = select(Course.name).distinct()
+        res_names = await self.db.execute(stmt_names)
+        active_sports = [row[0] for row in res_names.all() if row[0]]
 
         available_sports = active_sports if active_sports else ["Basket", "Calcio", "Pallavolo", "Nuoto", "Ginnastica Artistica", "Judo", "Scherma", "Tennis"]
         

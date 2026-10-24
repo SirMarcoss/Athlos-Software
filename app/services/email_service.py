@@ -234,3 +234,90 @@ class EmailService:
                     f"Per testare con successo l'invio, cambia l'email del genitore registrato con la tua email di Resend (o collega un dominio su resend.com/domains)."
                 )
             raise ValueError(f"Errore Resend durante l'invio: {error_msg}")
+
+    def send_password_reset_email(
+            self,
+            to_email: str,
+            first_name: str,
+            reset_token: str
+    ) -> bool:
+        """
+        Invia un'email tramite Resend contenente il codice/token temporaneo per reimpostare la password.
+        """
+        if not self.api_key:
+            raise ValueError(
+                "Chiave RESEND_API_KEY non configurata o non trovata nel file .env. "
+                "Assicurati di aver inserito RESEND_API_KEY=re_... nel file .env e riavvia il server."
+            )
+
+        safe_name = first_name.strip() if first_name else "Utente"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Recupero Password - Athlos</title>
+          <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px 12px; }}
+            .container {{ max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(30, 32, 70, 0.08); }}
+            .header {{ background: linear-gradient(135deg, #1E2046 0%, #2d3166 100%); padding: 32px 28px; text-align: center; color: #ffffff; }}
+            .badge {{ display: inline-block; background-color: rgba(229, 43, 109, 0.2); color: #ff6b9d; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; padding: 5px 14px; border-radius: 99px; margin-bottom: 12px; }}
+            .content {{ padding: 32px 28px; color: #334155; }}
+            .token-box {{ background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 16px; padding: 22px 18px; margin: 22px 0; text-align: center; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #1E2046; }}
+            .footer {{ background-color: #f8fafc; padding: 20px 28px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; line-height: 1.5; }}
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <div class="badge">Sicurezza Account</div>
+              <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">Recupero Password Athlos</h1>
+            </div>
+            <div class="content">
+              <p style="margin: 0 0 14px 0; font-size: 15px; line-height: 1.6;">
+                Ciao <strong>{safe_name}</strong>,
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #475569;">
+                Abbiamo ricevuto una richiesta per reimpostare la password del tuo account <strong>Athlos</strong>.
+                Copia il codice di sicurezza qui sotto e incollalo nella schermata di recupero dell'applicazione:
+              </p>
+
+              <div class="token-box">
+                {reset_token}
+              </div>
+
+              <div style="background-color: #fff1f2; border: 1px solid #fecdd3; border-radius: 12px; padding: 14px 16px; margin-top: 20px;">
+                <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #9f1239;">
+                  ⏳ <strong>Nota di sicurezza:</strong> Questo codice è strettamente personale, è <strong>monouso</strong> e scadrà automaticamente tra <strong>15 minuti</strong>. Se non hai richiesto tu il cambio password, puoi ignorare questa email: la tua password attuale rimarrà invariata.
+                </p>
+              </div>
+            </div>
+            <div class="footer">
+              Ricevi questa comunicazione di servizio per la sicurezza del tuo account <strong>Athlos</strong>.<br>
+              Non condividere mai questo codice con nessuno.
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+
+        try:
+            params: resend.Emails.SendParams = {
+                "from": settings.EMAIL_FROM,
+                "to": [to_email],
+                "subject": "Codice di Recupero Password - Athlos",
+                "html": html_content,
+            }
+            email_response = resend.Emails.send(params)
+            print(f"[EmailService] Email di reset password inviata a {to_email}. ID: {email_response}")
+            return True
+        except Exception as e:
+            error_msg = str(e)
+            print(f"[EmailService] Errore nell'invio dell'email di reset a {to_email}: {error_msg}")
+            if "testing emails to your own email address" in error_msg.lower() or "only send testing emails" in error_msg.lower():
+                raise ValueError(
+                    f"Resend (account di test gratuito) consente di inviare email SOLO all'indirizzo con cui ti sei registrato su Resend ('{to_email}' non è autorizzato finché non colleghi un dominio)."
+                )
+            raise ValueError(f"Errore Resend durante l'invio dell'email di recupero: {error_msg}")

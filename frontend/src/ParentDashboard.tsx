@@ -163,7 +163,11 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
       return;
     }
     try {
-      const results = await autocompleteGeo(query, 5);
+      const results = await autocompleteGeo(query, 5, {
+        city: parentProfile.city,
+        postal_code: parentProfile.postal_code,
+        province: parentProfile.province
+      });
       if (results && results.length > 0) {
         setParentGeoResults(results);
         return;
@@ -562,8 +566,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                   <div className="text-6xl mb-4">🎁</div>
                   <h3 className="text-3xl font-black text-[#1E2046] mb-2">Invita un Genitore</h3>
                   <p className="text-slate-500 font-medium mb-8">
-                    Condividi questo link con i tuoi amici. Quando iscriveranno i loro figli,
-                    riceverete entrambi un mese gratuito su Athlos!
+                    Condividi questo link con i tuoi amici.
                   </p>
 
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between mb-4">
@@ -753,45 +756,69 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                     </div>
 
                     {/* Indirizzo di Residenza con completamento automatico */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="col-span-2 relative">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Via e Numero Civico
-                        </label>
-                        <div className="relative">
-                          <MapPin className="w-4 h-4 absolute left-3 top-3 text-slate-400 pointer-events-none" />
-                          <input
-                            type="text"
-                            required
-                            placeholder="Cerca via e civico (es. Via Imperia 25)..."
-                            value={parentProfile.street}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setParentProfile({ ...parentProfile, street: val });
-                              handleParentGeoSearch(val);
-                            }}
-                            className="w-full pl-9 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
-                          />
-                        </div>
-                        {parentGeoResults.length > 0 && (
-                          <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl divide-y divide-slate-100 max-h-48 overflow-y-auto">
-                            {parentGeoResults.map((g, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => selectParentGeo(g)}
-                                className="w-full text-left px-3.5 py-2 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer"
-                              >
-                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D] shrink-0" />
-                                <span className="text-xs font-bold text-[#1E2046] truncate">
-                                  {g.display_name}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                    <div className="relative">
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Via e Numero Civico
+                      </label>
+                      <div className="relative">
+                        <MapPin className="w-4 h-4 absolute left-3 top-3.5 text-slate-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          required
+                          placeholder="Scrivi via, civico e città (es. Via Imperia 25, San Giovanni la Punta)..."
+                          value={parentProfile.street}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setParentProfile({ ...parentProfile, street: val });
+                            handleParentGeoSearch(val);
+                          }}
+                          className="w-full pl-9 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                        />
                       </div>
-                      <div>
+                      {parentGeoResults.length > 0 && (
+                        <div className="absolute z-30 left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                          {parentGeoResults.map((g, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => selectParentGeo(g)}
+                              className="w-full text-left px-4 py-2.5 hover:bg-rose-50/60 transition-colors flex items-start gap-2.5 cursor-pointer"
+                            >
+                              <MapPin className="w-4 h-4 text-[#E52B6D] shrink-0 mt-0.5" />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-bold text-[#1E2046] leading-snug">
+                                  {g.street || g.display_name}
+                                </div>
+                                {(g.city || g.postal_code) && (
+                                  <div className="text-xs font-semibold text-slate-500 mt-0.5">
+                                    {[g.postal_code, g.city, g.province ? `(${g.province})` : '']
+                                      .filter(Boolean)
+                                      .join(' ')}
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-6 gap-3">
+                      <div className="col-span-3">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                          Città
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={parentProfile.city}
+                          onChange={e =>
+                            setParentProfile({ ...parentProfile, city: e.target.value })
+                          }
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                        />
+                      </div>
+                      <div className="col-span-2">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
                           CAP
                         </label>
@@ -807,30 +834,14 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                           className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
                         />
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                          Città
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={parentProfile.city}
-                          onChange={e =>
-                            setParentProfile({ ...parentProfile, city: e.target.value })
-                          }
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                          Provincia
+                          Prov
                         </label>
                         <input
                           type="text"
                           minLength={2}
+                          maxLength={2}
                           required
                           value={parentProfile.province}
                           onChange={e =>
@@ -839,7 +850,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                               province: e.target.value.toUpperCase()
                             })
                           }
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046] uppercase"
+                          className="w-full px-3 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046] uppercase text-center"
                         />
                       </div>
                     </div>

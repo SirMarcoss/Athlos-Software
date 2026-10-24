@@ -30,3 +30,16 @@ class UserResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Schema in ingresso per la richiesta di invio codice/token di reset password."""
+    email : EmailStr = Field(max_length=255)
+
+
+class ResetPasswordRequest(BaseModel):
+    """Schema in ingresso per la conferma del cambio password."""
+
+    email : EmailStr = Field(max_length=255)
+    token : str
+    new_password : str = Field(min_length=8, max_length=255)

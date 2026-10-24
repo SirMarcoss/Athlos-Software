@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User, UserRoleEnum
 from app.api.deps import get_current_user, require_role
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate, UserResponse, ForgotPasswordRequest, ResetPasswordRequest
 from app.services.user_service import UserService
 from app.core.database import get_db
 from fastapi.security import OAuth2PasswordRequestForm
@@ -144,4 +144,47 @@ async def impersonate_user(
     # - "token_type": "bearer" ("al portatore"), indica al Front-End di inviare il token
     #   nell'header HTTP "Authorization: Bearer <access_token>".
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+async def forgot_password(
+        payload: ForgotPasswordRequest,
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Endpoint chiamato dallo Step 1 del modal Front-End per inviare il codice di recupero via email.
+    """
+    user_service = UserService(db)
+    try:
+        await user_service.request_password_reset(payload.email)
+        return {"message": "Codice di recupero inviato via email. Controlla la tua casella di posta."}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+async def reset_password(
+        payload: ResetPasswordRequest,
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Endpoint chiamato dallo Step 2 del modal Front-End per verificare il codice e salvare la nuova password.
+    """
+    user_service = UserService(db)
+    try:
+        await user_service.reset_password(
+            email=payload.email,
+            token=payload.token,
+            new_password=payload.new_password
+        )
+        return {"message": "Password aggiornata con successo. Ora puoi effettuare il login."}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
 

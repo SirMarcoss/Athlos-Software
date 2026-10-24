@@ -156,12 +156,13 @@ class CourseService:
         if res_check.scalars().first():
             raise ValueError(f"{child.first_name} {child.last_name} è già iscritto a questo corso")
 
-        # 4. Creazione dell'iscrizione
+        # 4. Creazione dell'iscrizione e aggiornamento dello sport praticato dal bambino
         enrollment = CourseEnrollment(
             course_id=course_id,
             child_id=child_id
         )
         self.db.add(enrollment)
+        child.sport = course.name
         await self.db.commit()
         await self.db.refresh(enrollment)
         return enrollment
@@ -217,6 +218,23 @@ class CourseService:
             raise ValueError("Iscrizione non trovata")
 
         await self.db.delete(enrollment)
+        await self.db.flush()
+
+        # Aggiorna lo sport del bambino in base ad eventuali altri corsi attivi o imposta "Nessuno"
+        stmt_child = select(Child).where(Child.id == child_id)
+        res_child = await self.db.execute(stmt_child)
+        child = res_child.scalars().first()
+        if child:
+            stmt_other = (
+                select(Course.name)
+                .join(CourseEnrollment, CourseEnrollment.course_id == Course.id)
+                .where(CourseEnrollment.child_id == child_id)
+                .order_by(CourseEnrollment.enrolled_at.desc())
+            )
+            res_other = await self.db.execute(stmt_other)
+            other_course_name = res_other.scalars().first()
+            child.sport = other_course_name if other_course_name else "Nessuno"
+
         await self.db.commit()
         return True
 

@@ -34,7 +34,7 @@ class ClubService:
         lat, lon = None, None
         if club_in.address:
             geo_service = GeoService()
-            query_str = f"{club_in.address.street}, {club_in.address.city}"
+            query_str = f"{club_in.address.street}, {club_in.address.postal_code} {club_in.address.city} {club_in.address.province}"
             geo_results = await geo_service.autocomplete(query_str, limit=1)
             if geo_results:
                 lat = geo_results[0].latitude
@@ -73,7 +73,7 @@ class ClubService:
         # Se il club sta modificando l'indirizzo, ricalcoliamo lat e lon automaticamente con GeoService
         if club_in.address:
             geo_service = GeoService()
-            query_str = f"{club_in.address.street}, {club_in.address.city}"
+            query_str = f"{club_in.address.street}, {club_in.address.postal_code} {club_in.address.city} {club_in.address.province}"
             geo_results = await geo_service.autocomplete(query_str, limit=1)
             if geo_results:
                 update_data["latitude"] = geo_results[0].latitude

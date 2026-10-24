@@ -167,49 +167,6 @@ const STANDARD_UNITS = [
   { value: 'pt', label: 'Punti (pt)' }
 ];
 
-const FALLBACK_GEO_SUGGESTIONS: GeoSearchResult[] = [
-  {
-    display_name: 'Via Roma 45, San Giovanni La Punta (CT)',
-    street: 'Via Roma 45',
-    city: 'San Giovanni La Punta',
-    province: 'CT',
-    postal_code: '95037',
-    country: 'Italy',
-    latitude: 37.5794,
-    longitude: 15.0956
-  },
-  {
-    display_name: 'Via Santa Sofia 111, Catania (CT)',
-    street: 'Via Santa Sofia 111',
-    city: 'Catania',
-    province: 'CT',
-    postal_code: '95123',
-    country: 'Italy',
-    latitude: 37.5295,
-    longitude: 15.0683
-  },
-  {
-    display_name: 'Viale Tiziano 74, Roma (RM)',
-    street: 'Viale Tiziano 74',
-    city: 'Roma',
-    province: 'RM',
-    postal_code: '00196',
-    country: 'Italy',
-    latitude: 41.9288,
-    longitude: 12.4663
-  },
-  {
-    display_name: 'Piazzale Lotto 15, Milano (MI)',
-    street: 'Piazzale Lotto 15',
-    city: 'Milano',
-    province: 'MI',
-    postal_code: '20148',
-    country: 'Italy',
-    latitude: 45.4793,
-    longitude: 9.1419
-  }
-];
-
 const parseGeminiAnalysis = (text: string | undefined) => {
   if (!text) return { sportName: 'N/A', objective: null, tip: null };
   const cleaned = text.trim().replace(/^["']|["']$/g, '');
@@ -475,6 +432,8 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                   ai_recommended_sport: f.ai_recommended_sport || '',
                   physical_tests: loadedTests[f.child_id] || []
                 };
+                // Una volta consolidati nella valutazione trimestrale, azzera i test attivi per il nuovo trimestre
+                loadedTests[f.child_id] = [];
               });
             } catch {
               // fallback silenzioso se il corso non ha ancora schede
@@ -808,6 +767,11 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
         ...prev,
         [psychAthlete.id]: newRecord
       }));
+      // Azzera il contatore delle prove fisiche del bambino dopo l'invio del form trimestrale
+      setChildPhysicalTests(prev => ({
+        ...prev,
+        [psychAthlete.id]: []
+      }));
       setAnalysisAthleteId(psychAthlete.id);
       setActiveModal('analysis');
 
@@ -861,6 +825,10 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
         ...prev,
         [psychAthlete.id]: fallbackRecord
       }));
+      setChildPhysicalTests(prev => ({
+        ...prev,
+        [psychAthlete.id]: []
+      }));
       setAnalysisAthleteId(psychAthlete.id);
       setActiveModal('analysis');
       showToast(`Valutazione salvata in locale per ${psychAthlete.first_name}!`);
@@ -889,7 +857,11 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       return;
     }
     try {
-      const results = await autocompleteGeo(query, 5);
+      const results = await autocompleteGeo(query, 5, {
+        city: profileForm.address.city,
+        postal_code: profileForm.address.postal_code,
+        province: profileForm.address.province
+      });
       if (results && results.length > 0) {
         setGeoResults(results);
         return;
@@ -897,10 +869,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     } catch {
       // Fallback silenzioso
     }
-    const filtered = FALLBACK_GEO_SUGGESTIONS.filter(item =>
-      item.display_name.toLowerCase().includes(query.toLowerCase())
-    );
-    setGeoResults(filtered);
+    setGeoResults([]);
   };
 
   const selectGeoResult = (geo: GeoSearchResult) => {
@@ -2449,18 +2418,27 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                           />
                         </div>
                         {geoResults.length > 0 && (
-                          <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                          <div className="absolute z-30 left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl divide-y divide-slate-100 max-h-60 overflow-y-auto">
                             {geoResults.map((g, idx) => (
                               <button
                                 key={idx}
                                 type="button"
                                 onClick={() => selectGeoResult(g)}
-                                className="w-full text-left px-3.5 py-2.5 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer"
+                                className="w-full text-left px-4 py-2.5 hover:bg-rose-50/60 transition-colors flex items-start gap-2.5 cursor-pointer"
                               >
-                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D] shrink-0" />
-                                <span className="text-xs font-bold text-[#1E2046] truncate">
-                                  {g.display_name}
-                                </span>
+                                <MapPin className="w-4 h-4 text-[#E52B6D] shrink-0 mt-0.5" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-bold text-[#1E2046] leading-snug">
+                                    {g.street || g.display_name}
+                                  </div>
+                                  {(g.city || g.postal_code) && (
+                                    <div className="text-xs font-semibold text-slate-500 mt-0.5">
+                                      {[g.postal_code, g.city, g.province ? `(${g.province})` : '']
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                    </div>
+                                  )}
+                                </div>
                               </button>
                             ))}
                           </div>

@@ -11,6 +11,8 @@ import {
   getCurrentUser,
   getAllUsers,
   impersonateUser,
+  requestPasswordReset,
+  confirmPasswordReset,
   getToken,
   setToken,
   clearToken,
@@ -101,49 +103,6 @@ const customSmoothScrollTo = (id: string) => {
   requestAnimationFrame(animation);
 };
 
-const FALLBACK_GEO_SUGGESTIONS: ApiGeoSearchResult[] = [
-  {
-    display_name: 'Via Roma 45, San Giovanni La Punta (CT)',
-    street: 'Via Roma 45',
-    city: 'San Giovanni La Punta',
-    province: 'CT',
-    postal_code: '95037',
-    country: 'Italy',
-    latitude: 37.5794,
-    longitude: 15.0956
-  },
-  {
-    display_name: 'Via Santa Sofia 111, Catania (CT)',
-    street: 'Via Santa Sofia 111',
-    city: 'Catania',
-    province: 'CT',
-    postal_code: '95123',
-    country: 'Italy',
-    latitude: 37.5295,
-    longitude: 15.0683
-  },
-  {
-    display_name: 'Viale Tiziano 74, Roma (RM)',
-    street: 'Viale Tiziano 74',
-    city: 'Roma',
-    province: 'RM',
-    postal_code: '00196',
-    country: 'Italy',
-    latitude: 41.9288,
-    longitude: 12.4663
-  },
-  {
-    display_name: 'Piazzale Lotto 15, Milano (MI)',
-    street: 'Piazzale Lotto 15',
-    city: 'Milano',
-    province: 'MI',
-    postal_code: '20148',
-    country: 'Italy',
-    latitude: 45.4793,
-    longitude: 9.1419
-  }
-];
-
 export default function App() {
   // Simulator State
   const childName = "Lorenzo";
@@ -160,12 +119,20 @@ export default function App() {
   // Auth modal state
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authSelection, setAuthSelection] = useState<'none' | 'parent' | 'club'>('none');
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot-password'>('register');
 
   // STATO DI SESSIONE REALE ('none' | 'parent' | 'club' | 'admin')
   const [isLoggedInAs, setIsLoggedInAs] = useState<'none' | 'parent' | 'club' | 'admin'>('none');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+
+  // Stato Recupero Password (comune a Genitore e Club)
+  const [resetStep, setResetStep] = useState<'request' | 'confirm'>('request');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
 
   // Stato Console Admin & Impersonation
   const [adminUsers, setAdminUsers] = useState<ApiUserResponse[]>([]);
@@ -205,22 +172,22 @@ export default function App() {
   const [clubLogoUrl, setClubLogoUrl] = useState('');
   const [clubPassword, setClubPassword] = useState('');
 
-  // Autocomplete indirizzi OpenStreetMap per Genitore
-  const [parentGeoQuery, setParentGeoQuery] = useState('');
+  // Autocomplete indirizzi per Genitore e Club
   const [parentGeoResults, setParentGeoResults] = useState<ApiGeoSearchResult[]>([]);
-
-  // Autocomplete indirizzi OpenStreetMap per Club
-  const [clubGeoQuery, setClubGeoQuery] = useState('');
   const [clubGeoResults, setClubGeoResults] = useState<ApiGeoSearchResult[]>([]);
 
   const handleParentGeoSearch = async (query: string) => {
-    setParentGeoQuery(query);
+    setParentStreet(query);
     if (query.trim().length < 2) {
       setParentGeoResults([]);
       return;
     }
     try {
-      const results = await autocompleteGeo(query, 5);
+      const results = await autocompleteGeo(query, 5, {
+        city: parentCity,
+        postal_code: parentPostalCode,
+        province: parentProvince
+      });
       if (results && results.length > 0) {
         setParentGeoResults(results);
         return;
@@ -228,10 +195,7 @@ export default function App() {
     } catch {
       // Fallback
     }
-    const filtered = FALLBACK_GEO_SUGGESTIONS.filter(item =>
-      item.display_name.toLowerCase().includes(query.toLowerCase())
-    );
-    setParentGeoResults(filtered.length > 0 ? filtered : FALLBACK_GEO_SUGGESTIONS.slice(0, 2));
+    setParentGeoResults([]);
   };
 
   const selectParentGeo = (geo: ApiGeoSearchResult) => {
@@ -241,18 +205,21 @@ export default function App() {
     if (geo.postal_code && /^\d{5}$/.test(geo.postal_code)) {
       setParentPostalCode(geo.postal_code);
     }
-    setParentGeoQuery(geo.display_name);
     setParentGeoResults([]);
   };
 
   const handleClubGeoSearch = async (query: string) => {
-    setClubGeoQuery(query);
+    setClubStreet(query);
     if (query.trim().length < 2) {
       setClubGeoResults([]);
       return;
     }
     try {
-      const results = await autocompleteGeo(query, 5);
+      const results = await autocompleteGeo(query, 5, {
+        city: clubCity,
+        postal_code: clubPostalCode,
+        province: clubProvince
+      });
       if (results && results.length > 0) {
         setClubGeoResults(results);
         return;
@@ -260,10 +227,7 @@ export default function App() {
     } catch {
       // Fallback
     }
-    const filtered = FALLBACK_GEO_SUGGESTIONS.filter(item =>
-      item.display_name.toLowerCase().includes(query.toLowerCase())
-    );
-    setClubGeoResults(filtered.length > 0 ? filtered : FALLBACK_GEO_SUGGESTIONS.slice(0, 2));
+    setClubGeoResults([]);
   };
 
   const selectClubGeo = (geo: ApiGeoSearchResult) => {
@@ -273,7 +237,6 @@ export default function App() {
     if (geo.postal_code && /^\d{5}$/.test(geo.postal_code)) {
       setClubPostalCode(geo.postal_code);
     }
-    setClubGeoQuery(geo.display_name);
     setClubGeoResults([]);
   };
 
@@ -514,6 +477,68 @@ export default function App() {
       } else {
         setAuthError(msg);
       }
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const openForgotPassword = () => {
+    setAuthError(null);
+    setAuthSuccess(null);
+    setResetEmail(loginEmail.trim());
+    setResetToken('');
+    setResetNewPassword('');
+    setResetConfirmPassword('');
+    setResetStep('request');
+    setAuthMode('forgot-password');
+  };
+
+  const handleForgotPasswordRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthSuccess(null);
+    setIsAuthLoading(true);
+    try {
+      const res = await requestPasswordReset(resetEmail);
+      setAuthSuccess(
+        res.message ||
+          "Se l'indirizzo email è registrato, ti abbiamo inviato un codice/token di recupero."
+      );
+      setResetStep('confirm');
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Errore nella richiesta di recupero password');
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const handleResetPasswordConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthSuccess(null);
+    if (resetNewPassword.length < 8) {
+      setAuthError('La nuova password deve contenere almeno 8 caratteri.');
+      return;
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      setAuthError('Le due password non coincidono.');
+      return;
+    }
+    setIsAuthLoading(true);
+    try {
+      const res = await confirmPasswordReset({
+        email: resetEmail,
+        token: resetToken,
+        new_password: resetNewPassword
+      });
+      setLoginEmail(resetEmail);
+      setLoginPassword('');
+      setAuthMode('login');
+      setAuthSuccess(
+        res.message || 'Password aggiornata con successo! Ora puoi effettuare il login.'
+      );
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Codice non valido o scaduto.');
     } finally {
       setIsAuthLoading(false);
     }
@@ -1680,6 +1705,11 @@ const nearbyClubs = useMemo(() => {
                             {authError}
                           </div>
                         )}
+                        {authSuccess && (
+                          <div className="mb-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-bold">
+                            {authSuccess}
+                          </div>
+                        )}
                         
                         {authMode === 'register' ? (
                           <form onSubmit={handleRegisterParentSubmit}>
@@ -1693,47 +1723,54 @@ const nearbyClubs = useMemo(() => {
                               <input type="text" required value={parentFiscalCode} onChange={e => setParentFiscalCode(e.target.value.toUpperCase())} placeholder="Codice Fiscale" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 uppercase" />
                             </div>
 
-                            {/* Ricerca Indirizzo OpenStreetMap per Genitore */}
+                            {/* Indirizzo Unificato per Genitore */}
                             <div className="relative mb-3">
-                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1 flex items-center gap-1.5">
-                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Indirizzo (ricerca automatica OpenStreetMap)
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Via e Numero Civico
                               </label>
                               <div className="relative">
                                 <input
                                   type="text"
-                                  value={parentGeoQuery}
+                                  required
+                                  value={parentStreet}
                                   onChange={e => handleParentGeoSearch(e.target.value)}
-                                  placeholder="Digita via e città (es. Via Roma 45, Catania)..."
-                                  className="w-full px-4 py-2.5 pl-9 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 text-sm"
+                                  placeholder="Scrivi via, civico e città (es. Via Imperia 25, San Giovanni la Punta)..."
+                                  className="w-full px-4 py-3 pl-9 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 text-sm"
                                 />
-                                <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                                <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3.5 pointer-events-none" />
                               </div>
                               {parentGeoResults.length > 0 && (
-                                <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl divide-y divide-slate-100 max-h-44 overflow-y-auto">
+                                <div className="absolute z-30 left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl divide-y divide-slate-100 max-h-56 overflow-y-auto">
                                   {parentGeoResults.map((g, idx) => (
                                     <button
                                       key={idx}
                                       type="button"
                                       onClick={() => selectParentGeo(g)}
-                                      className="w-full text-left px-3.5 py-2 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer"
+                                      className="w-full text-left px-4 py-2.5 hover:bg-rose-50/60 transition-colors flex items-start gap-2.5 cursor-pointer"
                                     >
-                                      <MapPin className="w-3.5 h-3.5 text-[#E52B6D] shrink-0" />
-                                      <span className="text-xs font-bold text-slate-700 truncate">
-                                        {g.display_name}
-                                      </span>
+                                      <MapPin className="w-4 h-4 text-[#E52B6D] shrink-0 mt-0.5" />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-bold text-[#1E2046] leading-snug">
+                                          {g.street || g.display_name}
+                                        </div>
+                                        {(g.city || g.postal_code) && (
+                                          <div className="text-xs font-semibold text-slate-500 mt-0.5">
+                                            {[g.postal_code, g.city, g.province ? `(${g.province})` : '']
+                                              .filter(Boolean)
+                                              .join(' ')}
+                                          </div>
+                                        )}
+                                      </div>
                                     </button>
                                   ))}
                                 </div>
                               )}
                             </div>
 
-                            <div className="flex gap-3 mb-3">
-                              <input type="text" value={parentStreet} onChange={e => setParentStreet(e.target.value)} placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                              <input type="text" pattern="\d{5}" value={parentPostalCode} onChange={e => setParentPostalCode(e.target.value)} placeholder="CAP (5 cifre)" className="w-1/3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                            </div>
-                            <div className="flex gap-3 mb-3">
-                              <input type="text" value={parentCity} onChange={e => setParentCity(e.target.value)} placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                              <input type="text" minLength={2} value={parentProvince} onChange={e => setParentProvince(e.target.value.toUpperCase())} placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 uppercase" />
+                            <div className="grid grid-cols-6 gap-2.5 mb-3">
+                              <input type="text" required value={parentCity} onChange={e => setParentCity(e.target.value)} placeholder="Città" className="col-span-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" required pattern="\d{5}" value={parentPostalCode} onChange={e => setParentPostalCode(e.target.value)} placeholder="CAP" className="col-span-2 px-3 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                              <input type="text" required minLength={2} maxLength={2} value={parentProvince} onChange={e => setParentProvince(e.target.value.toUpperCase())} placeholder="Prov" className="col-span-1 px-2 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 uppercase text-center" />
                             </div>
                             <input type="email" required value={parentEmail} onChange={e => setParentEmail(e.target.value)} placeholder="Indirizzo Email" className="w-full mb-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
                             <input type="password" required minLength={8} value={parentPassword} onChange={e => setParentPassword(e.target.value)} placeholder="Scegli una password (min. 8 caratteri)" className="w-full mb-3 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
@@ -1742,21 +1779,137 @@ const nearbyClubs = useMemo(() => {
                               {isAuthLoading ? 'Registrazione in corso...' : 'Registrati ora'}
                             </button>
                             <p className="mt-5 text-sm text-center text-slate-500 font-medium">
-                              Hai già un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthMode('login'); }}>Accedi</span>
+                              Hai già un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthSuccess(null); setAuthMode('login'); }}>Accedi</span>
                             </p>
                           </form>
-                        ) : (
+                        ) : authMode === 'login' ? (
                           <form onSubmit={(e) => handleLoginSubmit(e, 'parent')}>
                             <h3 className="text-2xl font-bold text-[#1E2046] mb-6">Bentornato</h3>
                             <input type="email" required value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                            <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Password" className="w-full mb-2 px-5 py-4 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
+                            <div className="flex justify-end mb-5">
+                              <button
+                                type="button"
+                                onClick={openForgotPassword}
+                                className="text-xs font-bold text-[#E52B6D] hover:underline cursor-pointer"
+                              >
+                                Password dimenticata?
+                              </button>
+                            </div>
                             <button type="submit" disabled={isAuthLoading} className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] disabled:opacity-60 transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">
                               {isAuthLoading ? 'Accesso in corso...' : 'Accedi'}
                             </button>
                             <p className="mt-6 text-sm text-center text-slate-500 font-medium">
-                              Non hai un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthMode('register'); }}>Registrati</span>
+                              Non hai un account? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthSuccess(null); setAuthMode('register'); }}>Registrati</span>
                             </p>
                           </form>
+                        ) : (
+                          <div>
+                            <h3 className="text-2xl font-bold text-[#1E2046] mb-2">Recupera Password</h3>
+                            {resetStep === 'request' ? (
+                              <form onSubmit={handleForgotPasswordRequest}>
+                                <p className="text-sm text-slate-500 font-medium mb-5">
+                                  Inserisci l'indirizzo email del tuo account. Ti invieremo un codice di sicurezza per scegliere una nuova password.
+                                </p>
+                                <input
+                                  type="email"
+                                  required
+                                  value={resetEmail}
+                                  onChange={e => setResetEmail(e.target.value)}
+                                  placeholder="La tua email registrata"
+                                  className="w-full mb-4 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800"
+                                />
+                                <button
+                                  type="submit"
+                                  disabled={isAuthLoading}
+                                  className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] disabled:opacity-60 transition-colors text-white rounded-xl font-bold text-base cursor-pointer"
+                                >
+                                  {isAuthLoading ? 'Invio in corso...' : 'Invia Codice di Recupero'}
+                                </button>
+                                <div className="mt-4 flex items-center justify-between text-xs font-bold">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setAuthError(null); setAuthSuccess(null); setResetStep('confirm'); }}
+                                    className="text-slate-500 hover:text-[#1E2046] cursor-pointer"
+                                  >
+                                    Ho già un codice
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setAuthError(null); setAuthSuccess(null); setAuthMode('login'); }}
+                                    className="text-[#E52B6D] hover:underline cursor-pointer"
+                                  >
+                                    Torna al Login
+                                  </button>
+                                </div>
+                              </form>
+                            ) : (
+                              <form onSubmit={handleResetPasswordConfirm}>
+                                <p className="text-sm text-slate-500 font-medium mb-4">
+                                  Inserisci il codice ricevuto via email e scegli la tua nuova password.
+                                </p>
+                                <input
+                                  type="email"
+                                  required
+                                  value={resetEmail}
+                                  onChange={e => setResetEmail(e.target.value)}
+                                  placeholder="Indirizzo Email"
+                                  className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800"
+                                />
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  maxLength={6}
+                                  required
+                                  value={resetToken}
+                                  onChange={e => setResetToken(e.target.value)}
+                                  placeholder="Codice a 6 cifre ricevuto via email (es. 482910)"
+                                  className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-mono font-bold tracking-widest text-center text-lg text-slate-800"
+                                />
+                                <input
+                                  type="password"
+                                  required
+                                  minLength={8}
+                                  value={resetNewPassword}
+                                  onChange={e => setResetNewPassword(e.target.value)}
+                                  placeholder="Nuova Password (min. 8 caratteri)"
+                                  className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800"
+                                />
+                                <input
+                                  type="password"
+                                  required
+                                  minLength={8}
+                                  value={resetConfirmPassword}
+                                  onChange={e => setResetConfirmPassword(e.target.value)}
+                                  placeholder="Conferma Nuova Password"
+                                  className="w-full mb-4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800"
+                                />
+                                <button
+                                  type="submit"
+                                  disabled={isAuthLoading}
+                                  className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] disabled:opacity-60 transition-colors text-white rounded-xl font-bold text-base cursor-pointer"
+                                >
+                                  {isAuthLoading ? 'Aggiornamento...' : 'Salva Nuova Password'}
+                                </button>
+                                <div className="mt-4 flex items-center justify-between text-xs font-bold">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setAuthError(null); setAuthSuccess(null); setResetStep('request'); }}
+                                    className="text-slate-500 hover:text-[#1E2046] cursor-pointer"
+                                  >
+                                    Richiedi nuovo codice
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setAuthError(null); setAuthSuccess(null); setAuthMode('login'); }}
+                                    className="text-[#E52B6D] hover:underline cursor-pointer"
+                                  >
+                                    Torna al Login
+                                  </button>
+                                </div>
+                              </form>
+                            )}
+                          </div>
                         )}
                         
                       </div>
@@ -1830,6 +1983,11 @@ const nearbyClubs = useMemo(() => {
                             {authError}
                           </div>
                         )}
+                        {authSuccess && (
+                          <div className="mb-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-bold">
+                            {authSuccess}
+                          </div>
+                        )}
                         
                         {authMode === 'register' ? (
                           <form onSubmit={handleRegisterClubSubmit}>
@@ -1843,47 +2001,54 @@ const nearbyClubs = useMemo(() => {
                               <input type="tel" required value={clubPhone} onChange={e => setClubPhone(e.target.value)} placeholder="Telefono Club" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                               <input type="email" required value={clubEmail} onChange={e => setClubEmail(e.target.value)} placeholder="Email ufficiale" className="w-1/2 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             </div>
-                            {/* Ricerca Indirizzo OpenStreetMap per Club */}
+                            {/* Indirizzo Unificato per Club */}
                             <div className="relative mb-3">
-                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1 flex items-center gap-1.5">
-                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Sede della Società (ricerca automatica OpenStreetMap)
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Sede della Società (Via e Civico)
                               </label>
                               <div className="relative">
                                 <input
                                   type="text"
-                                  value={clubGeoQuery}
+                                  required
+                                  value={clubStreet}
                                   onChange={e => handleClubGeoSearch(e.target.value)}
-                                  placeholder="Digita via e città della struttura (es. Viale Tiziano 74, Roma)..."
-                                  className="w-full px-4 py-2.5 pl-9 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 text-sm"
+                                  placeholder="Scrivi via, civico e città della struttura..."
+                                  className="w-full px-4 py-3 pl-9 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 text-sm"
                                 />
-                                <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                                <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3.5 pointer-events-none" />
                               </div>
                               {clubGeoResults.length > 0 && (
-                                <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl divide-y divide-slate-100 max-h-44 overflow-y-auto">
+                                <div className="absolute z-30 left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl divide-y divide-slate-100 max-h-56 overflow-y-auto">
                                   {clubGeoResults.map((g, idx) => (
                                     <button
                                       key={idx}
                                       type="button"
                                       onClick={() => selectClubGeo(g)}
-                                      className="w-full text-left px-3.5 py-2 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer"
+                                      className="w-full text-left px-4 py-2.5 hover:bg-rose-50/60 transition-colors flex items-start gap-2.5 cursor-pointer"
                                     >
-                                      <MapPin className="w-3.5 h-3.5 text-[#E52B6D] shrink-0" />
-                                      <span className="text-xs font-bold text-slate-700 truncate">
-                                        {g.display_name}
-                                      </span>
+                                      <MapPin className="w-4 h-4 text-[#E52B6D] shrink-0 mt-0.5" />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-bold text-[#1E2046] leading-snug">
+                                          {g.street || g.display_name}
+                                        </div>
+                                        {(g.city || g.postal_code) && (
+                                          <div className="text-xs font-semibold text-slate-500 mt-0.5">
+                                            {[g.postal_code, g.city, g.province ? `(${g.province})` : '']
+                                              .filter(Boolean)
+                                              .join(' ')}
+                                          </div>
+                                        )}
+                                      </div>
                                     </button>
                                   ))}
                                 </div>
                               )}
                             </div>
 
-                            <div className="flex gap-3 mb-3">
-                              <input type="text" value={clubStreet} onChange={e => setClubStreet(e.target.value)} placeholder="Via e civico" className="w-2/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                              <input type="text" pattern="\d{5}" value={clubPostalCode} onChange={e => setClubPostalCode(e.target.value)} placeholder="CAP (5 cifre)" className="w-1/3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                            </div>
-                            <div className="flex gap-3 mb-3">
-                              <input type="text" value={clubCity} onChange={e => setClubCity(e.target.value)} placeholder="Città" className="w-3/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                              <input type="text" minLength={2} value={clubProvince} onChange={e => setClubProvince(e.target.value.toUpperCase())} placeholder="Prov" className="w-1/4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium uppercase" />
+                            <div className="grid grid-cols-6 gap-2.5 mb-3">
+                              <input type="text" required value={clubCity} onChange={e => setClubCity(e.target.value)} placeholder="Città" className="col-span-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" required pattern="\d{5}" value={clubPostalCode} onChange={e => setClubPostalCode(e.target.value)} placeholder="CAP" className="col-span-2 px-3 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                              <input type="text" required minLength={2} maxLength={2} value={clubProvince} onChange={e => setClubProvince(e.target.value.toUpperCase())} placeholder="Prov" className="col-span-1 px-2 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium uppercase text-center" />
                             </div>
                             <input type="url" value={clubLogoUrl} onChange={e => setClubLogoUrl(e.target.value)} placeholder="Link Logo Società (Opzionale, es. https://...)" className="w-full mb-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
                             <input type="password" required minLength={8} value={clubPassword} onChange={e => setClubPassword(e.target.value)} placeholder="Scegli una password (min. 8 caratteri)" className="w-full mb-5 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
@@ -1891,21 +2056,106 @@ const nearbyClubs = useMemo(() => {
                               {isAuthLoading ? 'Affiliazione in corso...' : 'Richiedi Affiliazione'}
                             </button>
                             <p className="mt-5 text-sm text-center text-slate-500 font-medium">
-                              Già affiliato? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthMode('login'); }}>Accedi al gestionale</span>
+                              Già affiliato? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthSuccess(null); setAuthMode('login'); }}>Accedi al gestionale</span>
                             </p>
                           </form>
-                        ) : (
+                        ) : authMode === 'login' ? (
                           <form onSubmit={(e) => handleLoginSubmit(e, 'club')}>
                             <h3 className="text-2xl font-bold text-[#1E2046] mb-6">Area Riservata Club</h3>
                             <input type="email" required value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Indirizzo Email" className="w-full mb-4 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
-                            <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Password" className="w-full mb-6 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            <input type="password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Password" className="w-full mb-2 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium" />
+                            <div className="flex justify-end mb-5">
+                              <button
+                                type="button"
+                                onClick={openForgotPassword}
+                                className="text-xs font-bold text-slate-500 hover:text-[#E52B6D] transition-colors cursor-pointer"
+                              >
+                                Password dimenticata?
+                              </button>
+                            </div>
                             <button type="submit" disabled={isAuthLoading} className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] disabled:opacity-60 transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">
                               {isAuthLoading ? 'Accesso in corso...' : 'Accedi'}
                             </button>
                             <p className="mt-6 text-sm text-center text-slate-500 font-medium">
-                              Nuova società? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthMode('register'); }}>Affiliati ad Athlos</span>
+                              Nuova società? <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthSuccess(null); setAuthMode('register'); }}>Affiliati ad Athlos</span>
                             </p>
                           </form>
+                        ) : (
+                          <div>
+                            <h3 className="text-2xl font-bold text-[#1E2046] mb-2">Recupera Password Club</h3>
+                            <p className="text-sm text-slate-500 font-medium mb-6">
+                              {resetStep === 'request'
+                                ? 'Inserisci l\'email ufficiale del tuo club per ricevere il codice di recupero.'
+                                : 'Inserisci il codice ricevuto via email e scegli la nuova password.'}
+                            </p>
+                            {resetStep === 'request' ? (
+                              <form onSubmit={handleForgotPasswordRequest}>
+                                <input
+                                  type="email"
+                                  required
+                                  value={resetEmail}
+                                  onChange={e => setResetEmail(e.target.value)}
+                                  placeholder="Email ufficiale Club"
+                                  className="w-full mb-5 px-5 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium"
+                                />
+                                <button type="submit" disabled={isAuthLoading} className="w-full py-4 bg-[#E52B6D] hover:bg-[#1E2046] disabled:opacity-60 transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">
+                                  {isAuthLoading ? 'Invio in corso...' : 'Invia Codice di Recupero'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setAuthError(null); setAuthSuccess(null); setResetStep('confirm'); }}
+                                  className="w-full mt-3 py-2 text-xs font-bold text-slate-500 hover:text-[#1E2046] transition-colors cursor-pointer"
+                                >
+                                  Hai già un codice? Inseriscilo qui
+                                </button>
+                              </form>
+                            ) : (
+                              <form onSubmit={handleResetPasswordConfirm}>
+                                <input
+                                  type="email"
+                                  required
+                                  value={resetEmail}
+                                  onChange={e => setResetEmail(e.target.value)}
+                                  placeholder="Email ufficiale Club"
+                                  className="w-full mb-3 px-4 py-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium text-sm"
+                                />
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  maxLength={6}
+                                  required
+                                  value={resetToken}
+                                  onChange={e => setResetToken(e.target.value)}
+                                  placeholder="Codice a 6 cifre ricevuto via email (es. 482910)"
+                                  className="w-full mb-3 px-4 py-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-mono font-bold tracking-widest text-center text-lg"
+                                />
+                                <input
+                                  type="password"
+                                  required
+                                  minLength={8}
+                                  value={resetNewPassword}
+                                  onChange={e => setResetNewPassword(e.target.value)}
+                                  placeholder="Nuova Password (min. 8 caratteri)"
+                                  className="w-full mb-3 px-4 py-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium text-sm"
+                                />
+                                <input
+                                  type="password"
+                                  required
+                                  minLength={8}
+                                  value={resetConfirmPassword}
+                                  onChange={e => setResetConfirmPassword(e.target.value)}
+                                  placeholder="Conferma Nuova Password"
+                                  className="w-full mb-5 px-4 py-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#E52B6D] font-medium text-sm"
+                                />
+                                <button type="submit" disabled={isAuthLoading} className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] disabled:opacity-60 transition-colors text-white rounded-xl font-bold text-lg cursor-pointer">
+                                  {isAuthLoading ? 'Aggiornamento...' : 'Salva Nuova Password'}
+                                </button>
+                              </form>
+                            )}
+                            <p className="mt-5 text-sm text-center text-slate-500 font-medium">
+                              <span className="text-[#E52B6D] font-bold cursor-pointer hover:underline" onClick={() => { setAuthError(null); setAuthSuccess(null); setAuthMode('login'); }}>← Torna al Login</span>
+                            </p>
+                          </div>
                         )}
 
                       </div>

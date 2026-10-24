@@ -1,134 +1,177 @@
+import asyncio
 import re
 import httpx
 from typing import List
 from app.schemas.geo import GeoSearchResult
 
+ITALIAN_PROVINCE_CODES = {
+    "agrigento": "AG", "alessandria": "AL", "ancona": "AN", "aosta": "AO", "valle d'aosta": "AO",
+    "arezzo": "AR", "ascoli piceno": "AP", "asti": "AT", "avellino": "AV", "bari": "BA",
+    "barletta-andria-trani": "BT", "belluno": "BL", "benevento": "BN", "bergamo": "BG",
+    "biella": "BI", "bologna": "BO", "bolzano": "BZ", "bozen": "BZ", "brescia": "BS",
+    "brindisi": "BR", "cagliari": "CA", "caltanissetta": "CL", "campobasso": "CB",
+    "caserta": "CE", "catania": "CT", "catanzaro": "CZ", "chieti": "CH", "como": "CO",
+    "cosenza": "CS", "cremona": "CR", "crotone": "KR", "cuneo": "CN", "enna": "EN",
+    "fermo": "FM", "ferrara": "FE", "firenze": "FI", "foggia": "FG", "forlì-cesena": "FC",
+    "forli-cesena": "FC", "frosinone": "FR", "genova": "GE", "gorizia": "GO", "grosseto": "GR",
+    "imperia": "IM", "isernia": "IS", "l'aquila": "AQ", "la spezia": "SP", "latina": "LT",
+    "lecce": "LE", "lecco": "LC", "livorno": "LI", "lodi": "LO", "lucca": "LU",
+    "macerata": "MC", "mantova": "MN", "massa-carrara": "MS", "massa carrara": "MS",
+    "matera": "MT", "messina": "ME", "milano": "MI", "modena": "MO", "monza e della brianza": "MB",
+    "monza e brianza": "MB", "monza": "MB", "napoli": "NA", "novara": "NO", "nuoro": "NU",
+    "oristano": "OR", "padova": "PD", "palermo": "PA", "parma": "PR", "pavia": "PV",
+    "perugia": "PG", "pesaro e urbino": "PU", "pesaro-urbino": "PU", "pescara": "PE",
+    "piacenza": "PC", "pisa": "PI", "pistoia": "PT", "pordenone": "PN", "potenza": "PZ",
+    "prato": "PO", "ragusa": "RG", "ravenna": "RA", "reggio calabria": "RC",
+    "reggio di calabria": "RC", "reggio emilia": "RE", "reggio nell'emilia": "RE",
+    "rieti": "RI", "rimini": "RN", "roma": "RM", "rovigo": "RO", "salerno": "SA",
+    "sassari": "SS", "savona": "SV", "siena": "SI", "siracusa": "SR", "sondrio": "SO",
+    "sud sardegna": "SU", "gallura nord-est sardegna": "SS", "taranto": "TA", "teramo": "TE",
+    "terni": "TR", "torino": "TO", "trapani": "TP", "trento": "TN", "treviso": "TV",
+    "trieste": "TS", "udine": "UD", "varese": "VA", "venezia": "VE", "verbano-cusio-ossola": "VB",
+    "vercelli": "VC", "verona": "VR", "vibo valentia": "VV", "vicenza": "VI", "viterbo": "VT"
+}
+
+
+def normalize_province_code(raw_prov: str | None) -> str:
+    if not raw_prov:
+        return ""
+    cleaned = raw_prov.strip()
+    if len(cleaned) == 2 and cleaned.isalpha():
+        return cleaned.upper()
+    lower = cleaned.lower()
+    for prefix in ("provincia di ", "città metropolitana di ", "libero consorzio comunale di "):
+        if lower.startswith(prefix):
+            lower = lower[len(prefix):].strip()
+    if lower in ITALIAN_PROVINCE_CODES:
+        return ITALIAN_PROVINCE_CODES[lower]
+    for name, code in ITALIAN_PROVINCE_CODES.items():
+        if name in lower:
+            return code
+    return cleaned[:2].upper()
+
 
 class GeoService:
-    BASE_URL = "https://photon.komoot.io/api/"
+    ARCGIS_SUGGEST_URL = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/suggest"
+    ARCGIS_FIND_URL = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates"
     HEADERS = {"User-Agent": "Athlos-App/1.0 (Athlos Sports Platform)"}
 
     def _sanitize_query(self, query: str) -> str:
-        # Strip and remove potentially dangerous / invalid characters
         cleaned = re.sub(r"[^\w\s,\.\'-]", "", query, flags=re.UNICODE).strip()
-        return cleaned[:100]
+        return cleaned[:120]
+
+    def _parse_candidate(self, cand: dict) -> GeoSearchResult | None:
+        loc = cand.get("location") or {}
+        lon = loc.get("x")
+        lat = loc.get("y")
+        if lon is None or lat is None:
+            return None
+
+        attrs = cand.get("attributes") or {}
+        street = (attrs.get("StAddr") or attrs.get("PlaceName") or "").strip()
+        city = (attrs.get("City") or attrs.get("Nbrhd") or "").strip()
+        subregion = (attrs.get("Subregion") or attrs.get("Region") or "").strip()
+        postal = (attrs.get("Postal") or "").strip()
+        prov_code = normalize_province_code(subregion or city)
+
+        if not street and cand.get("address"):
+            street = cand["address"].split(",")[0].strip()
+
+        city_part = f"{postal} {city}".strip() if postal else city
+        if prov_code:
+            city_part = f"{city_part} ({prov_code})".strip()
+
+        if street and city_part and street.lower() != city.lower():
+            display_name = f"{street} — {city_part}"
+        else:
+            display_name = cand.get("address") or street or city_part
+
+        return GeoSearchResult(
+            display_name=display_name,
+            street=street or None,
+            city=city or None,
+            province=prov_code or None,
+            postal_code=postal or None,
+            country="Italia",
+            latitude=float(lat),
+            longitude=float(lon)
+        )
+
+    async def _resolve_suggestion(self, client: httpx.AsyncClient, text: str, magic_key: str | None) -> GeoSearchResult | None:
+        params = {
+            "SingleLine": text,
+            "countryCode": "ITA",
+            "f": "json",
+            "outFields": "StAddr,PlaceName,Nbrhd,City,Subregion,Region,Postal,Addr_type",
+            "maxLocations": 1
+        }
+        if magic_key:
+            params["magicKey"] = magic_key
+        try:
+            resp = await client.get(self.ARCGIS_FIND_URL, params=params)
+            if resp.status_code == 200:
+                cands = resp.json().get("candidates", [])
+                if cands:
+                    return self._parse_candidate(cands[0])
+        except Exception:
+            pass
+        return None
 
     async def autocomplete(self, query: str, limit: int = 5) -> List[GeoSearchResult]:
         sanitized = self._sanitize_query(query)
         if len(sanitized) < 2:
             return []
 
-        # 1. Prova prima con OpenStreetMap Nominatim (massima precisione per indirizzi italiani)
+        max_items = min(max(limit, 1), 8)
+
+        # 1. Motore Primario: Esri ArcGIS World Geocoder (Supporto completo civici, CAP e comuni italiani)
         try:
-            nom_url = "https://nominatim.openstreetmap.org/search"
-            nom_params = {
-                "q": sanitized,
-                "format": "json",
-                "addressdetails": 1,
-                "countrycodes": "it",
-                "limit": min(max(limit, 1), 10)
-            }
-            async with httpx.AsyncClient(timeout=4.0, headers=self.HEADERS) as client:
-                resp = await client.get(nom_url, params=nom_params)
-                if resp.status_code == 200:
-                    nom_data = resp.json()
-                    if isinstance(nom_data, list) and len(nom_data) > 0:
-                        nom_results: List[GeoSearchResult] = []
-                        for item in nom_data:
-                            addr = item.get("address", {})
-                            street_name = addr.get("road") or addr.get("pedestrian") or addr.get("street") or addr.get("suburb") or item.get("name") or ""
-                            house_num = addr.get("house_number")
-                            full_street = f"{street_name} {house_num}".strip() if house_num else street_name
-                            city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("municipality") or addr.get("county") or ""
-                            province = addr.get("county") or addr.get("state_district") or ""
-                            nom_results.append(GeoSearchResult(
-                                display_name=item.get("display_name", ""),
-                                street=full_street or None,
-                                city=city,
-                                province=province,
-                                postal_code=addr.get("postcode"),
-                                country=addr.get("country", "Italia"),
-                                latitude=float(item.get("lat")),
-                                longitude=float(item.get("lon"))
-                            ))
-                        if nom_results:
-                            return nom_results
+            async with httpx.AsyncClient(timeout=4.5, headers=self.HEADERS) as client:
+                if max_items == 1:
+                    single_res = await self._resolve_suggestion(client, sanitized, None)
+                    if single_res:
+                        return [single_res]
+
+                sug_resp = await client.get(
+                    self.ARCGIS_SUGGEST_URL,
+                    params={
+                        "text": sanitized,
+                        "category": "Address",
+                        "countryCode": "ITA",
+                        "f": "json",
+                        "maxSuggestions": max_items
+                    }
+                )
+                if sug_resp.status_code == 200:
+                    suggestions = sug_resp.json().get("suggestions", [])
+                    if suggestions:
+                        tasks = [
+                            self._resolve_suggestion(client, s.get("text", ""), s.get("magicKey"))
+                            for s in suggestions[:max_items]
+                        ]
+                        resolved = await asyncio.gather(*tasks)
+                        results = [r for r in resolved if r is not None]
+                        if results:
+                            return results
+
+                # Se suggest non ha trovato match parziali, prova findAddressCandidates diretto
+                cand_resp = await client.get(
+                    self.ARCGIS_FIND_URL,
+                    params={
+                        "SingleLine": sanitized,
+                        "countryCode": "ITA",
+                        "f": "json",
+                        "outFields": "StAddr,PlaceName,Nbrhd,City,Subregion,Region,Postal,Addr_type",
+                        "maxLocations": max_items
+                    }
+                )
+                if cand_resp.status_code == 200:
+                    cands = cand_resp.json().get("candidates", [])
+                    results = [self._parse_candidate(c) for c in cands]
+                    valid_results = [r for r in results if r is not None]
+                    if valid_results:
+                        return valid_results
         except Exception:
             pass
 
-        # 2. Fallback su Photon (Komoot)
-        params = {
-            "q": sanitized,
-            "limit": min(max(limit, 1), 10),
-            "lang": "default"
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=4.0, headers=self.HEADERS) as client:
-                response = await client.get(self.BASE_URL, params=params)
-                if response.status_code != 200:
-                    return []
-                data = response.json()
-        except Exception:
-            return []
-
-        features = data.get("features", [])
-        results: List[GeoSearchResult] = []
-
-        for feat in features:
-            props = feat.get("properties", {})
-            geom = feat.get("geometry", {})
-            coords = geom.get("coordinates", [])
-
-            if len(coords) < 2:
-                continue
-
-            lon, lat = coords[0], coords[1]
-            name = props.get("name")
-            street = props.get("street")
-            housenumber = props.get("housenumber")
-            city = props.get("city") or props.get("town") or props.get("village") or props.get("locality")
-            county = props.get("county") or props.get("state_district")
-            postcode = props.get("postcode")
-            country = props.get("country")
-
-            # Street composition
-            if street and housenumber:
-                full_street = f"{street} {housenumber}"
-            elif street:
-                full_street = street
-            elif props.get("osm_value") in ["residential", "secondary", "primary", "tertiary", "service", "living_street"] and name:
-                full_street = name
-            else:
-                full_street = None
-
-            # Display name composition
-            parts = []
-            if full_street:
-                parts.append(full_street)
-            elif name and name != city:
-                parts.append(name)
-
-            if city:
-                parts.append(city)
-            if county and county != city:
-                parts.append(county)
-            if country:
-                parts.append(country)
-
-            display_name = ", ".join(parts) if parts else (name or "Indirizzo sconosciuto")
-
-            results.append(
-                GeoSearchResult(
-                    display_name=display_name,
-                    street=full_street or name,
-                    city=city or name,
-                    province=county,
-                    postal_code=postcode,
-                    country=country or "Italia",
-                    latitude=float(lat),
-                    longitude=float(lon)
-                )
-            )
-
-        return results
+        return []

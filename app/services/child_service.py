@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.sql.functions import func
 from app.models.child import Child
+from app.models.course import Course, CourseEnrollment
 from app.schemas.child import ChildCreate, ChildUpdate
 import uuid
 
@@ -41,11 +42,30 @@ class ChildService:
 
 
     async def get_children_by_parent(self, parent_id: uuid.UUID) -> list[Child]:
-        """Restituisce i figli dato un parent_id."""
+        """Restituisce i figli dato un parent_id e sincronizza lo sport con eventuali iscrizioni attive ai corsi."""
 
         stmt = select(Child).where(Child.parent_id == parent_id)
-        child = await self.db.execute(stmt)
-        return list(child.scalars().all())
+        res = await self.db.execute(stmt)
+        children_list = list(res.scalars().all())
+
+        updated = False
+        for c in children_list:
+            stmt_course = (
+                select(Course.name)
+                .join(CourseEnrollment, CourseEnrollment.course_id == Course.id)
+                .where(CourseEnrollment.child_id == c.id)
+                .order_by(CourseEnrollment.enrolled_at.desc())
+            )
+            res_course = await self.db.execute(stmt_course)
+            enrolled_course_name = res_course.scalars().first()
+            if enrolled_course_name and c.sport != enrolled_course_name:
+                c.sport = enrolled_course_name
+                updated = True
+
+        if updated:
+            await self.db.commit()
+
+        return children_list
 
 
     async def get_child_by_id_and_parent(self, child_id: uuid.UUID, parent_id: uuid.UUID) -> Child | None:
