@@ -771,7 +771,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                         <input
                           type="text"
                           required
-                          placeholder="Scrivi via, civico e città (es. Via Imperia 25, San Giovanni la Punta)..."
+                          placeholder="Scrivi via, civico e città (es. Via Roma 10, Milano)..."
                           value={parentProfile.street}
                           onChange={e => {
                             const val = e.target.value;

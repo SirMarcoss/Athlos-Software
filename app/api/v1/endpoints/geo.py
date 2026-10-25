@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("/autocomplete", response_model=List[GeoSearchResult])
 async def autocomplete_address(
-    q: str = Query(..., min_length=2, max_length=100, description="Indirizzo o città da cercare (es. 'San Giovanni La')"),
+    q: str = Query(..., min_length=2, max_length=100, description="Indirizzo o città da cercare (es. 'Via Roma')"),
     limit: int = Query(5, ge=1, le=10, description="Numero massimo di risultati da restituire")
 ):
     """

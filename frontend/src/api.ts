@@ -646,7 +646,7 @@ export async function autocompleteGeo(
 
     const requests: Promise<Response>[] = [fetch(directUrl, { signal: controller.signal })];
 
-    // Se l'utente ha scritto solo il nome della via (es. "Via Imperia 25") e nel form c'è già un CAP/Città,
+    // Se l'utente ha scritto solo il nome della via (es. "Via Roma 10") e nel form c'è già un CAP/Città,
     // eseguiamo in parallelo anche una ricerca contestuale verificando che il nome della via combaci
     const hasContext = Boolean(context?.postal_code?.trim() || context?.city?.trim());
     if (hasContext) {

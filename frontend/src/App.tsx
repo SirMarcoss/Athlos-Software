@@ -1746,7 +1746,7 @@ const nearbyClubs = useMemo(() => {
                                   required
                                   value={parentStreet}
                                   onChange={e => handleParentGeoSearch(e.target.value)}
-                                  placeholder="Scrivi via, civico e città (es. Via Imperia 25, San Giovanni la Punta)..."
+                                  placeholder="Scrivi via, civico e città (es. Via Roma 10, Milano)..."
                                   className="w-full px-4 py-3 pl-9 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 text-sm"
                                 />
                                 <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3.5 pointer-events-none" />
