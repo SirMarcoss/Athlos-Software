@@ -297,6 +297,9 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                   creativity_score: latest.creativity_score,
                   teamwork_score: latest.teamwork_score,
                   stress_management_score: latest.stress_management_score,
+                  leadership_score: latest.leadership_score,
+                  game_reading_score: latest.game_reading_score,
+                  motivation_score: latest.motivation_score,
                   ai_recommended_sport: latest.ai_recommended_sport || 'N/A',
                   coach_notes: latest.coach_notes || '',
                   course_id: latest.course_id

@@ -9,7 +9,8 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,  # Previene crash se la connessione cade lato DB
     pool_size=10,        # Numero massimo di connessioni stabili mantenute aperte
-    max_overflow=20      # Connessioni extra temporanee nei momenti di picco
+    max_overflow=20,      # Connessioni extra temporanee nei momenti di picco
+    connect_args={"statement_cache_size": 0}
 )
 # Creating a single session per user
 SessionLocal = async_sessionmaker(

@@ -254,6 +254,17 @@ export default function App() {
 
   // Ripristino automatico della sessione al caricamento della pagina se esiste un token JWT valido
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const refParam = params.get('ref');
+    if (refParam) {
+      setParentReferral(refParam.trim());
+      if (!getToken()) {
+        setAuthSelection('parent');
+        setAuthMode('register');
+        setAuthModalOpen(true);
+      }
+    }
+
     const existingToken = getToken();
     if (!existingToken) return;
 
@@ -357,7 +368,7 @@ export default function App() {
     setIsLoggedInAs(role);
   };
 
-  const handleLoginSubmit = async (e: React.FormEvent, expectedRole: 'parent' | 'club') => {
+  const handleLoginSubmit = async (e: React.FormEvent, _expectedRole: 'parent' | 'club') => {
     e.preventDefault();
     setAuthError(null);
     setIsAuthLoading(true);
@@ -379,10 +390,7 @@ export default function App() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore durante il login';
       if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-        // Fallback automatico per testare l'interfaccia anche quando il server FastAPI è spento
-        window.scrollTo({ top: 0, behavior: 'instant' });
-        setIsLoggedInAs(expectedRole);
-        setAuthModalOpen(false);
+        setAuthError('Impossibile contattare il server. Verifica la tua connessione e riprova.');
       } else {
         setAuthError(msg);
       }
@@ -426,9 +434,7 @@ export default function App() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore durante la registrazione';
       if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-        window.scrollTo({ top: 0, behavior: 'instant' });
-        setIsLoggedInAs('parent');
-        setAuthModalOpen(false);
+        setAuthError('Impossibile contattare il server. Verifica la tua connessione e riprova.');
       } else {
         setAuthError(msg);
       }
@@ -471,9 +477,7 @@ export default function App() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore durante la registrazione del club';
       if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-        window.scrollTo({ top: 0, behavior: 'instant' });
-        setIsLoggedInAs('club');
-        setAuthModalOpen(false);
+        setAuthError('Impossibile contattare il server. Verifica la tua connessione e riprova.');
       } else {
         setAuthError(msg);
       }

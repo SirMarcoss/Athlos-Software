@@ -85,7 +85,7 @@ class PsychologicalForm(Base):
     game_reading_score: Mapped[int] = mapped_column(Integer, server_default="7", default=7)
     motivation_score: Mapped[int] = mapped_column(Integer, server_default="7", default=7)
 
-    coach_notes: Mapped[str] = mapped_column(String(255), nullable=True)
+    coach_notes: Mapped[str] = mapped_column(String(1000), nullable=True)
     ai_recommended_sport: Mapped[str] = mapped_column(Text, nullable=True) # Computed at end of trimester
 
     date: Mapped[datetime] = mapped_column(

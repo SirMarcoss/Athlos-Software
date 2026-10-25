@@ -56,6 +56,8 @@ export interface ApiParentCreate {
   info?: string | null;
   address?: ApiAddress | null;
   referral_code?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface ApiParentResponse extends ApiParentCreate {

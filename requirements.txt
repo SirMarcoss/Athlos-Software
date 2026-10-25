@@ -5,10 +5,11 @@ alembic
 asyncpg
 pydantic[email]
 pydantic-settings
-passlib[bcrypt]
+bcrypt
 python-jose[cryptography]
 python-multipart
 greenlet
 google-genai
 httpx
 resend
+python-dotenv

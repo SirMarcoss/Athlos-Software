@@ -31,7 +31,7 @@ class Child(Base):
     gender : Mapped[str] = mapped_column(String(10), nullable=False)
     sport : Mapped[str] = mapped_column(String(255), nullable=False)
     skills : Mapped[List[str]] = mapped_column(ARRAY(String), nullable=False)
-    fiscal_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    fiscal_code: Mapped[str] = mapped_column(String(16), unique=True, index=True, nullable=False)
     medical_notes : Mapped[str] = mapped_column(String(255), nullable=True)
     info : Mapped[str] = mapped_column(String(255), nullable=True)
 
@@ -49,4 +49,3 @@ class Child(Base):
             f"sport = {self.sport!r},"
             f"skills = {self.skills!r}"
         )
-
