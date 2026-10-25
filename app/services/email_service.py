@@ -1,5 +1,7 @@
+import html
 import os
 import resend
+import asyncio
 from dotenv import load_dotenv
 from app.core.config import settings
 
@@ -12,7 +14,7 @@ class EmailService:
         if self.api_key:
             resend.api_key = self.api_key
 
-    def send_evaluation_email_to_parent(
+    async def send_evaluation_email_to_parent(
             self,
             parent_email: str,
             parent_name: str,
@@ -77,16 +79,23 @@ class EmailService:
         </div>
         """ if tip_text else ""
 
+        safe_parent_name = html.escape(parent_name or "")
+        safe_child_name = html.escape(child_name or "")
+        safe_course_name = html.escape(course_name or "")
+        safe_trimester_id = html.escape(trimester_id or "")
+        safe_physical_summary = html.escape(physical_summary or "")
+        safe_coach_notes = html.escape(coach_notes) if coach_notes else ""
+
         coach_notes_html = f"""
         <div style="background-color: #1E2046; border-radius: 14px; padding: 18px 20px; margin-top: 20px; color: #ffffff;">
           <h4 style="margin: 0 0 6px 0; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #E52B6D;">
             📣 Commento dell'Allenatore
           </h4>
           <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #e2e8f0; font-style: italic;">
-            "{coach_notes}"
+            "{safe_coach_notes}"
           </p>
         </div>
-        """ if coach_notes else ""
+        """ if safe_coach_notes else ""
 
         # Template HTML responsive Athlos
         html_content = f"""
@@ -120,10 +129,10 @@ class EmailService:
 
             <div class="body-content">
               <h2 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 900; color: #1E2046;">
-                Ciao {parent_name},
+                Ciao {safe_parent_name},
               </h2>
               <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.5; color: #475569;">
-                Ecco il riepilogo trimestrale di <strong>{child_name}</strong> per il periodo <strong>{trimester_id}</strong> (Corso: <em>{course_name}</em>).
+                Ecco il riepilogo trimestrale di <strong>{safe_child_name}</strong> per il periodo <strong>{safe_trimester_id}</strong> (Corso: <em>{safe_course_name}</em>).
               </p>
 
               <!-- GRIGLIA PUNTEGGI ATTITUDINALI -->
@@ -170,7 +179,7 @@ class EmailService:
                   🏃 Sintesi Test Motori Svolti
                 </span>
                 <p style="margin: 0; font-size: 14px; font-weight: 600; color: #1E2046;">
-                  {physical_summary}
+                  {safe_physical_summary}
                 </p>
               </div>
 
@@ -190,7 +199,7 @@ class EmailService:
               <!-- CARD: PANORAMICA ABILITA' -->
               <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);">
                 <h3 style="margin: 0 0 14px 0; font-size: 15px; font-weight: 800; color: #1E2046;">
-                  🎯 Panoramica sulle Abilità di {child_name}
+                  🎯 Panoramica sulle Abilità di {safe_child_name}
                 </h3>
                 <div>
                   {overview_paragraphs}
@@ -221,7 +230,7 @@ class EmailService:
                 "subject": f"Scheda Trimestrale Athlos: {child_name} ({course_name})",
                 "html": html_content,
             }
-            email_response = resend.Emails.send(params)
+            email_response = await asyncio.to_thread(resend.Emails.send, params)
             print(f"[EmailService] Email inviata con successo a {parent_email}. ID: {email_response}")
             return True
         except Exception as e:
@@ -235,7 +244,7 @@ class EmailService:
                 )
             raise ValueError(f"Errore Resend durante l'invio: {error_msg}")
 
-    def send_password_reset_email(
+    async def send_password_reset_email(
             self,
             to_email: str,
             first_name: str,
@@ -250,7 +259,8 @@ class EmailService:
                 "Assicurati di aver inserito RESEND_API_KEY=re_... nel file .env e riavvia il server."
             )
 
-        safe_name = first_name.strip() if first_name else "Utente"
+        safe_name = html.escape(first_name.strip()) if first_name else "Utente"
+        safe_token = html.escape(reset_token.strip())
 
         html_content = f"""
         <!DOCTYPE html>
@@ -285,7 +295,7 @@ class EmailService:
               </p>
 
               <div class="token-box">
-                {reset_token}
+                {safe_token}
               </div>
 
               <div style="background-color: #fff1f2; border: 1px solid #fecdd3; border-radius: 12px; padding: 14px 16px; margin-top: 20px;">
@@ -310,7 +320,7 @@ class EmailService:
                 "subject": "Codice di Recupero Password - Athlos",
                 "html": html_content,
             }
-            email_response = resend.Emails.send(params)
+            email_response = await asyncio.to_thread(resend.Emails.send, params)
             print(f"[EmailService] Email di reset password inviata a {to_email}. ID: {email_response}")
             return True
         except Exception as e:

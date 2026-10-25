@@ -61,8 +61,8 @@ interface ClubProfile {
   phone_number: string;
   address: Address;
   logo_url?: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface GeoSearchResult {
@@ -72,8 +72,8 @@ interface GeoSearchResult {
   province?: string;
   postal_code?: string;
   country: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface MotorTestMetric {
@@ -152,9 +152,7 @@ const DEFAULT_EMPTY_CLUB: ClubProfile = {
     postal_code: '',
     country: 'Italy'
   },
-  logo_url: '',
-  latitude: 0,
-  longitude: 0
+  logo_url: ''
 };
 
 
@@ -199,51 +197,6 @@ const parseGeminiAnalysis = (text: string | undefined) => {
     objective: overview || (cleaned && !tip ? cleanMd(cleaned) : null),
     tip: tip
   };
-};
-
-const generateLocalAIPassport = (
-  athlete: Athlete,
-  currentCourseName: string,
-  creativity: number,
-  teamwork: number,
-  stress: number,
-  leadership: number,
-  gameReading: number,
-  motivation: number,
-  physicalTests: PhysicalTestItem[],
-  coachNotes: string
-): string => {
-  let recommended = 'Ginnastica Artistica';
-  let objective = '';
-  let tip = '';
-
-  if (leadership >= 8 && gameReading >= 7) {
-    recommended = currentCourseName.toLowerCase().includes('basket') ? 'Pallavolo' : 'Mini-Basket';
-    objective = `A ${athlete.age} anni, ${athlete.first_name} mostra spiccate doti di leadership (${leadership}/10), intelligenza tattica (${gameReading}/10) e spirito di squadra (${teamwork}/10). Uno sport di situazione come ${recommended} permetterà di esaltare la sua capacità di lettura e guida dei compagni.`;
-    tip = `Incoraggiate il suo ruolo propositivo nel gruppo senza caricarlo di responsabilità premature: il gioco deve rimanere divertimento e condivisione.`;
-  } else if (teamwork >= 7 && creativity >= 7) {
-    recommended = currentCourseName.toLowerCase().includes('basket') ? 'Pallavolo' : 'Mini-Basket';
-    objective = `A ${athlete.age} anni, ${athlete.first_name} mostra spiccate doti di creatività (${creativity}/10) e spirito di squadra (${teamwork}/10). Provare anche ${recommended} aiuterà a sviluppare ancora meglio la visione di gioco e la collaborazione con i compagni.`;
-    tip = `Incoraggiate la sua naturale propensione al gioco di gruppo e all'iniziativa personale, lasciandolo divertire senza pressioni sul risultato.`;
-  } else if (stress >= 8 && teamwork <= 5) {
-    recommended = 'Scherma';
-    objective = `Dai test emerge un ottimo autocontrollo (${stress}/10) e una preferenza per le attività individuali. La Scherma valorizza la rapidità di riflessi e la precisione senza metterlo a disagio nelle dinamiche di squadra.`;
-    tip = `Rispettate i suoi tempi di socializzazione: praticare uno sport individuale strutturato rafforzerà la sua fiducia in sé stesso.`;
-  } else if (motivation >= 8 && stress <= 5) {
-    recommended = 'Judo';
-    objective = `L'altissima motivazione (${motivation}/10) unita all'esigenza di canalizzare lo stress e l'emotività (${stress}/10) trova nel Judo la disciplina ideale per equilibrio, rispetto delle regole e autoconsapevolezza corporea.`;
-    tip = `Valorizzate ogni piccolo progresso nel rispetto dei turni e delle regole: sarà una bellissima palestra di crescita personale.`;
-  } else {
-    recommended = 'Nuoto Formativo';
-    objective = `Unendo i ${physicalTests.length} test motori svolti in campo con le osservazioni dell'allenatore (motivazione ${motivation}/10, intelligenza tattica ${gameReading}/10), si consiglia di arricchire il percorso con il Nuoto Formativo per sviluppare coordinazione e armonia motoria.`;
-    tip = `Accompagnate ${athlete.first_name} nella scoperta di più sport: variare movimento a questa età è il modo migliore per crescere sani e felici.`;
-  }
-
-  if (coachNotes.trim()) {
-    objective += ` Nota dell'allenatore: "${coachNotes.trim()}".`;
-  }
-
-  return `1.  SPORT CONSIGLIATO: ${recommended}\n2.  OBIETTIVO MOTORIO: ${objective}\n3.  CONSIGLIO PER I GENITORI: ${tip}`;
 };
 
 const getSportEmoji = (sport: string) => {
@@ -382,8 +335,8 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               country: apiClub.address?.country || 'Italy'
             },
             logo_url: apiClub.logo_url || undefined,
-            latitude: apiClub.latitude ?? 37.5785,
-            longitude: apiClub.longitude ?? 15.0953
+            latitude: apiClub.latitude ?? undefined,
+            longitude: apiClub.longitude ?? undefined
           };
           setClub(loadedClub);
           setProfileForm(loadedClub);
@@ -464,16 +417,41 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               // fallback silenzioso se la chiamata fallisce
             }
 
+            let savedMotorTests: CourseMotorTest[] = [];
+            let savedSportCat = ac.name;
+            try {
+              const rawSavedTests = localStorage.getItem(`athlos_course_mtests_${ac.id}`);
+              if (rawSavedTests) savedMotorTests = JSON.parse(rawSavedTests);
+              const rawSavedCat = localStorage.getItem(`athlos_course_cat_${ac.id}`);
+              if (rawSavedCat) savedSportCat = rawSavedCat;
+            } catch {
+              // Ignora errori localStorage
+            }
+
             loadedCourses.push({
               id: ac.id,
               clubs_id: ac.clubs_id,
               name: ac.name,
-              sport_category: ac.name,
+              sport_category: savedSportCat,
               min_age: ac.min_age,
               max_age: ac.max_age,
-              motor_tests: [],
+              motor_tests: savedMotorTests,
               athletes: enrolledAthletes
             });
+          }
+
+          try {
+            const rawPendingTests = localStorage.getItem('athlos_pending_child_tests');
+            if (rawPendingTests) {
+              const parsedPending: Record<string, PhysicalTestItem[]> = JSON.parse(rawPendingTests);
+              Object.entries(parsedPending).forEach(([cId, items]) => {
+                if (Array.isArray(items) && items.length > 0) {
+                  loadedTests[cId] = items;
+                }
+              });
+            }
+          } catch {
+            // Ignora errori localStorage
           }
 
           setCourses(loadedCourses);
@@ -507,6 +485,28 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       isMounted = false;
     };
   }, []);
+
+  // Sincronizzazione automatica in localStorage dei test motori dei corsi e delle prove settimanali in corso
+  useEffect(() => {
+    courses.forEach(c => {
+      try {
+        localStorage.setItem(`athlos_course_mtests_${c.id}`, JSON.stringify(c.motor_tests));
+        if (c.sport_category) {
+          localStorage.setItem(`athlos_course_cat_${c.id}`, c.sport_category);
+        }
+      } catch {
+        // Ignora errori localStorage
+      }
+    });
+  }, [courses]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('athlos_pending_child_tests', JSON.stringify(childPhysicalTests));
+    } catch {
+      // Ignora errori localStorage
+    }
+  }, [childPhysicalTests]);
 
   const handleSearchAthleteByCf = async () => {
     if (!athleteFiscalCode.trim()) return;
@@ -742,99 +742,58 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       coach_notes: coachNotes.trim() || undefined
     };
 
-    try {
-      // 1. Chiamata al Back-End FastAPI reale (e a Gemini AI)
-      const res = await submitEvaluationSession(psychCourse.id, psychAthlete.id, sessionPayload);
+      try {
+        const res = await submitEvaluationSession(psychCourse.id, psychAthlete.id, sessionPayload);
 
-      const newRecord: EvaluationSessionRecord = {
-        id: res.psychological_form_id || `eval-${crypto.randomUUID()}`,
-        course_id: psychCourse.id,
-        child_id: psychAthlete.id,
-        trimester_id: sessionId,
-        date: new Date().toISOString().split('T')[0],
-        creativity_score: creativityScore,
-        teamwork_score: teamworkScore,
-        stress_management_score: stressScore,
-        leadership_score: leadershipScore,
-        game_reading_score: gameReadingScore,
-        motivation_score: motivationScore,
-        coach_notes: coachNotes.trim() || 'Buon impegno e partecipazione durante il trimestre.',
-        ai_recommended_sport: res.ai_recommendation || 'Valutazione salvata con successo.',
-        physical_tests: athleteTests
-      };
+        const newRecord: EvaluationSessionRecord = {
+          id: res.psychological_form_id || `eval-${crypto.randomUUID()}`,
+          course_id: psychCourse.id,
+          child_id: psychAthlete.id,
+          trimester_id: sessionId,
+          date: new Date().toISOString().split('T')[0],
+          creativity_score: creativityScore,
+          teamwork_score: teamworkScore,
+          stress_management_score: stressScore,
+          leadership_score: leadershipScore,
+          game_reading_score: gameReadingScore,
+          motivation_score: motivationScore,
+          coach_notes: coachNotes.trim() || 'Buon impegno e partecipazione durante il trimestre.',
+          ai_recommended_sport: res.ai_recommendation || 'Valutazione salvata con successo.',
+          physical_tests: athleteTests
+        };
 
-      setEvaluations(prev => ({
-        ...prev,
-        [psychAthlete.id]: newRecord
-      }));
-      // Azzera il contatore delle prove fisiche del bambino dopo l'invio del form trimestrale
-      setChildPhysicalTests(prev => ({
-        ...prev,
-        [psychAthlete.id]: []
-      }));
-      setAnalysisAthleteId(psychAthlete.id);
-      setActiveModal('analysis');
+        setEvaluations(prev => ({
+          ...prev,
+          [psychAthlete.id]: newRecord
+        }));
+        // Azzera il contatore delle prove fisiche del bambino dopo l'invio del form trimestrale
+        setChildPhysicalTests(prev => ({
+          ...prev,
+          [psychAthlete.id]: []
+        }));
+        setAnalysisAthleteId(psychAthlete.id);
+        setActiveModal('analysis');
 
-      // 2. Invio automatico dell'email al genitore tramite la nuova API Resend
-      if (res.psychological_form_id) {
-        sendEvaluationEmail(res.psychological_form_id)
-          .then(() => {
-            showToast(`Scheda salvata ed inviata via email al genitore di ${psychAthlete.first_name}!`);
-          })
-          .catch(emailErr => {
-            console.warn('Invio email automatico non riuscito:', emailErr);
-            const msg = emailErr instanceof Error ? emailErr.message : "Errore invio email";
-            showToast(`Scheda salvata! (${msg})`);
-          });
-      } else {
-        showToast(`Passaporto AI generato per ${psychAthlete.first_name}!`);
+        // 2. Invio automatico dell'email al genitore tramite la nuova API Resend
+        if (res.psychological_form_id) {
+          sendEvaluationEmail(res.psychological_form_id)
+            .then(() => {
+              showToast(`Scheda salvata ed inviata via email al genitore di ${psychAthlete.first_name}!`);
+            })
+            .catch(emailErr => {
+              console.warn('Invio email automatico non riuscito:', emailErr);
+              const msg = emailErr instanceof Error ? emailErr.message : "Errore invio email";
+              showToast(`Scheda salvata! (${msg})`);
+            });
+        } else {
+          showToast(`Passaporto AI generato per ${psychAthlete.first_name}!`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Errore durante il salvataggio della valutazione sul server.';
+        showToast(msg);
+      } finally {
+        setIsSubmittingEval(false);
       }
-    } catch (err) {
-      console.warn('Chiamata server fallita, uso fallback locale:', err);
-      const localAi = generateLocalAIPassport(
-        psychAthlete,
-        psychCourse.name,
-        creativityScore,
-        teamworkScore,
-        stressScore,
-        leadershipScore,
-        gameReadingScore,
-        motivationScore,
-        athleteTests,
-        coachNotes
-      );
-
-      const fallbackRecord: EvaluationSessionRecord = {
-        id: `eval-${crypto.randomUUID()}`,
-        course_id: psychCourse.id,
-        child_id: psychAthlete.id,
-        trimester_id: sessionId,
-        date: new Date().toISOString().split('T')[0],
-        creativity_score: creativityScore,
-        teamwork_score: teamworkScore,
-        stress_management_score: stressScore,
-        leadership_score: leadershipScore,
-        game_reading_score: gameReadingScore,
-        motivation_score: motivationScore,
-        coach_notes: coachNotes.trim() || 'Buon impegno e partecipazione durante il trimestre.',
-        ai_recommended_sport: localAi,
-        physical_tests: athleteTests
-      };
-
-      setEvaluations(prev => ({
-        ...prev,
-        [psychAthlete.id]: fallbackRecord
-      }));
-      setChildPhysicalTests(prev => ({
-        ...prev,
-        [psychAthlete.id]: []
-      }));
-      setAnalysisAthleteId(psychAthlete.id);
-      setActiveModal('analysis');
-      showToast(`Valutazione salvata in locale per ${psychAthlete.first_name}!`);
-    } finally {
-      setIsSubmittingEval(false);
-    }
   };
 
   const handleResendEmail = async (evaluationId: string) => {
@@ -885,9 +844,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
             ? geo.postal_code
             : prev.address.postal_code,
         country: geo.country || 'Italy'
-      },
-      latitude: Number(geo.latitude.toFixed(4)),
-      longitude: Number(geo.longitude.toFixed(4))
+      }
     }));
     setGeoResults([]);
   };
@@ -907,8 +864,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           postal_code: profileForm.address.postal_code.trim(),
           country: profileForm.address.country || 'Italy'
         },
-        latitude: profileForm.latitude,
-        longitude: profileForm.longitude,
         logo_url: profileForm.logo_url || undefined
       };
 
@@ -1053,31 +1008,59 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
 
   const handleAddAthlete = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetCourseForAthlete || !newAthleteFirstName.trim() || !newAthleteLastName.trim())
-      return;
+    if (!targetCourseForAthlete) return;
 
-    const birthYear = new Date().getFullYear() - newAthleteAge;
-    const athleteId = targetChildId || `athlete-${crypto.randomUUID()}`;
+    let resolvedChildId = targetChildId;
+    let firstName = newAthleteFirstName.trim();
+    let lastName = newAthleteLastName.trim();
+    let age = newAthleteAge;
+
+    if (!resolvedChildId && athleteFiscalCode.trim().length === 16) {
+      try {
+        const child = await getChildByFiscalCode(athleteFiscalCode.trim());
+        resolvedChildId = child.id;
+        firstName = child.first_name;
+        lastName = child.last_name;
+        if (child.date_of_birth) {
+          const birthYear = parseInt(child.date_of_birth.split('-')[0], 10);
+          const calculatedAge = new Date().getFullYear() - birthYear;
+          age = calculatedAge >= 5 && calculatedAge <= 13 ? calculatedAge : 8;
+        }
+      } catch {
+        setCfSearchMessage({
+          text: 'Nessun atleta registrato con questo Codice Fiscale su Athlos. Verifica che il genitore abbia registrato il bambino.',
+          isError: true
+        });
+        return;
+      }
+    }
+
+    if (!resolvedChildId) {
+      setCfSearchMessage({
+        text: 'Cerca prima il bambino tramite il suo Codice Fiscale (16 caratteri) per associarlo al corso.',
+        isError: true
+      });
+      return;
+    }
+
+    const birthYear = new Date().getFullYear() - age;
     const newAthlete: Athlete = {
-      id: athleteId,
-      first_name: newAthleteFirstName.trim(),
-      last_name: newAthleteLastName.trim(),
+      id: resolvedChildId,
+      first_name: firstName,
+      last_name: lastName,
       date_of_birth: `${birthYear}-05-15`,
-      age: newAthleteAge,
+      age,
       gender: 'M',
       from_athlos: newAthleteFromAthlos,
       skills: []
     };
 
-    if (targetChildId) {
-      try {
-        await enrollAthleteInCourse(targetCourseForAthlete, targetChildId);
-        showToast(`${newAthlete.first_name} iscritto al corso nel database!`);
-      } catch (err) {
-        showToast(err instanceof Error ? err.message : 'Iscrizione remota fallita, aggiunto in locale');
-      }
-    } else {
-      showToast(`${newAthlete.first_name} aggiunto al corso (in locale).`);
+    try {
+      await enrollAthleteInCourse(targetCourseForAthlete, resolvedChildId);
+      showToast(`${newAthlete.first_name} iscritto al corso con successo!`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Errore durante l’iscrizione al corso');
+      return;
     }
 
     setCourses(prev =>
@@ -2239,12 +2222,12 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                           Note dell'Allenatore (Opzionale)
                         </label>
                         <span className="text-xs font-bold text-slate-400">
-                          {coachNotes.length}/255
+                          {coachNotes.length}/1000
                         </span>
                       </div>
                       <textarea
                         rows={3}
-                        maxLength={255}
+                        maxLength={1000}
                         placeholder="Scrivi qui un commento sul percorso del bambino durante il trimestre..."
                         value={coachNotes}
                         onChange={e => setCoachNotes(e.target.value)}

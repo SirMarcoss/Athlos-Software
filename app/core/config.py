@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = Field(...)
     RESEND_API_KEY: str = Field(default="")
     EMAIL_FROM: str = Field(default="Athlos <onboarding@resend.dev>")
+    FRONTEND_URL: str = Field(default="http://localhost:5173")
 
 
     @field_validator('SECRET_KEY')

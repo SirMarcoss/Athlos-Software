@@ -15,6 +15,10 @@ class ChildService:
     async def create_child(self, child_in: ChildCreate, parent_id: uuid.UUID) -> Child:
         """Crea un bambino."""
 
+        existing = await self.get_children_by_fiscal_code(child_in.fiscal_code)
+        if existing:
+            raise ValueError("Un atleta con questo Codice Fiscale è già registrato.")
+
         db_child = Child(
             parent_id=parent_id,
             first_name=child_in.first_name,
@@ -23,7 +27,7 @@ class ChildService:
             gender=child_in.gender,
             sport=child_in.sport,
             skills=child_in.skills,
-            fiscal_code=child_in.fiscal_code,
+            fiscal_code=child_in.fiscal_code.upper(),
             medical_notes=child_in.medical_notes,
             info=child_in.info
         )

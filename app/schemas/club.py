@@ -10,7 +10,7 @@ from app.schemas.address import Address
 
 
 class ClubCreate(BaseModel):
-    name : str = Field(max_length=255)
+    name : str = Field(max_length=100)
     email_contact : EmailStr
     address : Optional[Address] = None
     phone_number : str = Field(max_length=20)
@@ -18,7 +18,7 @@ class ClubCreate(BaseModel):
 
 
 class ClubUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, max_length=255)
+    name: Optional[str] = Field(default=None, max_length=100)
     email_contact: Optional[EmailStr] = None
     phone_number: Optional[str] = Field(default=None, max_length=20)
     address: Optional[Address] = None

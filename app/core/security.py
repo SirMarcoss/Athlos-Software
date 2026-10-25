@@ -58,6 +58,10 @@ def verify_access_token(token: str)-> dict:
 
 # --- RECUPERO PASSWORD (CODICE OTP BREVE E LEGGIBILE, STATELESS E MONOUSO) ---
 
+# Protezione anti-brute-force in memoria: traccia i timestamp dei tentativi errati per ciascuna email
+_OTP_FAILED_ATTEMPTS: dict[str, list[float]] = {}
+
+
 def _compute_otp_for_minute(email: str, current_password_hash: str, minute_bucket: int) -> str:
     """
     Genera un codice numerico a 6 cifre (o alfanumerico breve) deterministico per uno specifico minuto,
@@ -106,13 +110,25 @@ def verify_password_reset_token(
     if not email or not current_password_hash:
         raise ValueError("Dati utente mancanti per la verifica del codice.")
 
-    current_minute = int(datetime.now(timezone.utc).timestamp() // 60)
+    now_ts = datetime.now(timezone.utc).timestamp()
+    email_key = email.strip().lower()
+    recent_failures = [
+        t for t in _OTP_FAILED_ATTEMPTS.get(email_key, [])
+        if now_ts - t < expires_minutes * 60
+    ]
+    _OTP_FAILED_ATTEMPTS[email_key] = recent_failures
+    if len(recent_failures) >= 5:
+        raise ValueError("Troppi tentativi errati. Attendi 15 minuti o richiedi un nuovo codice.")
+
+    current_minute = int(now_ts // 60)
 
     # Controlliamo se il codice corrisponde a uno qualsiasi degli ultimi `expires_minutes` minuti
     for offset in range(expires_minutes + 1):
         candidate_code = _compute_otp_for_minute(email, current_password_hash, current_minute - offset)
         if hmac.compare_digest(cleaned_token, candidate_code):
-            return {"sub": email.strip().lower(), "type": "password_reset"}
+            _OTP_FAILED_ATTEMPTS.pop(email_key, None)
+            return {"sub": email_key, "type": "password_reset"}
 
+    _OTP_FAILED_ATTEMPTS.setdefault(email_key, []).append(now_ts)
     raise ValueError("Codice di recupero errato, scaduto (validità 15 minuti) o già utilizzato.")
 

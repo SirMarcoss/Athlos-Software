@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.models.user import User, UserRoleEnum
 from app.schemas.user import UserCreate
 from app.core.security import hash_password, verify_password
@@ -25,7 +25,7 @@ class UserService:
         Ritorna l'oggetto User di SQLAlchemy se trovato, altrimenti None.
         """
         # Creiamo lo statement SQL (Sintassi SQLAlchemy 2.0)
-        stmt = select(User).where(User.email == email)
+        stmt = select(User).where(func.lower(User.email) == email.strip().lower())
 
         # Eseguiamo la query in modo asincrono
         result = await self.db.execute(stmt)
@@ -69,7 +69,7 @@ class UserService:
 
         # 3. Mappatura: Creazione dell'oggetto SQLAlchemy
         db_user = User(
-            email=user_in.email,
+            email=user_in.email.strip().lower(),
             password_hash=hashed_pwd,
             first_name=user_in.first_name,
             last_name=user_in.last_name,
@@ -128,7 +128,7 @@ class UserService:
         # 3. Istanziamo EmailService (con le parentesi () per eseguire __init__ e caricare RESEND_API_KEY)
         #    e spediamo l'email con il codice di recupero
         email_service = EmailService()
-        email_service.send_password_reset_email(
+        await email_service.send_password_reset_email(
             to_email=user.email,
             first_name=user.first_name,
             reset_token=token

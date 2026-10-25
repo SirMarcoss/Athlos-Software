@@ -42,7 +42,7 @@ class EvaluationSessionCreate(BaseModel):
     session_id: str = Field(max_length=50) # e.g. "Q1_2026"
     physical_tests: List[PhysicalTestCreate]
     psychological_form: PsychologicalFormCreate
-    coach_notes: Optional[str] = Field(default=None, max_length=255)
+    coach_notes: Optional[str] = Field(default=None, max_length=1000)
 
 class EvaluationSessionResponse(BaseModel):
     session_id: str

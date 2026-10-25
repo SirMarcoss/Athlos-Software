@@ -65,6 +65,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",    # It finds the url in the dict
         poolclass=pool.NullPool, # Done with the operation, the memory will be freed
+        connect_args={"statement_cache_size": 0},
     )
 
     async with connectable.connect() as connection:  # Opens the connection

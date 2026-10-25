@@ -116,9 +116,17 @@ export default function App() {
   // Search simulator state
   // const [selectedTown, setSelectedTown] = useState("Catania");
 
+  // Lettura iniziale parametro ?ref= dall'URL senza triggerare render a cascata in useEffect
+  const initialRefParam =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('ref')?.trim() || ''
+      : '';
+
   // Auth modal state
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authSelection, setAuthSelection] = useState<'none' | 'parent' | 'club'>('none');
+  const [authModalOpen, setAuthModalOpen] = useState(() => Boolean(initialRefParam && !getToken()));
+  const [authSelection, setAuthSelection] = useState<'none' | 'parent' | 'club'>(() =>
+    initialRefParam && !getToken() ? 'parent' : 'none'
+  );
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot-password'>('register');
 
   // STATO DI SESSIONE REALE ('none' | 'parent' | 'club' | 'admin')
@@ -157,7 +165,7 @@ export default function App() {
   const [parentProvince, setParentProvince] = useState('');
   const [parentEmail, setParentEmail] = useState('');
   const [parentPassword, setParentPassword] = useState('');
-  const [parentReferral, setParentReferral] = useState('');
+  const [parentReferral, setParentReferral] = useState(initialRefParam);
 
   // Campi Form Registrazione Club Sportivo
   const [clubRespFirstName, setClubRespFirstName] = useState('');
@@ -254,17 +262,6 @@ export default function App() {
 
   // Ripristino automatico della sessione al caricamento della pagina se esiste un token JWT valido
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const refParam = params.get('ref');
-    if (refParam) {
-      setParentReferral(refParam.trim());
-      if (!getToken()) {
-        setAuthSelection('parent');
-        setAuthMode('register');
-        setAuthModalOpen(true);
-      }
-    }
-
     const existingToken = getToken();
     if (!existingToken) return;
 
@@ -402,20 +399,29 @@ export default function App() {
   const handleRegisterParentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
+
+    const cleanCf = parentFiscalCode.trim().toUpperCase();
+    if (cleanCf.length !== 16) {
+      setAuthError('Il Codice Fiscale deve essere composto esattamente da 16 caratteri.');
+      return;
+    }
+
     setIsAuthLoading(true);
     try {
-      await registerParentUser({
-        email: parentEmail.trim(),
-        password: parentPassword,
-        first_name: parentFirstName.trim(),
-        last_name: parentLastName.trim()
-      });
-      await loginWithPassword(parentEmail.trim(), parentPassword);
+      if (!getToken()) {
+        await registerParentUser({
+          email: parentEmail.trim(),
+          password: parentPassword,
+          first_name: parentFirstName.trim(),
+          last_name: parentLastName.trim()
+        });
+        await loginWithPassword(parentEmail.trim(), parentPassword);
+      }
       await createParentProfile({
         first_name: parentFirstName.trim(),
         last_name: parentLastName.trim(),
         phone_number: parentPhone.trim(),
-        fiscal_code: parentFiscalCode.trim().toUpperCase(),
+        fiscal_code: cleanCf,
         address:
           parentStreet.trim() && parentCity.trim() && parentProvince.trim() && parentPostalCode.trim()
             ? {
@@ -448,13 +454,15 @@ export default function App() {
     setAuthError(null);
     setIsAuthLoading(true);
     try {
-      await registerClubUser({
-        email: clubEmail.trim(),
-        password: clubPassword,
-        first_name: clubRespFirstName.trim() || clubName.trim(),
-        last_name: clubRespLastName.trim() || 'Club'
-      });
-      await loginWithPassword(clubEmail.trim(), clubPassword);
+      if (!getToken()) {
+        await registerClubUser({
+          email: clubEmail.trim(),
+          password: clubPassword,
+          first_name: clubRespFirstName.trim() || clubName.trim(),
+          last_name: clubRespLastName.trim() || 'Club'
+        });
+        await loginWithPassword(clubEmail.trim(), clubPassword);
+      }
       await createClubProfile({
         name: clubName.trim(),
         email_contact: clubEmail.trim(),
@@ -1724,7 +1732,7 @@ const nearbyClubs = useMemo(() => {
                             </div>
                             <div className="flex gap-3 mb-3">
                               <input type="tel" required value={parentPhone} onChange={e => setParentPhone(e.target.value)} placeholder="Telefono" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800" />
-                              <input type="text" required value={parentFiscalCode} onChange={e => setParentFiscalCode(e.target.value.toUpperCase())} placeholder="Codice Fiscale" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 uppercase" />
+                              <input type="text" required minLength={16} maxLength={16} value={parentFiscalCode} onChange={e => setParentFiscalCode(e.target.value.toUpperCase())} placeholder="Codice Fiscale (16 car.)" className="w-1/2 px-4 py-3 rounded-xl bg-transparent border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 uppercase" />
                             </div>
 
                             {/* Indirizzo Unificato per Genitore */}

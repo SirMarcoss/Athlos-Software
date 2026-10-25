@@ -35,3 +35,17 @@ class ChildResponse(ChildCreate):
     parent_id : UUID
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ChildLookupResponse(BaseModel):
+    id: UUID
+    parent_id: UUID
+    first_name: str
+    last_name: str
+    date_of_birth: date
+    gender: str
+    sport: str
+    skills: list[str]
+    fiscal_code: str
+
+    model_config = ConfigDict(from_attributes=True)

@@ -11,21 +11,21 @@ from uuid import UUID
 class UserCreate(BaseModel):
     email: EmailStr = Field(..., max_length=255)
     password : str = Field(..., min_length=8, max_length=255)
-    first_name: str = Field(max_length=255)
-    last_name: str = Field(max_length=255)
+    first_name: str = Field(max_length=100)
+    last_name: str = Field(max_length=100)
 
 
 class UserUpdate(BaseModel):
     password: Optional[str] = Field(default=None, min_length=8, max_length=255)
-    first_name: Optional[str] = Field(default=None, max_length=255)
-    last_name: Optional[str] = Field(default=None, max_length=255)
+    first_name: Optional[str] = Field(default=None, max_length=100)
+    last_name: Optional[str] = Field(default=None, max_length=100)
 
 
 class UserResponse(BaseModel):
     id : UUID
     email : EmailStr
-    first_name: str = Field(max_length=255)
-    last_name: str = Field(max_length=255)
+    first_name: str = Field(max_length=100)
+    last_name: str = Field(max_length=100)
     role : UserRoleEnum
     created_at: datetime
 

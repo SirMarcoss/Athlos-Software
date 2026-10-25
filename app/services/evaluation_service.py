@@ -135,7 +135,7 @@ class EvaluationService:
         if not res_child.scalars().first():
             raise ValueError("Bambino non trovato o non autorizzato")
 
-        stmt_eval = select(PsychologicalForm).where(PsychologicalForm.child_id == child_id)
+        stmt_eval = select(PsychologicalForm).where(PsychologicalForm.child_id == child_id).order_by(PsychologicalForm.date.asc())
         res_eval = await self.db.execute(stmt_eval)
         return list(res_eval.scalars().all())
 
@@ -146,7 +146,7 @@ class EvaluationService:
         if not res_child.scalars().first():
             raise ValueError("Bambino non trovato o non autorizzato")
 
-        stmt_eval = select(PhysicalTest).where(PhysicalTest.child_id == child_id)
+        stmt_eval = select(PhysicalTest).where(PhysicalTest.child_id == child_id).order_by(PhysicalTest.date.asc())
         res_eval = await self.db.execute(stmt_eval)
         return list(res_eval.scalars().all())
 
@@ -254,7 +254,7 @@ class EvaluationService:
 
         # 7. Invio effettivo tramite EmailService
         email_service = EmailService()
-        return email_service.send_evaluation_email_to_parent(
+        return await email_service.send_evaluation_email_to_parent(
             parent_email=parent_user.email,
             parent_name=f"{parent.first_name} {parent.last_name}",
             child_name=f"{child.first_name} {child.last_name}",

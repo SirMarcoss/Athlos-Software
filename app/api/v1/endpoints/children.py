@@ -5,7 +5,7 @@ from typing import List
 from app.models.user import User, UserRoleEnum
 from app.api.deps import require_role
 from app.core.database import get_db
-from app.schemas.child import ChildCreate, ChildResponse, ChildUpdate
+from app.schemas.child import ChildCreate, ChildResponse, ChildUpdate, ChildLookupResponse
 from app.services.child_service import ChildService
 from app.services.parent_service import ParentService
 
@@ -29,11 +29,14 @@ async def add_child(
         raise HTTPException(status_code=400, detail="Devi prima creare il tuo profilo genitore")
 
     # 2. Se esiste, passiamo il SUO id al ChildService
-    child = await child_service.create_child(payload, parent.id)
-    return child
+    try:
+        child = await child_service.create_child(payload, parent.id)
+        return child
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/by-fiscal-code/{fiscal_code}", response_model=ChildResponse)
+@router.get("/by-fiscal-code/{fiscal_code}", response_model=ChildLookupResponse)
 async def get_child_by_cf(
         fiscal_code : str,
         db: AsyncSession = Depends(get_db),

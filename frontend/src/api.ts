@@ -163,8 +163,8 @@ export interface ApiGeoSearchResult {
   province?: string;
   postal_code?: string;
   country: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 // === FUNZIONE BASE FETCH CON GESTIONE JWT ED ERRORI FASTAPI ===
@@ -698,9 +698,7 @@ export async function autocompleteGeo(
         city: parsed.city,
         province: parsed.province,
         postal_code: parsed.postal_code,
-        country: 'Italia',
-        latitude: 37.5785,
-        longitude: 15.0953
+        country: 'Italia'
       });
       if (results.length >= limit) break;
     }

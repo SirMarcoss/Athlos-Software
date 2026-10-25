@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.endpoints import auth, parents, children, club, courses, evaluations, geo
+from app.core.config import settings
 
 
 app = FastAPI(
@@ -33,7 +34,7 @@ async def root(): #async function
 origins = [
     "http://localhost:3000",  # React classico
     "http://localhost:5173",  # Vite / React moderno
-    "*",                      # Ammette tutte le origini per sviluppo locale
+    settings.FRONTEND_URL,    # URL del frontend in produzione (es. https://athlos.vercel.app)
 ]
 
 

@@ -7,8 +7,8 @@ from uuid import UUID
 from app.schemas.address import Address
 
 class ParentCreate(BaseModel):
-    first_name: str = Field(max_length=255)
-    last_name: str = Field(max_length=255)
+    first_name: str = Field(max_length=100)
+    last_name: str = Field(max_length=100)
     phone_number : str = Field(max_length=20)
     fiscal_code: str = Field(min_length=16, max_length=16)
     info: Optional[str] = Field(default=None, max_length=255)
@@ -17,8 +17,8 @@ class ParentCreate(BaseModel):
 
 
 class ParentUpdate(BaseModel):
-    first_name: Optional[str] = Field(default=None, max_length=255)
-    last_name: Optional[str] = Field(default=None, max_length=255)
+    first_name: Optional[str] = Field(default=None, max_length=100)
+    last_name: Optional[str] = Field(default=None, max_length=100)
     phone_number: Optional[str] = Field(default=None, max_length=20)
     fiscal_code: Optional[str] = Field(default=None, min_length=16, max_length=16)
     info: Optional[str] = Field(default=None, max_length=255)

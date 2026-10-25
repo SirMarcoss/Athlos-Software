@@ -254,7 +254,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
         setNewChildLastName(profile.last_name);
         if (profile.referral_code) {
           setMyReferralCode(profile.referral_code);
-          setMyReferralLink(`https://athlos.it/register?ref=${profile.referral_code}`);
+          setMyReferralLink(`${window.location.origin}/?ref=${profile.referral_code}`);
         }
       })
       .catch(() => {});
@@ -263,7 +263,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     getMyReferral()
       .then(refData => {
         setMyReferralCode(refData.referral_code);
-        setMyReferralLink(refData.link);
+        setMyReferralLink(`${window.location.origin}/?ref=${refData.referral_code}`);
       })
       .catch(() => {});
 
@@ -370,8 +370,11 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     e.preventDefault();
     if (!newChildFirstName.trim() || !newChildLastName.trim()) return;
 
-    const cleanFiscalCode =
-      newChildFiscalCode.trim().toUpperCase().padEnd(16, 'X').slice(0, 16);
+    const cleanFiscalCode = newChildFiscalCode.trim().toUpperCase();
+    if (cleanFiscalCode.length !== 16) {
+      showToast('Il Codice Fiscale deve essere composto esattamente da 16 caratteri.');
+      return;
+    }
 
     setIsSaving(true);
     try {

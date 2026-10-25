@@ -14,3 +14,7 @@ env/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# macOS e Build Front-End
+.DS_Store
+frontend/dist/
