@@ -306,6 +306,17 @@ export default function App() {
     };
   }, []);
 
+  // Stato di scorrimento per l'effetto logo "a scomparsa" tra Hero e Navbar
+  const [isScrolled, setIsScrolled] = useState(false);
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 160);
+    };
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const openAuth = (selection?: 'none' | 'parent' | 'club', mode: 'login' | 'register' = 'register') => {
     setAuthError(null);
     setAuthSelection(selection || 'none');
@@ -908,13 +919,19 @@ const nearbyClubs = useMemo(() => {
       
       <div id="top" className="absolute top-0 w-full h-1"></div>
       {/* MINIMAL NAVBAR */}
-      <header className="fixed top-0 w-full z-40 bg-[#1E2046]/60 backdrop-blur-xl border-b border-white/10">
+      <header className={`fixed top-0 w-full z-40 transition-all duration-300 ${isScrolled ? 'bg-[#1E2046]/80 backdrop-blur-xl border-b border-white/10 shadow-lg' : 'bg-[#1E2046]/30 backdrop-blur-md border-b border-white/5'}`}>
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-          <button onClick={() => customSmoothScrollTo('top')} className="hover:opacity-80 transition-opacity cursor-pointer border-none bg-transparent p-0">
-            <img src="/logo-light.png" alt="Athlos Logo" className="h-16 w-auto object-contain" />
+          <button
+            onClick={() => customSmoothScrollTo('top')}
+            className={`transition-all duration-500 cursor-pointer border-none bg-transparent p-0 flex items-center ${
+              isScrolled ? 'opacity-100 translate-y-0 hover:opacity-80' : 'opacity-0 -translate-y-3 pointer-events-none'
+            }`}
+          >
+            <img src="/logo-light.png" alt="Athlos Logo" className="h-20 w-auto object-contain" />
           </button>
-          <nav className="hidden md:flex items-center gap-8 text-[14px] font-bold text-slate-200">
+          <nav className="hidden md:flex items-center gap-7 text-[14px] font-bold text-slate-200">
             <a href="#manifesto" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('manifesto'); }} className="hover:text-[#E52B6D] transition-colors">Il Progetto</a>
+            <a href="#come-funziona" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('come-funziona'); }} className="hover:text-[#E52B6D] transition-colors">Come Funziona</a>
             <a href="#simulatore" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('simulatore'); }} className="hover:text-[#E52B6D] transition-colors">L'Algoritmo</a>
             <a href="#passaporto-sportivo" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('passaporto-sportivo'); }} className="hover:text-[#E52B6D] transition-colors">Passaporto</a>
             {/* <a href="#vicino-a-te" onClick={(e) => { e.preventDefault(); customSmoothScrollTo('vicino-a-te'); }} className="hover:text-[#E52B6D] transition-colors">Club Vicini</a> */}
@@ -949,7 +966,21 @@ const nearbyClubs = useMemo(() => {
             variants={stagger}
             className="max-w-5xl mx-auto text-center"
           >
-            <motion.h1 variants={fadeUp} className="text-5xl sm:text-[75px] lg:text-[90px] font-black text-white leading-[0.95] tracking-tighter drop-shadow-sm">
+            {/* LOGO HERO CENTRALE CON EFFETTO A SCOMPARSA ALLO SCROLL */}
+            <motion.div
+              variants={fadeUp}
+              className={`flex justify-center mb-4 sm:mb-6 transition-all duration-500 transform-gpu ${
+                isScrolled ? 'opacity-0 scale-90 -translate-y-8 pointer-events-none' : 'opacity-100 scale-100 translate-y-0'
+              }`}
+            >
+              <img
+                src="/logo-light.png"
+                alt="Athlos - Rivelare i talenti del futuro"
+                className="h-36 sm:h-48 lg:h-56 w-auto object-contain drop-shadow-[0_8px_30px_rgba(229,43,109,0.35)]"
+              />
+            </motion.div>
+
+            <motion.h1 variants={fadeUp} className="text-4xl sm:text-[68px] lg:text-[82px] font-black text-white leading-[0.95] tracking-tighter drop-shadow-sm">
               La piattaforma che consente ai tuoi figli <br/>di trovare lo sport migliore per loro.
             </motion.h1>
             
@@ -1101,6 +1132,81 @@ const nearbyClubs = useMemo(() => {
               </p>
             </div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* COME FUNZIONA */}
+      <section id="come-funziona" className="relative py-24 sm:py-32 overflow-hidden text-white bg-transparent">
+        <div className="max-w-6xl mx-auto px-6">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-150px" }}
+            variants={{
+              hidden: { opacity: 0, y: 40 },
+              visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
+            }}
+            className="text-center mb-16"
+          >
+            <div className="inline-block px-6 py-2.5 rounded-full bg-[#E52B6D]/20 border border-[#E52B6D]/40 text-[#FF4F8B] text-xs sm:text-sm font-black uppercase tracking-widest mb-6">
+              Il Percorso Athlos
+            </div>
+            <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter drop-shadow-lg">
+              Come funziona?
+            </h2>
+            <p className="mt-4 text-xl text-slate-200 font-medium drop-shadow-md max-w-2xl mx-auto">
+              Un percorso semplice, guidato dai dati e costruito attorno alla libertà di scelta della famiglia.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {[
+              {
+                step: "01",
+                title: "Esplora e scegli da dove partire",
+                desc: "I genitori, insieme ai figli, possono trovare i club vicino casa e visionare le schede dedicate ad ogni sport, scegliendo quello da cui partire."
+              },
+              {
+                step: "02",
+                title: "Ciclo sportivo trimestrale",
+                desc: "L'attività sportiva dura un trimestre: il tempo ideale per sperimentare davvero una disciplina, divertirsi e acquisire nuove abilità motorie."
+              },
+              {
+                step: "03",
+                title: "Suggerimento AI a fine ciclo",
+                desc: "Al termine di ogni ciclo, la piattaforma Athlos, con il supporto dell’intelligenza artificiale, suggerisce quale sport provare dopo, in base all’esperienza vissuta e alle attitudini emerse."
+              },
+              {
+                step: "04",
+                title: "La scelta resta sempre alla famiglia",
+                desc: "I genitori visionano il percorso dei figli ed i suggerimenti, procedendo alla scelta della prossima esperienza insieme a loro. La scelta resta sempre della famiglia: si può cambiare sport (è consigliato) o fermarsi quando si trova quello giusto."
+              }
+            ].map((item, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                whileHover={{ y: -6, transition: { duration: 0.2, delay: 0 } }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.45, delay: idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                className="bg-white p-8 sm:p-10 rounded-[32px] shadow-xl shadow-slate-900/15 hover:shadow-2xl transition-shadow duration-300 group transform-gpu flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center gap-4 sm:gap-5 mb-5">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#1E2046] text-white flex items-center justify-center text-lg sm:text-xl font-black shrink-0 group-hover:bg-[#E52B6D] transition-colors">
+                      {item.step}
+                    </div>
+                    <h3 className="text-xl sm:text-2xl font-black text-[#1E2046]">
+                      {item.title}
+                    </h3>
+                  </div>
+                  <p className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed">
+                    {item.desc}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
