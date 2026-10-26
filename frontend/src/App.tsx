@@ -604,7 +604,7 @@ const nearbyClubs = useMemo(() => {
       { sport: "Calcio (Fantasista)", a: 9, t: 7, d: 3, tag: "Creatività Pura", tagColor: "bg-sky-50 text-sky-800 border-sky-200", reason: "Talento immenso ma refrattario alla tattica rigida. Ha bisogno di inventare." },
       { sport: "Calcio (Centrocampista)", a: 7, t: 9, d: 8, tag: "Sacrificio e Tattica", tagColor: "bg-blue-50 text-blue-800 border-blue-200", reason: "Grande attenzione e spirito di sacrificio, il vero motore in campo." },
       { sport: "Calcio a 5 (Futsal)", a: 8, t: 8, d: 4, tag: "Intensità Condivisa", tagColor: "bg-emerald-50 text-emerald-800 border-emerald-200", reason: "Campo piccolo, continui scambi. Ideale per chi ha poca attenzione ma ama il team." },
-      { sport: "Pallavolo (Attaccante)", a: 8, t: 9, d: 6, tag: "Potenza Esplosiva", tagColor: "bg-cyan-50 text-cyan-800 border-cyan-200", reason: "Ottima elevazione e dinamiche di squadra ma con picchi individualisti." },
+      { sport: "Pallavolo (Schiacciatore)", a: 8, t: 9, d: 6, tag: "Potenza Esplosiva", tagColor: "bg-cyan-50 text-cyan-800 border-cyan-200", reason: "Ottima elevazione e dinamiche di squadra ma con picchi individualisti." },
       { sport: "Pallavolo (Libero)", a: 9, t: 10, d: 8, tag: "Spirito di Sacrificio", tagColor: "bg-teal-50 text-teal-800 border-teal-200", reason: "Agilità felina messa al servizio totale e umile del collettivo." },
       { sport: "Pallavolo (Palleggiatore)", a: 7, t: 10, d: 9, tag: "Regia e Sincronia", tagColor: "bg-indigo-50 text-indigo-800 border-indigo-200", reason: "Il cervello della squadra. Coordinato, altruista e precisissimo." },
       { sport: "Rugby", a: 6, t: 10, d: 9, tag: "Sostegno e Lealtà", tagColor: "bg-green-50 text-green-800 border-green-200", reason: "Disposizione totale al sacrificio per il team. Rispetto cieco dell'arbitro." },
@@ -1142,9 +1142,6 @@ const nearbyClubs = useMemo(() => {
                    onChange={(e) => setAgility(Number(e.target.value))}
                    className="w-full h-2.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-sky-400 hover:accent-[#1E2046] transition-all"
                  />
-                 <div className="flex justify-between text-xs text-slate-200 font-bold uppercase tracking-widest">
-                   <span>(Es. Scatto, Salto)</span>
-                 </div>
                </div>
 
                <div className="space-y-4">
@@ -1157,9 +1154,6 @@ const nearbyClubs = useMemo(() => {
                    onChange={(e) => setTeamwork(Number(e.target.value))}
                    className="w-full h-2.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-[#E52B6D] hover:accent-[#1E2046] transition-all"
                  />
-                 <div className="flex justify-between text-xs text-slate-200 font-bold uppercase tracking-widest">
-                   <span>(Form Trimestrale)</span>
-                 </div>
                </div>
 
                <div className="space-y-4">
@@ -1172,10 +1166,11 @@ const nearbyClubs = useMemo(() => {
                    onChange={(e) => setDiscipline(Number(e.target.value))}
                    className="w-full h-2.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-amber-400 hover:accent-[#1E2046] transition-all"
                  />
-                 <div className="flex justify-between text-xs text-slate-200 font-bold uppercase tracking-widest">
-                   <span>(Form Trimestrale)</span>
-                 </div>
                </div>
+
+               <p className="text-sm sm:text-base text-slate-300 font-medium italic pt-2">
+                 …e molti altri aspetti su cui fondiamo i nostri suggerimenti
+               </p>
             </motion.div>
 
             {/* RIGHT: PASSPORT */}
@@ -1412,7 +1407,7 @@ const nearbyClubs = useMemo(() => {
             transition={{ duration: 0.6 }}
             className="flex flex-col items-center"
           >
-            <span className="inline-block px-5 py-2 rounded-full bg-[#E52B6D]/15 border border-[#E52B6D]/30 text-[#FF4F8B] text-xs sm:text-sm font-black uppercase tracking-wider mb-6">
+            <span className="inline-block px-7 py-3 rounded-full bg-[#E52B6D]/20 border-2 border-[#E52B6D]/50 text-[#FF4F8B] text-sm sm:text-base md:text-lg font-black uppercase tracking-widest mb-8 shadow-lg shadow-[#E52B6D]/20">
               Per i centri sportivi
             </span>
             <h2 className="text-4xl sm:text-6xl font-black tracking-tighter leading-[0.95]">
@@ -1616,8 +1611,8 @@ const nearbyClubs = useMemo(() => {
             </a>
           </div>
 
-          <p className="text-slate-300 font-medium text-sm">
-            © 2026 Athlos S.r.l. — Conforme alle Linee Guida Attività Motoria Giovanile CONI.
+          <p className="text-slate-300 font-medium text-sm max-w-2xl mx-auto leading-relaxed">
+            © 2026 Athlos — Piattaforma ideata, ingegnerizzata, strutturata e deployata da <strong className="text-white font-bold">Marco Mazzone</strong>, studente di Computer Engineering.
           </p>
         </div>
       </footer>
@@ -1739,8 +1734,8 @@ const nearbyClubs = useMemo(() => {
 
                             {/* Indirizzo Unificato per Genitore */}
                             <div className="relative mb-3">
-                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Via e Numero Civico
+                              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1.5 flex-wrap">
+                                <MapPin className="w-3.5 h-3.5 text-[#E52B6D] shrink-0" /> Via e Numero Civico <span className="normal-case text-slate-400 font-medium text-[10px]">(per mostrarti i club più vicini a te)</span>
                               </label>
                               <div className="relative">
                                 <input
@@ -1748,7 +1743,7 @@ const nearbyClubs = useMemo(() => {
                                   required
                                   value={parentStreet}
                                   onChange={e => handleParentGeoSearch(e.target.value)}
-                                  placeholder="Scrivi via, civico e città (es. Via Roma 10, Milano)..."
+                                  placeholder="Scrivi indirizzo"
                                   className="w-full px-4 py-3 pl-9 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-slate-800 text-sm"
                                 />
                                 <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3.5 pointer-events-none" />

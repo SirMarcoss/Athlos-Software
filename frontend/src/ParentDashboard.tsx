@@ -763,15 +763,15 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
                     {/* Indirizzo di Residenza con completamento automatico */}
                     <div className="relative">
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-[#E52B6D]" /> Via e Numero Civico
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5 flex-wrap">
+                        <MapPin className="w-3.5 h-3.5 text-[#E52B6D] shrink-0" /> Via e Numero Civico <span className="normal-case text-slate-400 font-medium text-[11px]">(per mostrarti i club più vicini a te)</span>
                       </label>
                       <div className="relative">
                         <MapPin className="w-4 h-4 absolute left-3 top-3.5 text-slate-400 pointer-events-none" />
                         <input
                           type="text"
                           required
-                          placeholder="Scrivi via, civico e città (es. Via Roma 10, Milano)..."
+                          placeholder="Scrivi indirizzo"
                           value={parentProfile.street}
                           onChange={e => {
                             const val = e.target.value;
