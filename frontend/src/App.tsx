@@ -1050,11 +1050,13 @@ const nearbyClubs = useMemo(() => {
                 transition={{ duration: 0.45, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
                 className="bg-white p-8 sm:p-10 rounded-[32px] shadow-xl shadow-slate-900/15 hover:shadow-2xl transition-shadow duration-300 group transform-gpu"
               >
-                <div className="w-14 h-14 rounded-2xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center text-2xl font-black mb-6 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors">
-                  {i+1}
+                <div className="flex items-center gap-4 sm:gap-5 mb-5">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#f4f8fc] text-[#E52B6D] flex items-center justify-center text-xl sm:text-2xl font-black shrink-0 group-hover:bg-[#E52B6D] group-hover:text-white transition-colors">
+                    {i+1}
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-black text-[#1E2046]">{p.t}</h3>
                 </div>
-                <h3 className="text-2xl font-black text-[#1E2046] mb-4">{p.t}</h3>
-                <p className="text-slate-600 text-lg font-medium leading-relaxed">{p.d}</p>
+                <p className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed">{p.d}</p>
               </motion.div>
             ))}
           </div>
