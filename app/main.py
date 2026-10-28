@@ -6,7 +6,7 @@ from app.core.config import settings
 
 app = FastAPI(
     title='Athlos API',
-    version="0.1.0"
+    version="1.0.0"
 )
 
 #Semantic versioning: 0 -> not in production project (instable project)
