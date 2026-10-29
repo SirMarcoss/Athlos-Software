@@ -95,18 +95,85 @@ export interface ApiClubCreate {
 export interface ApiClubResponse extends ApiClubCreate {
   id: string;
   user_id: string;
+  stripe_account_id?: string | null;
+  stripe_onboarding_completed?: boolean;
+  stripe_charges_enabled?: boolean;
+  stripe_payouts_enabled?: boolean;
 }
 
 export interface ApiCourseCreate {
   name: string;
   min_age: number;
   max_age: number;
+  price_cents?: number;
+  max_participants?: number | null;
+  billing_period?: 'trimestrale' | 'mensile' | 'annuale' | 'quota_unica';
 }
 
 export interface ApiCourseResponse extends ApiCourseCreate {
   id: string;
   clubs_id: string;
   distance_km?: number | null;
+  enrolled_count?: number;
+}
+
+export type PaymentLifecycleStatus =
+  | 'DRAFT'
+  | 'PENDING'
+  | 'SUCCEEDED'
+  | 'EXPIRED'
+  | 'FAILED'
+  | 'REFUNDED'
+  | 'DISPUTED';
+
+export interface ApiStripeConnectStatus {
+  stripe_account_id: string | null;
+  account_type: 'standard' | 'express';
+  onboarding_completed: boolean;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+  details_submitted: boolean;
+  fiscal_code_or_vat?: string | null;
+  iban_last4?: string | null;
+  requirements_due: string[];
+}
+
+export interface ApiCheckoutSessionRequest {
+  course_id: string;
+  child_id: string;
+}
+
+export interface ApiCheckoutSessionResponse {
+  checkout_url: string;
+  session_id: string;
+  payment_id: string;
+  expires_at?: string;
+}
+
+export interface ApiPaymentRecord {
+  id: string;
+  parent_id: string;
+  parent_name?: string;
+  parent_fiscal_code?: string;
+  parent_email?: string;
+  child_id: string;
+  child_name: string;
+  child_fiscal_code: string;
+  course_id: string;
+  course_name: string;
+  club_id: string;
+  club_name: string;
+  club_fiscal_code?: string;
+  amount_cents: number;
+  currency: string;
+  billing_period?: string;
+  status: PaymentLifecycleStatus;
+  stripe_checkout_session_id: string;
+  stripe_payment_intent_id?: string | null;
+  stripe_event_id?: string | null;
+  receipt_number?: string;
+  created_at: string;
+  completed_at?: string | null;
 }
 
 export interface ApiPhysicalTestCreate {
@@ -712,3 +779,275 @@ export async function autocompleteGeo(
 
   return [];
 }
+
+// === 8. ENDPOINT PAGAMENTI STRIPE (/payments) & FALLBACK SIMULATO PRE-BACKEND ===
+
+export interface LocalCoursePricingMeta {
+  price_cents: number;
+  max_participants: number;
+  billing_period: 'trimestrale' | 'mensile' | 'annuale' | 'quota_unica';
+  sport_category?: string;
+}
+
+const COURSE_PRICING_STORAGE_KEY = 'athlos_course_pricing_map';
+const CLUB_STRIPE_STORAGE_KEY = 'athlos_club_stripe_map';
+const PAYMENTS_LEDGER_STORAGE_KEY = 'athlos_payments_ledger';
+const LOCAL_ENROLLMENTS_STORAGE_KEY = 'athlos_local_course_enrollments';
+
+export function formatEuroFromCents(cents: number | undefined | null): string {
+  const safeCents = typeof cents === 'number' && !isNaN(cents) ? cents : 15000;
+  return new Intl.NumberFormat('it-IT', {
+    style: 'currency',
+    currency: 'EUR'
+  }).format(safeCents / 100);
+}
+
+export function formatBillingPeriodLabel(
+  period?: 'trimestrale' | 'mensile' | 'annuale' | 'quota_unica' | string | null
+): string {
+  switch (period) {
+    case 'mensile':
+      return 'Mensile';
+    case 'annuale':
+      return 'Annuale';
+    case 'quota_unica':
+      return 'Quota Unica';
+    case 'trimestrale':
+    default:
+      return 'Trimestrale';
+  }
+}
+
+export function formatPaymentStatusLabel(
+  status?: PaymentLifecycleStatus | string | null
+): string {
+  switch (status) {
+    case 'SUCCEEDED':
+      return 'Pagato';
+    case 'PENDING':
+      return 'In attesa';
+    case 'FAILED':
+      return 'Non riuscito';
+    case 'REFUNDED':
+      return 'Rimborsato';
+    case 'EXPIRED':
+      return 'Annullato';
+    case 'DISPUTED':
+      return 'Contestato';
+    case 'DRAFT':
+      return 'In corso';
+    default:
+      return status || 'In corso';
+  }
+}
+
+export function getSavedCoursePricing(courseId: string): LocalCoursePricingMeta {
+  try {
+    const raw = localStorage.getItem(COURSE_PRICING_STORAGE_KEY);
+    if (raw) {
+      const map = JSON.parse(raw) as Record<string, LocalCoursePricingMeta>;
+      if (map[courseId]) return map[courseId];
+    }
+  } catch {
+    // ignore
+  }
+  return {
+    price_cents: 15000, // Default 150,00 €
+    max_participants: 20,
+    billing_period: 'trimestrale'
+  };
+}
+
+export function saveCoursePricing(courseId: string, meta: LocalCoursePricingMeta): void {
+  try {
+    const raw = localStorage.getItem(COURSE_PRICING_STORAGE_KEY);
+    const map: Record<string, LocalCoursePricingMeta> = raw ? JSON.parse(raw) : {};
+    map[courseId] = meta;
+    localStorage.setItem(COURSE_PRICING_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+export function getSavedClubStripeStatus(clubId?: string): ApiStripeConnectStatus {
+  const key = clubId || 'default_club';
+  try {
+    const raw = localStorage.getItem(CLUB_STRIPE_STORAGE_KEY);
+    if (raw) {
+      const map = JSON.parse(raw) as Record<string, ApiStripeConnectStatus>;
+      if (map[key]) return map[key];
+      if (map['default_club']) return map['default_club'];
+    }
+  } catch {
+    // ignore
+  }
+  return {
+    stripe_account_id: 'acct_1AthlosStdClubIT',
+    account_type: 'standard',
+    onboarding_completed: true,
+    charges_enabled: true,
+    payouts_enabled: true,
+    details_submitted: true,
+    fiscal_code_or_vat: '93048210874',
+    iban_last4: '4892',
+    requirements_due: []
+  };
+}
+
+export function saveClubStripeStatus(
+  clubId: string | undefined,
+  status: ApiStripeConnectStatus
+): void {
+  try {
+    const raw = localStorage.getItem(CLUB_STRIPE_STORAGE_KEY);
+    const map: Record<string, ApiStripeConnectStatus> = raw ? JSON.parse(raw) : {};
+    if (clubId) map[clubId] = status;
+    map['default_club'] = status;
+    localStorage.setItem(CLUB_STRIPE_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+export interface LocalEnrollmentEntry {
+  course_id: string;
+  course_name: string;
+  club_id: string;
+  club_name: string;
+  child_id: string;
+  child_first_name: string;
+  child_last_name: string;
+  child_date_of_birth: string;
+  child_gender: string;
+  child_fiscal_code: string;
+  payment_id: string;
+  enrolled_at: string;
+}
+
+export function getLocalEnrollments(): LocalEnrollmentEntry[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_ENROLLMENTS_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as LocalEnrollmentEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addLocalEnrollment(entry: LocalEnrollmentEntry): void {
+  try {
+    const current = getLocalEnrollments().filter(
+      e => !(e.course_id === entry.course_id && e.child_id === entry.child_id)
+    );
+    current.push(entry);
+    localStorage.setItem(LOCAL_ENROLLMENTS_STORAGE_KEY, JSON.stringify(current));
+  } catch {
+    // ignore
+  }
+}
+
+export function removeLocalEnrollment(courseId: string, childId: string): void {
+  try {
+    const current = getLocalEnrollments().filter(
+      e => !(e.course_id === courseId && e.child_id === childId)
+    );
+    localStorage.setItem(LOCAL_ENROLLMENTS_STORAGE_KEY, JSON.stringify(current));
+  } catch {
+    // ignore
+  }
+}
+
+export function getLocalPaymentsLedger(): ApiPaymentRecord[] {
+  try {
+    const raw = localStorage.getItem(PAYMENTS_LEDGER_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as ApiPaymentRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalPaymentRecord(record: ApiPaymentRecord): void {
+  try {
+    const current = getLocalPaymentsLedger().filter(p => p.id !== record.id);
+    current.unshift(record);
+    localStorage.setItem(PAYMENTS_LEDGER_STORAGE_KEY, JSON.stringify(current));
+  } catch {
+    // ignore
+  }
+}
+
+export function updateLocalPaymentStatus(
+  paymentId: string,
+  status: PaymentLifecycleStatus
+): ApiPaymentRecord | null {
+  try {
+    const current = getLocalPaymentsLedger();
+    let updated: ApiPaymentRecord | null = null;
+    const next = current.map(p => {
+      if (p.id === paymentId) {
+        updated = {
+          ...p,
+          status,
+          completed_at:
+            status === 'SUCCEEDED' ? new Date().toISOString() : p.completed_at
+        };
+        return updated;
+      }
+      return p;
+    });
+    localStorage.setItem(PAYMENTS_LEDGER_STORAGE_KEY, JSON.stringify(next));
+    return updated;
+  } catch {
+    return null;
+  }
+}
+
+// Chiamate API reali verso FastAPI (/payments/...)
+export async function createStripeConnectOnboardingLink(
+  accountType: 'standard' | 'express' = 'standard'
+): Promise<{ onboarding_url: string; stripe_account_id: string }> {
+  return apiFetch<{ onboarding_url: string; stripe_account_id: string }>(
+    '/payments/connect/onboard',
+    {
+      method: 'POST',
+      body: JSON.stringify({ account_type: accountType })
+    }
+  );
+}
+
+export async function getStripeConnectStatus(): Promise<ApiStripeConnectStatus> {
+  return apiFetch<ApiStripeConnectStatus>('/payments/connect/status');
+}
+
+export async function createCourseCheckoutSession(
+  payload: ApiCheckoutSessionRequest
+): Promise<ApiCheckoutSessionResponse> {
+  return apiFetch<ApiCheckoutSessionResponse>('/payments/checkout-session', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function verifyCheckoutSessionStatus(
+  sessionId: string
+): Promise<ApiPaymentRecord> {
+  return apiFetch<ApiPaymentRecord>(
+    `/payments/verify/${encodeURIComponent(sessionId)}`
+  );
+}
+
+export async function getMyParentPayments(): Promise<ApiPaymentRecord[]> {
+  return apiFetch<ApiPaymentRecord[]>('/payments/parent/me');
+}
+
+export async function getMyClubPayments(): Promise<ApiPaymentRecord[]> {
+  return apiFetch<ApiPaymentRecord[]>('/payments/club/me');
+}
+
+export async function refundClubPayment(
+  paymentId: string
+): Promise<ApiPaymentRecord> {
+  return apiFetch<ApiPaymentRecord>(`/payments/${paymentId}/refund`, {
+    method: 'POST'
+  });
+}
+

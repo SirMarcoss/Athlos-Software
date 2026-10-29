@@ -19,7 +19,13 @@ import {
   Play,
   ClipboardCheck,
   Search,
-  Loader2
+  Loader2,
+  CreditCard,
+  ShieldCheck,
+  RefreshCw,
+  Euro,
+  FileText,
+  RotateCcw
 } from 'lucide-react';
 import {
   getMyClubProfile,
@@ -39,7 +45,19 @@ import {
   getCourseAthletes,
   enrollAthleteInCourse,
   unenrollAthleteFromCourse,
-  type ApiEvaluationSessionCreate
+  getMyClubPayments,
+  refundClubPayment,
+  getSavedCoursePricing,
+  saveCoursePricing,
+  getLocalPaymentsLedger,
+  updateLocalPaymentStatus,
+  getLocalEnrollments,
+  removeLocalEnrollment,
+  formatEuroFromCents,
+  formatBillingPeriodLabel,
+  formatPaymentStatusLabel,
+  type ApiEvaluationSessionCreate,
+  type ApiPaymentRecord
 } from './api';
 
 // === INTERFACCE ALLINEATE AL BACK-END ===
@@ -132,6 +150,9 @@ interface ClubCourse {
   sport_category: string;
   min_age: number;
   max_age: number;
+  price_cents: number;
+  max_participants: number;
+  billing_period: 'trimestrale' | 'mensile' | 'annuale' | 'quota_unica';
   motor_tests: CourseMotorTest[];
   athletes: Athlete[];
 }
@@ -218,13 +239,18 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   const [childPhysicalTests, setChildPhysicalTests] = useState<Record<string, PhysicalTestItem[]>>({});
   const [evaluations, setEvaluations] = useState<Record<string, EvaluationSessionRecord>>({});
 
-  // Navigazione principale tra le 3 sezioni
-  const [activeTab, setActiveTab] = useState<'courses' | 'motor-tests' | 'psych-form'>('courses');
+  // Navigazione principale tra le 4 sezioni (inclusa Pagamenti & Stripe)
+  const [activeTab, setActiveTab] = useState<'courses' | 'motor-tests' | 'psych-form' | 'payments'>('courses');
 
   // Modali
   const [activeModal, setActiveModal] = useState<
     'none' | 'profile' | 'course-form' | 'analysis' | 'add-athlete'
   >('none');
+
+  // --- PAGAMENTI E ISCRIZIONI CLUB ---
+  const [clubPayments, setClubPayments] = useState<ApiPaymentRecord[]>(() =>
+    getLocalPaymentsLedger()
+  );
 
   // Messaggio di conferma rapido (Toast)
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -282,6 +308,11 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   const [courseSportCategory, setCourseSportCategory] = useState('Basket');
   const [courseMinAge, setCourseMinAge] = useState(6);
   const [courseMaxAge, setCourseMaxAge] = useState(10);
+  const [coursePriceEuro, setCoursePriceEuro] = useState<string>('150');
+  const [courseMaxParticipants, setCourseMaxParticipants] = useState<number>(20);
+  const [courseBillingPeriod, setCourseBillingPeriod] = useState<
+    'trimestrale' | 'mensile' | 'annuale' | 'quota_unica'
+  >('trimestrale');
   const [courseFormError, setCourseFormError] = useState<string | null>(null);
 
   // --- STATO MODALE AGGIUNGI BAMBINO ---
@@ -345,6 +376,18 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
         console.warn('Profilo club non trovato o errore:', err);
       }
 
+      // 1b. Pagamenti e iscrizioni del club dal backend (con fallback locale)
+      try {
+        const remotePayments = await getMyClubPayments();
+        if (isMounted && remotePayments) {
+          setClubPayments(remotePayments);
+        }
+      } catch {
+        if (isMounted) {
+          setClubPayments(getLocalPaymentsLedger());
+        }
+      }
+
       // 2. Corsi del Club e Valutazioni salvate
       try {
         const apiCourses = await getMyClubCourses();
@@ -352,6 +395,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           const loadedCourses: ClubCourse[] = [];
           const loadedEvals: Record<string, EvaluationSessionRecord> = {};
           const loadedTests: Record<string, PhysicalTestItem[]> = {};
+          const localEnrollments = getLocalEnrollments();
 
           for (const ac of apiCourses) {
             try {
@@ -417,6 +461,27 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               // fallback silenzioso se la chiamata fallisce
             }
 
+            // Unisce anche eventuali iscrizioni completate dal genitore tramite il Checkout Stripe
+            const courseLocalEnrollments = localEnrollments.filter(le => le.course_id === ac.id);
+            for (const le of courseLocalEnrollments) {
+              if (!enrolledAthletes.some(ea => ea.id === le.child_id)) {
+                const birthYear = le.child_date_of_birth
+                  ? parseInt(le.child_date_of_birth.split('-')[0], 10)
+                  : 2017;
+                const calculatedAge = new Date().getFullYear() - birthYear;
+                enrolledAthletes.push({
+                  id: le.child_id,
+                  first_name: le.child_first_name,
+                  last_name: le.child_last_name,
+                  date_of_birth: le.child_date_of_birth,
+                  age: calculatedAge >= 5 && calculatedAge <= 18 ? calculatedAge : 8,
+                  gender: le.child_gender || 'M',
+                  from_athlos: true,
+                  skills: []
+                });
+              }
+            }
+
             let savedMotorTests: CourseMotorTest[] = [];
             let savedSportCat = ac.name;
             try {
@@ -428,13 +493,18 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               // Ignora errori localStorage
             }
 
+            const pricingMeta = getSavedCoursePricing(ac.id);
+
             loadedCourses.push({
               id: ac.id,
               clubs_id: ac.clubs_id,
               name: ac.name,
-              sport_category: savedSportCat,
+              sport_category: pricingMeta.sport_category || savedSportCat,
               min_age: ac.min_age,
               max_age: ac.max_age,
+              price_cents: ac.price_cents ?? pricingMeta.price_cents,
+              max_participants: ac.max_participants ?? pricingMeta.max_participants,
+              billing_period: ac.billing_period ?? pricingMeta.billing_period,
               motor_tests: savedMotorTests,
               athletes: enrolledAthletes
             });
@@ -483,6 +553,67 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     loadBackendData();
     return () => {
       isMounted = false;
+    };
+  }, []);
+
+  // --- SINCRONIZZAZIONE AUTOMATICA REAL-TIME DELLE TRANSAZIONI & ISCRIZIONI IN CORSO ---
+  useEffect(() => {
+    const refreshPayments = () => {
+      // 1. Controlla e scade automaticamente i checkout PENDING più vecchi di 15 minuti liberando il posto
+      const current = getLocalPaymentsLedger();
+      const now = Date.now();
+      let hasExpiredAny = false;
+      const updated = current.map(p => {
+        if (p.status === 'PENDING') {
+          const createdAt = new Date(p.created_at).getTime();
+          // 15 minuti = 15 * 60 * 1000 = 900.000 ms
+          if (now - createdAt > 15 * 60 * 1000) {
+            hasExpiredAny = true;
+            return { ...p, status: 'EXPIRED' as const };
+          }
+        }
+        return p;
+      });
+
+      if (hasExpiredAny) {
+        localStorage.setItem('athlos_payments_ledger', JSON.stringify(updated));
+      }
+
+      // 2. Chiamata API backend (con fallback istantaneo su ledger locale)
+      getMyClubPayments()
+        .then(remote => {
+          if (remote && remote.length > 0) setClubPayments(remote);
+          else setClubPayments(getLocalPaymentsLedger());
+        })
+        .catch(() => {
+          setClubPayments(getLocalPaymentsLedger());
+        });
+    };
+
+    // Ascolta eventi di storage da altre schede/finestre (es. genitore che avvia o completa il pagamento)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'athlos_payments_ledger' || e.key === 'athlos_enrollments') {
+        refreshPayments();
+      }
+    };
+
+    // Ri-sincronizza subito non appena l'utente torna sulla finestra
+    const handleFocus = () => {
+      refreshPayments();
+    };
+
+    // Polling periodico in background ogni 6 secondi per tenere aggiornati i KPI in tempo reale
+    const timer = window.setInterval(refreshPayments, 6000);
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
     };
   }, []);
 
@@ -898,6 +1029,9 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     setCourseSportCategory('Basket');
     setCourseMinAge(6);
     setCourseMaxAge(10);
+    setCoursePriceEuro('150');
+    setCourseMaxParticipants(20);
+    setCourseBillingPeriod('trimestrale');
     setCourseFormError(null);
     setActiveModal('course-form');
   };
@@ -908,6 +1042,9 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     setCourseSportCategory(course.sport_category);
     setCourseMinAge(course.min_age);
     setCourseMaxAge(course.max_age);
+    setCoursePriceEuro(((course.price_cents ?? 15000) / 100).toString());
+    setCourseMaxParticipants(course.max_participants ?? 20);
+    setCourseBillingPeriod(course.billing_period ?? 'trimestrale');
     setCourseFormError(null);
     setActiveModal('course-form');
   };
@@ -925,12 +1062,29 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       return;
     }
 
+    const parsedEuro = parseFloat(coursePriceEuro.replace(',', '.'));
+    if (isNaN(parsedEuro) || parsedEuro <= 0) {
+      setCourseFormError('Inserisci un prezzo di iscrizione valido (maggiore di 0 €).');
+      return;
+    }
+    const priceCents = Math.round(parsedEuro * 100);
+    const maxCap = Math.max(1, Math.min(200, Number(courseMaxParticipants) || 20));
+
     try {
       if (editingCourseId) {
         const updated = await updateClubCourse(editingCourseId, {
           name: courseName.trim(),
           min_age: courseMinAge,
-          max_age: courseMaxAge
+          max_age: courseMaxAge,
+          price_cents: priceCents,
+          max_participants: maxCap,
+          billing_period: courseBillingPeriod
+        });
+        saveCoursePricing(editingCourseId, {
+          price_cents: priceCents,
+          max_participants: maxCap,
+          billing_period: courseBillingPeriod,
+          sport_category: courseSportCategory
         });
         setCourses(prev =>
           prev.map(c =>
@@ -940,17 +1094,31 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                   name: updated.name,
                   sport_category: courseSportCategory,
                   min_age: updated.min_age,
-                  max_age: updated.max_age
+                  max_age: updated.max_age,
+                  price_cents: priceCents,
+                  max_participants: maxCap,
+                  billing_period: courseBillingPeriod
                 }
               : c
           )
         );
-        showToast(`Corso "${courseName.trim()}" modificato nel database!`);
+        showToast(
+          `Corso "${courseName.trim()}" aggiornato (${formatEuroFromCents(priceCents)} • ${formatBillingPeriodLabel(courseBillingPeriod)})!`
+        );
       } else {
         const created = await createClubCourse({
           name: courseName.trim(),
           min_age: courseMinAge,
-          max_age: courseMaxAge
+          max_age: courseMaxAge,
+          price_cents: priceCents,
+          max_participants: maxCap,
+          billing_period: courseBillingPeriod
+        });
+        saveCoursePricing(created.id, {
+          price_cents: priceCents,
+          max_participants: maxCap,
+          billing_period: courseBillingPeriod,
+          sport_category: courseSportCategory
         });
         const newCourse: ClubCourse = {
           id: created.id,
@@ -959,11 +1127,16 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           sport_category: courseSportCategory,
           min_age: created.min_age,
           max_age: created.max_age,
+          price_cents: priceCents,
+          max_participants: maxCap,
+          billing_period: courseBillingPeriod,
           motor_tests: [],
           athletes: []
         };
         setCourses(prev => [...prev, newCourse]);
-        showToast(`Corso "${newCourse.name}" creato nel database!`);
+        showToast(
+          `Corso "${newCourse.name}" creato (${formatEuroFromCents(priceCents)} • max ${maxCap} posti)!`
+        );
       }
       setActiveModal('none');
     } catch (err) {
@@ -971,6 +1144,46 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
         err instanceof Error ? err.message : 'Errore durante il salvataggio del corso'
       );
     }
+  };
+
+  // === HANDLERS STRIPE CONNECT & PAGAMENTI ===
+
+  const handleRefundPayment = async (payment: ApiPaymentRecord) => {
+    if (
+      !window.confirm(
+        `Vuoi emettere un rimborso di ${formatEuroFromCents(payment.amount_cents)} su Stripe per l'iscrizione di ${payment.child_name} al corso "${payment.course_name}"? L'atleta verrà rimosso dal corso e il posto tornerà disponibile.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const refunded = await refundClubPayment(payment.id);
+      setClubPayments(prev => prev.map(p => (p.id === payment.id ? refunded : p)));
+    } catch {
+      updateLocalPaymentStatus(payment.id, 'REFUNDED');
+      setClubPayments(getLocalPaymentsLedger());
+    }
+
+    // Rimuove l'iscrizione anche dal corso e libera il posto
+    removeLocalEnrollment(payment.course_id, payment.child_id);
+    try {
+      await unenrollAthleteFromCourse(payment.course_id, payment.child_id);
+    } catch {
+      // ignora se era solo locale
+    }
+
+    setCourses(prev =>
+      prev.map(c =>
+        c.id === payment.course_id
+          ? { ...c, athletes: c.athletes.filter(a => a.id !== payment.child_id) }
+          : c
+      )
+    );
+
+    showToast(
+      `Rimborso di ${formatEuroFromCents(payment.amount_cents)} emesso su Stripe e posto liberato!`
+    );
   };
 
   const handleDeleteCourse = async (courseId: string, name: string) => {
@@ -1076,6 +1289,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     athleteId: string,
     athleteName: string
   ) => {
+    removeLocalEnrollment(courseId, athleteId);
     try {
       await unenrollAthleteFromCourse(courseId, athleteId);
       showToast(`${athleteName} rimosso dal corso.`);
@@ -1128,7 +1342,20 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           </p>
         </button>
 
-        <div className="flex flex-wrap gap-3 sm:gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          {/* Badge Iscrizioni & Incassi */}
+          <button
+            onClick={() => {
+              setClubPayments(getLocalPaymentsLedger());
+              setActiveTab('payments');
+            }}
+            className="px-4 py-2.5 rounded-full font-bold text-xs flex items-center gap-2 border backdrop-blur-md transition-all cursor-pointer bg-white/10 hover:bg-white/20 border-white/25 text-white"
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <CreditCard className="w-4 h-4 text-emerald-300" />
+            <span>Iscrizioni & Incassi</span>
+          </button>
+
           <button
             onClick={openCreateCourseModal}
             className="px-5 py-2.5 bg-[#E52B6D] hover:bg-[#FF4F8B] backdrop-blur-md border border-pink-400/40 rounded-full font-bold transition-colors text-sm flex items-center gap-2 shadow-lg cursor-pointer"
@@ -1163,11 +1390,11 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               Il Tuo Centro Sportivo
             </h2>
             <p className="text-sky-100 text-lg font-medium">
-              Gestisci i corsi, crea i test motori per ogni disciplina e compila la scheda di fine trimestre.
+              Gestisci i corsi, ricevi le iscrizioni con pagamento Stripe e compila i passaporti AI.
             </p>
           </div>
 
-          {/* Menu delle 3 Sezioni */}
+          {/* Menu delle 4 Sezioni */}
           <div className="bg-white/10 backdrop-blur-md p-1.5 rounded-2xl border border-white/20 flex flex-nowrap items-center shrink-0 overflow-x-auto whitespace-nowrap gap-1.5">
             <button
               onClick={() => setActiveTab('courses')}
@@ -1202,6 +1429,20 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               <ClipboardCheck className="w-4 h-4 text-[#E52B6D]" />
               Form Fine Trimestre
             </button>
+            <button
+              onClick={() => {
+                setClubPayments(getLocalPaymentsLedger());
+                setActiveTab('payments');
+              }}
+              className={`px-5 py-3 rounded-xl font-black text-sm transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === 'payments'
+                  ? 'bg-white text-[#1E2046] shadow-lg'
+                  : 'text-white hover:bg-white/10'
+              }`}
+            >
+              <CreditCard className="w-4 h-4 text-[#E52B6D]" />
+              Iscrizioni & Incassi
+            </button>
           </div>
         </div>
 
@@ -1224,7 +1465,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                   </div>
                   <h3 className="text-2xl font-black text-[#1E2046] mb-2">Nessun corso creato</h3>
                   <p className="text-slate-500 mb-6 text-sm">
-                    Non hai ancora creato nessun corso. Inizia subito creando il tuo primo corso per aggiungere i bambini e registrare le loro prove.
+                    Non hai ancora creato nessun corso. Inizia subito creando il tuo primo corso con quota di iscrizione per permettere ai genitori di iscrivere i figli.
                   </p>
                   <button
                     onClick={openCreateCourseModal}
@@ -1252,7 +1493,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
 
                     <div className="relative z-10">
                       {/* Intestazione Corso */}
-                      <div className="flex items-start justify-between gap-4 mb-6">
+                      <div className="flex items-start justify-between gap-4 mb-5">
                         <div className="flex items-center gap-4">
                           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center font-black text-2xl shadow-lg shrink-0">
                             {getSportEmoji(course.sport_category || course.name)}
@@ -1261,6 +1502,10 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="bg-sky-100 text-[#E52B6D] px-3 py-1 rounded-full text-xs font-black uppercase tracking-wide">
                                 {course.sport_category} • {course.min_age}-{course.max_age} anni
+                              </span>
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-xs font-black">
+                                {formatEuroFromCents(course.price_cents)} •{' '}
+                                {formatBillingPeriodLabel(course.billing_period)}
                               </span>
                               <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-bold">
                                 {course.motor_tests.length} test configurati
@@ -1275,7 +1520,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => openEditCourseModal(course)}
-                            title="Modifica Corso"
+                            title="Modifica Corso e Prezzo"
                             className="p-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 text-slate-500 hover:text-[#1E2046] border border-slate-200/80 transition-colors cursor-pointer"
                           >
                             <Edit3 className="w-4 h-4" />
@@ -1290,6 +1535,50 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                         </div>
                       </div>
 
+                      {/* Barra Capienza / Disponibilità Posti (Anti-Overbooking) */}
+                      <div className="mb-5 bg-slate-50 rounded-2xl px-4 py-3 border border-slate-100 flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex justify-between text-xs font-bold mb-1.5">
+                            <span className="text-slate-500">
+                              Posti occupati:{' '}
+                              <strong className="text-[#1E2046]">
+                                {course.athletes.length} / {course.max_participants || 20}
+                              </strong>
+                            </span>
+                            <span
+                              className={
+                                course.athletes.length >= (course.max_participants || 20)
+                                  ? 'text-rose-600 font-black'
+                                  : 'text-emerald-600 font-black'
+                              }
+                            >
+                              {Math.max(
+                                0,
+                                (course.max_participants || 20) - course.athletes.length
+                              )}{' '}
+                              posti liberi
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                course.athletes.length >= (course.max_participants || 20)
+                                  ? 'bg-rose-500'
+                                  : 'bg-gradient-to-r from-[#1E2046] to-[#E52B6D]'
+                              }`}
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  Math.round(
+                                    (course.athletes.length / (course.max_participants || 20)) * 100
+                                  )
+                                )}%`
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Elenco di tutti i bambini iscritti al corso */}
                       <div className="bg-slate-50/90 rounded-2xl p-5 border border-slate-100">
                         <div className="flex items-center justify-between mb-4">
@@ -1301,7 +1590,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                             onClick={() => openAddAthleteModal(course.id)}
                             className="text-xs font-black text-[#E52B6D] hover:text-[#1E2046] flex items-center gap-1 transition-colors cursor-pointer"
                           >
-                            <UserPlus className="w-3.5 h-3.5" /> + Aggiungi Bambino
+                            <UserPlus className="w-3.5 h-3.5" /> + Iscrizione Segreteria
                           </button>
                         </div>
 
@@ -2260,6 +2549,269 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           )}
         </motion.div>
           )}
+
+          {/* =====================================================================
+              SEZIONE 4: PAGAMENTI & STRIPE CONNECT (CLIENTE ➔ CLUB SPORTIVO)
+          ===================================================================== */}
+          {activeTab === 'payments' && (
+            <motion.div
+              key="tab-payments"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="space-y-8"
+            >
+              {/* PANNELLO 1: GESTIONE INCASSI & LIQUIDAZIONI ATHLOS */}
+              <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-[#E52B6D]/10 border border-sky-50">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+                  <div className="flex items-start gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center shrink-0 shadow-lg">
+                      <CreditCard className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-700">
+                          ● Raccolta Quote Gestita da Athlos
+                        </span>
+                      </div>
+                      <h3 className="text-2xl sm:text-3xl font-black text-[#1E2046] mt-2">
+                        Iscrizioni & Incassi
+                      </h3>
+                      <p className="text-slate-500 text-sm font-medium mt-1">
+                        Le famiglie pagano le quote online direttamente ad <strong className="text-[#1E2046]">Athlos</strong>. Athlos raccoglie tutti i versamenti e gestisce le iscrizioni. Le liquidazioni delle quote al tuo centro sportivo avvengono al di fuori della piattaforma tramite accordi commerciali.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dettagli Informativi */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">
+                      Centro Sportivo
+                    </span>
+                    <div className="text-base font-black text-[#1E2046] mt-1">
+                      {club.name}
+                    </div>
+                    <div className="text-xs text-slate-500 font-medium mt-1">
+                      {club.address?.city || 'Centro affiliato Athlos'}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">
+                      Modalità di Incasso Famiglie
+                    </span>
+                    <div className="text-base font-black text-emerald-600 mt-1 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4" /> Pagamento Diretto Athlos
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      Quote versate con Carta o Apple Pay e rilascio automatico della ricevuta.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">
+                      Liquidazione Quote
+                    </span>
+                    <div className="text-base font-black text-[#1E2046] mt-1">
+                      Esterna alla Piattaforma
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      I trasferimenti delle quote maturate al centro avvengono al di fuori del software.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* PANNELLO 2: KPI INCASSI E STATO DELLE ISCRIZIONI */}
+              {(() => {
+                const succeededPayments = clubPayments.filter(p => p.status === 'SUCCEEDED');
+                const pendingPayments = clubPayments.filter(
+                  p => p.status === 'PENDING' || p.status === 'DRAFT'
+                );
+                const refundedPayments = clubPayments.filter(p => p.status === 'REFUNDED');
+                const totalGrossCents = succeededPayments.reduce(
+                  (acc, item) => acc + item.amount_cents,
+                  0
+                );
+
+                return (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                      <div className="bg-white rounded-3xl p-6 border border-sky-50 shadow-lg">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          Incasso Totale Gestito da Athlos
+                        </span>
+                        <div className="text-3xl font-black text-[#1E2046] mt-2">
+                          {formatEuroFromCents(totalGrossCents)}
+                        </div>
+                        <p className="text-xs text-emerald-600 font-bold mt-1">
+                          Quote raccolte per i tuoi corsi
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-3xl p-6 border border-sky-50 shadow-lg">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          Iscrizioni Confermate
+                        </span>
+                        <div className="text-3xl font-black text-emerald-600 mt-2">
+                          {succeededPayments.length}
+                        </div>
+                        <p className="text-xs text-slate-400 font-medium mt-1">
+                          Atleti iscritti e registrati
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-3xl p-6 border border-sky-50 shadow-lg">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          Iscrizioni in Corso
+                        </span>
+                        <div className="text-3xl font-black text-amber-500 mt-2">
+                          {pendingPayments.length}
+                        </div>
+                        <p className="text-xs text-slate-400 font-medium mt-1">
+                          Posti riservati per 15 min
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-3xl p-6 border border-sky-50 shadow-lg">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          Rimborsi Gestiti
+                        </span>
+                        <div className="text-3xl font-black text-rose-500 mt-2">
+                          {refundedPayments.length}
+                        </div>
+                        <p className="text-xs text-slate-400 font-medium mt-1">
+                          Quote riaccreditate
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* REGISTRO TRANSAZIONI E RIMBORSI */}
+                    <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-[#E52B6D]/10 border border-sky-50">
+                      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                        <div>
+                          <h3 className="text-2xl font-black text-[#1E2046]">
+                            Registro Iscrizioni & Quote Versate
+                          </h3>
+                          <p className="text-slate-500 text-sm font-medium mt-0.5">
+                            Elenco in tempo reale di tutte le quote iscrizione ricevute tramite Athlos e ricevute fiscali.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClubPayments(getLocalPaymentsLedger());
+                            showToast('Registro transazioni aggiornato!');
+                          }}
+                          className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#1E2046] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" /> Aggiorna
+                        </button>
+                      </div>
+
+                      {clubPayments.length > 0 ? (
+                        <div className="space-y-3">
+                          {clubPayments.map(payment => (
+                            <div
+                              key={payment.id}
+                              className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                            >
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
+                                      payment.status === 'SUCCEEDED'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : payment.status === 'PENDING'
+                                          ? 'bg-amber-100 text-amber-800'
+                                          : payment.status === 'REFUNDED'
+                                            ? 'bg-purple-100 text-purple-700'
+                                            : 'bg-rose-100 text-rose-700'
+                                    }`}
+                                  >
+                                    {formatPaymentStatusLabel(payment.status)}
+                                  </span>
+                                  <span className="font-black text-[#1E2046] text-base">
+                                    {payment.child_name}
+                                  </span>
+                                  <span className="text-xs font-mono font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                    CF Atleta: {payment.child_fiscal_code}
+                                  </span>
+                                  <span className="text-xs font-bold text-[#E52B6D] bg-rose-50 px-2.5 py-0.5 rounded-full">
+                                    Corso: {payment.course_name}
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-medium pt-1">
+                                  <span>
+                                    Genitore: <strong>{payment.parent_name || 'Famiglia'}</strong>{' '}
+                                    {payment.parent_fiscal_code
+                                      ? `(CF: ${payment.parent_fiscal_code})`
+                                      : ''}
+                                  </span>
+                                  <span>•</span>
+                                  <span>
+                                    Data: {new Date(payment.created_at).toLocaleString('it-IT')}
+                                  </span>
+                                  {payment.receipt_number && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="font-mono font-bold text-slate-700">
+                                        Ricevuta #{payment.receipt_number}
+                                      </span>
+                                    </>
+                                  )}
+                                  <span>•</span>
+                                  <span className="text-slate-500 font-medium">
+                                    Metodo: Carta / Wallet
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-4 shrink-0">
+                                <div className="text-right">
+                                  <div className="text-xl font-black text-[#1E2046]">
+                                    {formatEuroFromCents(payment.amount_cents)}
+                                  </div>
+                                  <div className="text-[11px] font-bold text-slate-400 uppercase">
+                                    {formatBillingPeriodLabel(payment.billing_period)}
+                                  </div>
+                                </div>
+
+                                {payment.status === 'SUCCEEDED' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRefundPayment(payment)}
+                                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 hover:border-rose-300 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                    Rimborsa
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                          <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                          <h4 className="font-black text-[#1E2046] text-base">
+                            Nessun pagamento ancora registrato
+                          </h4>
+                          <p className="text-xs text-slate-400 font-medium max-w-md mx-auto mt-1">
+                            Non appena un genitore iscriverà il proprio figlio a uno dei tuoi corsi dalla sua Area Famiglia, vedrai comparire qui la transazione Stripe e la ricevuta fiscale.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
@@ -2534,10 +3086,10 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               {activeModal === 'course-form' && (
                 <div className="pt-2">
                   <h3 className="text-2xl font-black text-[#1E2046] mb-1">
-                    {editingCourseId ? 'Modifica Corso' : 'Nuovo Corso'}
+                    {editingCourseId ? 'Modifica Corso e Quota' : 'Nuovo Corso Sportivo'}
                   </h3>
                   <p className="text-slate-400 text-sm font-medium mb-6">
-                    Inserisci il nome del corso, lo sport e la fascia d'età dei bambini.
+                    Imposta nome, sport, fascia d'età, quota d'iscrizione e posti disponibili per i genitori.
                   </p>
 
                   {courseFormError && (
@@ -2612,11 +3164,80 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                       </div>
                     </div>
 
+                    {/* Sezione Prezzo e Capienza Posti per Stripe Checkout */}
+                    <div className="p-4 rounded-2xl bg-sky-50/70 border border-sky-100 space-y-4">
+                      <div className="flex items-center gap-2 text-xs font-black text-[#1E2046] uppercase tracking-wider">
+                        <Euro className="w-4 h-4 text-[#E52B6D]" />
+                        Configurazione Pagamento Stripe & Capienza
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                            Quota (€)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min={1}
+                              step="0.50"
+                              required
+                              value={coursePriceEuro}
+                              onChange={e => setCoursePriceEuro(e.target.value)}
+                              className="w-full pl-3.5 pr-8 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046] text-base"
+                            />
+                            <span className="absolute right-3 top-2.5 font-black text-slate-400">
+                              €
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                            Frequenza Quota
+                          </label>
+                          <select
+                            value={courseBillingPeriod}
+                            onChange={e =>
+                              setCourseBillingPeriod(
+                                e.target.value as
+                                  | 'trimestrale'
+                                  | 'mensile'
+                                  | 'annuale'
+                                  | 'quota_unica'
+                              )
+                            }
+                            className="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-bold text-[#1E2046] text-sm"
+                          >
+                            <option value="trimestrale">Trimestrale</option>
+                            <option value="mensile">Mensile</option>
+                            <option value="annuale">Annuale</option>
+                            <option value="quota_unica">Quota Unica</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                            Posti Massimi
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={200}
+                            required
+                            value={courseMaxParticipants}
+                            onChange={e => setCourseMaxParticipants(Number(e.target.value))}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046] text-base"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     <button
                       type="submit"
                       className="w-full py-4 mt-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer"
                     >
-                      {editingCourseId ? 'Salva Corso' : 'Crea Corso'}
+                      {editingCourseId ? 'Salva Corso e Quota' : 'Crea Corso'}
                     </button>
                   </form>
                 </div>
