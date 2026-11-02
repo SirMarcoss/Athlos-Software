@@ -22,7 +22,13 @@ import {
   AlertCircle,
   Clock,
   Receipt,
-  Users
+  Users,
+  Star,
+  Globe,
+  ExternalLink,
+  ArrowLeft,
+  Camera,
+  Navigation
 } from 'lucide-react';
 import {
   getToken,
@@ -55,7 +61,8 @@ import {
   type ApiPhysicalTestResponse,
   type ApiGeoSearchResult,
   type ApiPaymentRecord,
-  type LocalEnrollmentEntry
+  type LocalEnrollmentEntry,
+  type ApiPlacesData
 } from './api';
 
 // === INTERFACCE ===
@@ -121,6 +128,11 @@ interface Club {
   distance: string;
   stripe_charges_enabled: boolean;
   fiscal_code_or_vat?: string;
+  website_url?: string | null;
+  rating?: number | null;
+  phone_number?: string;
+  email_contact?: string;
+  places_data?: ApiPlacesData | null;
   courses: Course[];
 }
 
@@ -132,6 +144,35 @@ const DEMO_FALLBACK_CLUBS: Club[] = [
     distance: '2.4 km',
     stripe_charges_enabled: true,
     fiscal_code_or_vat: '93048210874',
+    website_url: 'https://www.etnasport.it',
+    rating: 4.8,
+    phone_number: '+39 095 448822',
+    email_contact: 'segreteria@etnasport.it',
+    places_data: {
+      google_place_id: 'ChIJ_etna_sport_cat',
+      website_url: 'https://www.etnasport.it',
+      phone_number: '+39 095 448822',
+      rating: 4.8,
+      reviews_count: 118,
+      opening_hours: {
+        open_now: true,
+        weekday_descriptions: [
+          'lunedì: 08:30–21:30',
+          'martedì: 08:30–21:30',
+          'mercoledì: 08:30–21:30',
+          'giovedì: 08:30–21:30',
+          'venerdì: 08:30–21:30',
+          'sabato: 09:00–18:00',
+          'domenica: Chiuso'
+        ]
+      },
+      photos: [
+        'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1517649763962-0c623266ddc0?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?auto=format&fit=crop&w=1200&q=80'
+      ]
+    },
     courses: [
       {
         id: 'demo-course-basket',
@@ -174,6 +215,35 @@ const DEMO_FALLBACK_CLUBS: Club[] = [
     distance: '4.1 km',
     stripe_charges_enabled: true,
     fiscal_code_or_vat: '05482910872',
+    website_url: 'https://www.trinacrianuoto.it',
+    rating: 4.9,
+    phone_number: '+39 095 7221430',
+    email_contact: 'info@trinacrianuoto.it',
+    places_data: {
+      google_place_id: 'ChIJ_trinacria_nuoto',
+      website_url: 'https://www.trinacrianuoto.it',
+      phone_number: '+39 095 7221430',
+      rating: 4.9,
+      reviews_count: 142,
+      opening_hours: {
+        open_now: true,
+        weekday_descriptions: [
+          'lunedì: 07:30–21:00',
+          'martedì: 07:30–21:00',
+          'mercoledì: 07:30–21:00',
+          'giovedì: 07:30–21:00',
+          'venerdì: 07:30–21:00',
+          'sabato: 08:30–19:00',
+          'domenica: 09:00–13:00'
+        ]
+      },
+      photos: [
+        'https://images.unsplash.com/photo-1519315901367-f34ff9154487?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1530549387789-4c1017266635?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&w=1200&q=80'
+      ]
+    },
     courses: [
       {
         id: 'demo-course-nuoto',
@@ -315,6 +385,8 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
   const [selectedReceiptPayment, setSelectedReceiptPayment] = useState<ApiPaymentRecord | null>(
     null
   );
+  // Stato Vetrina / Mini-sito Club selezionato dal genitore
+  const [selectedClubForShowcase, setSelectedClubForShowcase] = useState<Club | null>(null);
 
   // Stato nuovo figlio
   const [newChildFirstName, setNewChildFirstName] = useState('');
@@ -377,6 +449,11 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
         distance: minDistance != null ? `${minDistance} km` : 'Vicino a te',
         stripe_charges_enabled: chargesEnabled,
         fiscal_code_or_vat: clubStripe.fiscal_code_or_vat || '93048210874',
+        website_url: cl.website_url || cl.places_data?.website_url || null,
+        rating: cl.rating ?? cl.places_data?.rating ?? null,
+        phone_number: cl.phone_number || cl.places_data?.phone_number || undefined,
+        email_contact: cl.email_contact || undefined,
+        places_data: cl.places_data || null,
         courses: clubCourses.map(cr => {
           const pricing = getSavedCoursePricing(cr.id);
           const extraEnrolled = currentLocalEnrollments.filter(e => e.course_id === cr.id).length;
@@ -2609,38 +2686,140 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
           )}
         </div>
 
-        {nearbyClubs.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {nearbyClubs.map((club, i) => (
-              <div
-                key={club.id || i}
-                className="bg-white rounded-[24px] border border-slate-200 p-6 hover:shadow-xl hover:shadow-[#E52B6D]/10 transition-shadow duration-300 flex flex-col"
+        {selectedClubForShowcase ? (
+          /* ==========================================================================
+             MINI-SITO / VETRINA DETTAGLIATA DEL CLUB ("CHI SIAMO", FOTO & ORARI)
+             Evita l'uscita dalla piattaforma e aumenta la fiducia dei genitori
+             ========================================================================== */
+          <div className="bg-white rounded-[28px] border border-slate-200 overflow-hidden shadow-xl animate-in fade-in duration-200">
+            {/* Barra superiore di navigazione */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <button
+                onClick={() => setSelectedClubForShowcase(null)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-[#1E2046] shadow-sm transition-colors cursor-pointer"
               >
-                <div className="flex justify-between items-start gap-2 mb-3">
-                  <div>
-                    {i === 0 && (
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#E52B6D] bg-sky-100 px-2.5 py-1 rounded-full inline-block mb-2">
-                        PIÙ VICINO (1° SCELTA)
+                <ArrowLeft className="w-4 h-4 text-[#E52B6D]" /> Torna all'elenco dei centri sportivi
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Centro Convenzionato Ufficiale
+                </span>
+                <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-full">
+                  {selectedClubForShowcase.distance} da casa tua
+                </span>
+              </div>
+            </div>
+
+            {/* Hero Cover con Foto Reale Google Places & Dati Principali */}
+            <div className="relative h-64 sm:h-80 w-full overflow-hidden bg-slate-900">
+              <img
+                src={
+                  selectedClubForShowcase.places_data?.photos?.[0] ||
+                  'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1400&q=80'
+                }
+                alt={selectedClubForShowcase.name}
+                className="w-full h-full object-cover opacity-80"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#1E2046] via-[#1E2046]/50 to-transparent" />
+              <div className="absolute bottom-6 left-6 right-6 flex flex-col sm:flex-row justify-between sm:items-end gap-4 text-white">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    {selectedClubForShowcase.rating && (
+                      <span className="bg-amber-400 text-slate-900 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                        <Star className="w-3.5 h-3.5 fill-slate-900" />
+                        {selectedClubForShowcase.rating.toFixed(1)} / 5.0 (
+                        {selectedClubForShowcase.places_data?.reviews_count || '100+'} recensioni Google)
                       </span>
                     )}
-                    <h3 className="text-xl font-bold text-[#1E2046] leading-tight">{club.name}</h3>
+                    {selectedClubForShowcase.places_data?.opening_hours?.open_now != null && (
+                      <span
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                          selectedClubForShowcase.places_data.opening_hours.open_now
+                            ? 'bg-emerald-500/90 text-white'
+                            : 'bg-slate-700/90 text-slate-200'
+                        }`}
+                      >
+                        {selectedClubForShowcase.places_data.opening_hours.open_now
+                          ? '● Aperto ora'
+                          : '○ Chiuso al momento'}
+                      </span>
+                    )}
                   </div>
-                  <span className="bg-slate-100 text-[#1E2046] font-black text-sm px-3 py-1 rounded-full whitespace-nowrap shrink-0">
-                    {club.distance}
-                  </span>
+                  <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+                    {selectedClubForShowcase.name}
+                  </h2>
+                  <p className="text-slate-200 text-xs sm:text-sm flex items-center gap-2 mt-1">
+                    <MapPin className="w-4 h-4 text-[#FF4F8B] shrink-0" />
+                    {selectedClubForShowcase.address}
+                  </p>
                 </div>
 
-                <p className="text-slate-500 text-sm flex items-center gap-2 mb-5">
-                  <MapPin className="w-4 h-4 text-slate-400 shrink-0" /> {club.address}
-                </p>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {selectedClubForShowcase.website_url && (
+                    <a
+                      href={selectedClubForShowcase.website_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
+                    >
+                      <Globe className="w-4 h-4" /> Sito Ufficiale <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                  {selectedClubForShowcase.phone_number && (
+                    <a
+                      href={`tel:${selectedClubForShowcase.phone_number}`}
+                      className="px-4 py-2 bg-white text-[#1E2046] hover:bg-slate-100 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors"
+                    >
+                      <Phone className="w-4 h-4 text-[#E52B6D]" /> {selectedClubForShowcase.phone_number}
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
 
-                <div className="flex-1">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
-                    <span>Corsi & Quote Iscrizione</span>
-                    <span className="text-[10px] text-slate-400 font-semibold">{club.courses.length} corsi</span>
-                  </h4>
-                  <div className="space-y-3">
-                    {club.courses.map((course, cIdx) => {
+            {/* Corpo Vetrina: Galleria, Corsi e Orari Ufficiali */}
+            <div className="p-6 sm:p-8 space-y-8">
+              {/* Photo Gallery Struttura (Campi, Spogliatoi, Palestre da Google) */}
+              {selectedClubForShowcase.places_data?.photos &&
+                selectedClubForShowcase.places_data.photos.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-black text-[#1E2046] uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-[#E52B6D]" /> Foto della Struttura & Campi (
+                      {selectedClubForShowcase.places_data.photos.length} immagini ufficiali)
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {selectedClubForShowcase.places_data.photos.map((photoUrl, pIdx) => (
+                        <div
+                          key={pIdx}
+                          className="group relative h-40 sm:h-48 rounded-2xl overflow-hidden bg-slate-100 shadow-sm border border-slate-200"
+                        >
+                          <img
+                            src={photoUrl}
+                            alt={`${selectedClubForShowcase.name} foto ${pIdx + 1}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* 3. Sezione Corsi Disponibili + Sidebar Orari & Posizione */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Corsi Attivi del Club */}
+                <div className="lg:col-span-2">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-black text-[#1E2046] flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-[#E52B6D]" /> Corsi Disponibili & Iscrizione Diretta
+                    </h3>
+                    <span className="text-xs font-bold text-slate-400">
+                      {selectedClubForShowcase.courses.length} corsi attivi
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    {selectedClubForShowcase.courses.map((course, cIdx) => {
                       const spotsLeft = Math.max(0, course.max_participants - course.enrolled_count);
                       const isFull = spotsLeft <= 0;
                       const enrolledChildrenInCourse = children.filter((ch) =>
@@ -2652,14 +2831,16 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       return (
                         <div
                           key={course.id || cIdx}
-                          className="bg-slate-50 border border-slate-100 rounded-2xl p-4 hover:border-[#E52B6D]/40 transition-colors flex flex-col gap-3"
+                          className="bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:border-[#E52B6D]/40 transition-colors flex flex-col gap-3"
                         >
                           <div className="flex justify-between items-start gap-2">
                             <div>
-                              <p className="font-black text-[#1E2046] text-sm leading-snug">{course.name}</p>
+                              <p className="font-black text-[#1E2046] text-base leading-snug">
+                                {course.name}
+                              </p>
                               <div className="flex flex-wrap items-center gap-2 mt-1">
                                 <span className="text-xs text-slate-500 font-semibold">
-                                  Età: {course.age_range} anni
+                                  Fascia d'età: {course.age_range} anni
                                 </span>
                                 <span className="text-slate-300">•</span>
                                 <span
@@ -2679,7 +2860,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                               </div>
                             </div>
                             <div className="text-right shrink-0">
-                              <span className="block font-black text-[#1E2046] text-base leading-none">
+                              <span className="block font-black text-[#1E2046] text-lg leading-none">
                                 {formatEuroFromCents(course.price_cents)}
                               </span>
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -2705,7 +2886,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                           <button
                             onClick={() => openEnrollCourseModal(course)}
                             disabled={isFull}
-                            className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
+                            className={`w-full py-3 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
                               isFull
                                 ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
                                 : 'bg-[#1E2046] hover:bg-[#E52B6D] text-white shadow-sm cursor-pointer'
@@ -2715,13 +2896,248 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                               <>Corso al Completo ({course.enrolled_count}/{course.max_participants})</>
                             ) : (
                               <>
-                                <CreditCard className="w-3.5 h-3.5" /> Iscrivi tuo figlio con Carta o Apple Pay
+                                <CreditCard className="w-4 h-4" /> Iscrivi tuo figlio con Carta o Apple Pay
                               </>
                             )}
                           </button>
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+
+                {/* Sidebar: Orari di Apertura & Mappa Google */}
+                <div className="space-y-6">
+                  {/* Orari settimanali */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-[#E52B6D]" /> Orari di Apertura Centro
+                    </h4>
+                    {selectedClubForShowcase.places_data?.opening_hours?.weekday_descriptions?.length ? (
+                      <ul className="space-y-2 text-xs">
+                        {selectedClubForShowcase.places_data.opening_hours.weekday_descriptions.map(
+                          (desc, dIdx) => (
+                            <li
+                              key={dIdx}
+                              className="flex justify-between py-1.5 border-b border-slate-200/60 last:border-0 text-slate-700 font-medium"
+                            >
+                              {desc}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-slate-500">
+                        Orari standard segreteria e corsi: Lunedì – Sabato 08:30 – 21:00
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Posizione & Navigatore */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Navigation className="w-4 h-4 text-[#E52B6D]" /> Posizione & Mappe
+                    </h4>
+                    <p className="text-xs text-slate-600 mb-4 flex items-start gap-1.5">
+                      <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                      {selectedClubForShowcase.address}
+                    </p>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        `${selectedClubForShowcase.name} ${selectedClubForShowcase.address}`
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 border border-slate-200 text-[#1E2046] rounded-xl font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4 text-[#E52B6D]" /> Apri in Google Maps
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : nearbyClubs.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {nearbyClubs.map((club, i) => (
+              <div
+                key={club.id || i}
+                className="bg-white rounded-[24px] border border-slate-200 overflow-hidden hover:shadow-xl hover:shadow-[#E52B6D]/10 transition-shadow duration-300 flex flex-col"
+              >
+                {/* Cover Immagine Google Places (se presente) */}
+                {club.places_data?.photos?.[0] && (
+                  <div className="relative h-44 w-full overflow-hidden bg-slate-100">
+                    <img
+                      src={club.places_data.photos[0]}
+                      alt={club.name}
+                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300 cursor-pointer"
+                      onClick={() => setSelectedClubForShowcase(club)}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
+                    
+                    <div className="absolute top-3 left-3 right-3 flex justify-between items-center">
+                      {i === 0 ? (
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white bg-[#E52B6D] px-2.5 py-1 rounded-full shadow-md">
+                          PIÙ VICINO (1° SCELTA)
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      <span className="bg-white/90 backdrop-blur text-[#1E2046] font-black text-xs px-2.5 py-1 rounded-full shadow-sm">
+                        {club.distance}
+                      </span>
+                    </div>
+
+                    <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center text-white">
+                      {club.rating ? (
+                        <span className="bg-amber-400 text-slate-900 text-[11px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                          <Star className="w-3 h-3 fill-slate-900" />
+                          {club.rating.toFixed(1)} ({club.places_data?.reviews_count || '100+'})
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      {club.places_data?.opening_hours?.open_now != null && (
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            club.places_data.opening_hours.open_now
+                              ? 'bg-emerald-500/90 text-white'
+                              : 'bg-slate-700/80 text-slate-200'
+                          }`}
+                        >
+                          {club.places_data.opening_hours.open_now ? 'Aperto' : 'Chiuso'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-6 flex flex-col flex-1">
+                  {!club.places_data?.photos?.[0] && (
+                    <div className="flex justify-between items-start gap-2 mb-3">
+                      <div>
+                        {i === 0 && (
+                          <span className="text-[10px] font-black uppercase tracking-widest text-[#E52B6D] bg-sky-100 px-2.5 py-1 rounded-full inline-block mb-2">
+                            PIÙ VICINO (1° SCELTA)
+                          </span>
+                        )}
+                        <h3 className="text-xl font-bold text-[#1E2046] leading-tight">{club.name}</h3>
+                      </div>
+                      <span className="bg-slate-100 text-[#1E2046] font-black text-sm px-3 py-1 rounded-full whitespace-nowrap shrink-0">
+                        {club.distance}
+                      </span>
+                    </div>
+                  )}
+
+                  {club.places_data?.photos?.[0] && (
+                    <h3 className="text-xl font-bold text-[#1E2046] leading-tight mb-2">{club.name}</h3>
+                  )}
+
+                  <p className="text-slate-500 text-sm flex items-center gap-2 mb-4">
+                    <MapPin className="w-4 h-4 text-slate-400 shrink-0" /> {club.address}
+                  </p>
+
+                  {/* Pulsante Esplora Vetrina e Foto Struttura */}
+                  <button
+                    onClick={() => setSelectedClubForShowcase(club)}
+                    className="w-full mb-5 py-2.5 px-3 bg-slate-50 hover:bg-[#E52B6D]/10 hover:text-[#E52B6D] border border-slate-200 text-[#1E2046] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-[#E52B6D]" /> Scopri Struttura, Foto & Orari
+                  </button>
+
+                  <div className="flex-1">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+                      <span>Corsi & Quote Iscrizione</span>
+                      <span className="text-[10px] text-slate-400 font-semibold">
+                        {club.courses.length} corsi
+                      </span>
+                    </h4>
+                    <div className="space-y-3">
+                      {club.courses.map((course, cIdx) => {
+                        const spotsLeft = Math.max(0, course.max_participants - course.enrolled_count);
+                        const isFull = spotsLeft <= 0;
+                        const enrolledChildrenInCourse = children.filter((ch) =>
+                          localEnrollments.some(
+                            (enr) => enr.child_id === ch.id && enr.course_id === course.id
+                          )
+                        );
+
+                        return (
+                          <div
+                            key={course.id || cIdx}
+                            className="bg-slate-50 border border-slate-100 rounded-2xl p-4 hover:border-[#E52B6D]/40 transition-colors flex flex-col gap-3"
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <div>
+                                <p className="font-black text-[#1E2046] text-sm leading-snug">
+                                  {course.name}
+                                </p>
+                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                  <span className="text-xs text-slate-500 font-semibold">
+                                    Età: {course.age_range} anni
+                                  </span>
+                                  <span className="text-slate-300">•</span>
+                                  <span
+                                    className={`text-[11px] font-bold flex items-center gap-1 ${
+                                      isFull
+                                        ? 'text-rose-600'
+                                        : spotsLeft <= 3
+                                          ? 'text-amber-600'
+                                          : 'text-emerald-600'
+                                    }`}
+                                  >
+                                    <Users className="w-3 h-3" />
+                                    {isFull
+                                      ? 'Posti Esauriti'
+                                      : `${spotsLeft} ${spotsLeft === 1 ? 'posto libero' : 'posti liberi'}`}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="block font-black text-[#1E2046] text-base leading-none">
+                                  {formatEuroFromCents(course.price_cents)}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                  {formatBillingPeriodLabel(course.billing_period)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {enrolledChildrenInCourse.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-200/60">
+                                {enrolledChildrenInCourse.map((ch) => (
+                                  <span
+                                    key={ch.id}
+                                    className="inline-flex items-center gap-1 bg-emerald-100/80 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    {ch.first_name} iscritto/a
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <button
+                              onClick={() => openEnrollCourseModal(course)}
+                              disabled={isFull}
+                              className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
+                                isFull
+                                  ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                                  : 'bg-[#1E2046] hover:bg-[#E52B6D] text-white shadow-sm cursor-pointer'
+                              }`}
+                            >
+                              {isFull ? (
+                                <>Corso al Completo ({course.enrolled_count}/{course.max_participants})</>
+                              ) : (
+                                <>
+                                  <CreditCard className="w-3.5 h-3.5" /> Iscrivi tuo figlio con Carta o Apple Pay
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>

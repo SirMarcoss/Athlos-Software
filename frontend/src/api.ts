@@ -92,9 +92,28 @@ export interface ApiClubCreate {
   longitude?: number | null;
 }
 
+export interface ApiPlacesOpeningHours {
+  open_now?: boolean;
+  weekday_descriptions?: string[];
+}
+
+export interface ApiPlacesData {
+  google_place_id?: string;
+  website_url?: string | null;
+  phone_number?: string | null;
+  rating?: number | null;
+  reviews_count?: number;
+  opening_hours?: ApiPlacesOpeningHours | null;
+  photos?: string[];
+  description?: string | null;
+}
+
 export interface ApiClubResponse extends ApiClubCreate {
   id: string;
   user_id: string;
+  places_data?: ApiPlacesData | null;
+  website_url?: string | null;
+  rating?: number | null;
   stripe_account_id?: string | null;
   stripe_onboarding_completed?: boolean;
   stripe_charges_enabled?: boolean;
@@ -465,6 +484,12 @@ export async function updateMyClubProfile(
 export async function deleteMyClubProfile(): Promise<void> {
   return apiFetch<void>('/club/me', {
     method: 'DELETE'
+  });
+}
+
+export async function enrichMyClub(): Promise<ApiClubResponse> {
+  return apiFetch<ApiClubResponse>('/club/me/enrich', {
+    method: 'POST'
   });
 }
 

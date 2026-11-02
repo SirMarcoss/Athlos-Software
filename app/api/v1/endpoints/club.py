@@ -5,7 +5,8 @@ from app.api.deps import require_role
 from app.core.database import get_db
 from app.schemas.club import ClubCreate, ClubResponse, ClubUpdate
 from app.services.club_service import ClubService
-from typing import List
+from app.services.places_service import GooglePlacesService
+
 
 router = APIRouter()
 
@@ -79,3 +80,33 @@ async def delete_my_club(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
         )
+
+
+@router.post("/me/enrich", response_model=ClubResponse)
+async def enrich_current_club(
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB)),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Ricarica e aggiorna da Google Places foto, orari e recensioni per il club dell'utente loggato.
+    """
+    club_service = ClubService(db)
+    club = await club_service.get_club_by_user_id(current_user.id)
+    if not club:
+        raise HTTPException(status_code=404, detail="Club non trovato")
+
+    # Chiama Google Places con nome e indirizzo salvati
+    addr_str = f"{club.address.get('street', '')}, {club.address.get('city', '')}" if club.address else ""
+    places_service = GooglePlacesService()
+    info = await places_service.fetch_club_details(club.name, addr_str)
+
+    if info:
+        club.places_data = info
+        if info.get("website_url"):
+            club.website_url = info["website_url"]
+        if info.get("rating"):
+            club.rating = info["rating"]
+        await db.commit()
+        await db.refresh(club)
+
+    return club

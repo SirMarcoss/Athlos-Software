@@ -25,10 +25,13 @@ import {
   RefreshCw,
   Euro,
   FileText,
-  RotateCcw
+  RotateCcw,
+  Star,
+  Camera
 } from 'lucide-react';
 import {
   getMyClubProfile,
+  enrichMyClub,
   updateMyClubProfile,
   createClubProfile,
   deleteMyClubProfile,
@@ -81,6 +84,9 @@ interface ClubProfile {
   logo_url?: string;
   latitude?: number;
   longitude?: number;
+  website_url?: string;
+  rating?: number;
+  places_data?: any;
 }
 
 interface GeoSearchResult {
@@ -367,7 +373,10 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
             },
             logo_url: apiClub.logo_url || undefined,
             latitude: apiClub.latitude ?? undefined,
-            longitude: apiClub.longitude ?? undefined
+            longitude: apiClub.longitude ?? undefined,
+            website_url: apiClub.website_url || undefined,
+            rating: apiClub.rating ?? undefined,
+            places_data: apiClub.places_data || undefined
           };
           setClub(loadedClub);
           setProfileForm(loadedClub);
@@ -999,16 +1008,59 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       };
 
       try {
-        await updateMyClubProfile(payload);
+        const updated = await updateMyClubProfile(payload);
+        if (updated) {
+          setClub(prev => ({
+            ...prev,
+            ...profileForm,
+            places_data: updated.places_data || prev.places_data,
+            website_url: updated.website_url || prev.website_url,
+            rating: updated.rating ?? prev.rating
+          }));
+        } else {
+          setClub(profileForm);
+        }
       } catch {
-        await createClubProfile(payload);
+        const created = await createClubProfile(payload);
+        if (created) {
+          setClub(prev => ({
+            ...prev,
+            ...profileForm,
+            places_data: created.places_data || prev.places_data,
+            website_url: created.website_url || prev.website_url,
+            rating: created.rating ?? prev.rating
+          }));
+        } else {
+          setClub(profileForm);
+        }
       }
 
-      setClub(profileForm);
       setActiveModal('none');
       showToast('Dati del centro sportivo salvati sul server!');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Errore nel salvataggio del profilo');
+    }
+  };
+
+  const [isEnrichingPlaces, setIsEnrichingPlaces] = useState(false);
+
+  const handleEnrichClub = async () => {
+    setIsEnrichingPlaces(true);
+    try {
+      const updated = await enrichMyClub();
+      if (updated) {
+        setClub(prev => ({
+          ...prev,
+          website_url: updated.website_url || prev.website_url,
+          rating: updated.rating ?? prev.rating,
+          places_data: updated.places_data || prev.places_data
+        }));
+        showToast('Foto, orari e recensioni sincronizzati con successo da Google Maps!');
+      }
+    } catch {
+      showToast('Nessuna scheda Google Maps trovata per questo nome e indirizzo.');
+    } finally {
+      setIsEnrichingPlaces(false);
     }
   };
 
@@ -3036,6 +3088,55 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                           className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
                         />
                       </div>
+                    </div>
+
+                    {/* Vetrina & Integrazione Automatica Google Maps */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-[#1E2046] text-white flex items-center justify-center">
+                            <Camera className="w-4 h-4 text-[#FF4F8B]" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-[#1E2046] uppercase tracking-wider">
+                              Vetrina & Foto Google Maps
+                            </h4>
+                            <p className="text-[11px] text-slate-500">
+                              {club?.places_data?.photos?.length ? (
+                                <>
+                                  <span className="font-bold text-emerald-600">● Sincronizzato:</span>{' '}
+                                  {club.places_data.photos.length} foto e orari rilevati
+                                </>
+                              ) : (
+                                'Nessuna foto sincronizzata al momento'
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {club?.rating && (
+                          <span className="bg-amber-100 text-amber-800 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1">
+                            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                            {club.rating.toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleEnrichClub}
+                        disabled={isEnrichingPlaces}
+                        className="w-full py-2.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-[#1E2046] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-60"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 text-[#E52B6D] ${
+                            isEnrichingPlaces ? 'animate-spin' : ''
+                          }`}
+                        />
+                        {isEnrichingPlaces
+                          ? 'Sincronizzazione in corso con Google Places...'
+                          : 'Sincronizza Foto, Orari & Rating da Google Maps'}
+                      </button>
                     </div>
 
                     <button
