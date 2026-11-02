@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     EMAIL_FROM : str = Field(default="Athlos <onboarding@resend.dev>")
     FRONTEND_URL : str = Field(default="http://localhost:5173")
     GOOGLE_PLACES_API_KEY: str = Field(default="")
+    STRIPE_SECRET_KEY : str = Field(default="")
+    STRIPE_WEBHOOK_SECRET : str = Field(default="")
 
 
     @field_validator('SECRET_KEY')

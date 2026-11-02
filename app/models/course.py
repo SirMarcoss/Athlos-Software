@@ -1,6 +1,6 @@
 import uuid
 from typing import TYPE_CHECKING
-from sqlalchemy import String, ForeignKey, text, UniqueConstraint, DateTime
+from sqlalchemy import String, ForeignKey, text, UniqueConstraint, DateTime, Integer
 from sqlalchemy.sql.functions import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -43,6 +43,18 @@ class Course(Base):
 
     physical_tests : Mapped[list["PhysicalTest"]] = relationship("PhysicalTest", back_populates="courses", cascade="all, delete-orphan")
     psychological_forms : Mapped[list["PsychologicalForm"]] = relationship("PsychologicalForm", back_populates="courses", cascade="all, delete-orphan")
+
+    # Prezzo pattuito con il Club (in centesimi, es. 9000 = 90.00 €).
+    # È l'unico importo che il Club vedrà nella propria interfaccia.
+    club_price_cents: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("9000"))
+
+    # Prezzo finale mostrato e addebitato al Genitore (in centesimi, es. 9500 = 95.00 €).
+    # È l'unico importo che il Genitore vedrà e pagherà su Stripe.
+    parent_price_cents : Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("9500"))
+
+    max_participants: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20"))
+
+    billing_period: Mapped[str] = mapped_column(String(30), nullable=False, server_default=text("'trimestrale'"))
 
 
     def __repr__(self) -> str:

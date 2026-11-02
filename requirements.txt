@@ -13,3 +13,4 @@ google-genai
 httpx
 resend
 python-dotenv
+stripe

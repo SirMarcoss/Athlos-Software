@@ -30,11 +30,19 @@ class CourseService:
         if result.scalars().first():
             raise ValueError("Hai già creato un corso con questo nome")
 
+        if course_in.parent_price_cents is None:
+            course_in.parent_price_cents = course_in.club_price_cents
+
         db_course = Course(
             clubs_id=club_id,
             name=course_in.name,
             min_age=course_in.min_age,
-            max_age=course_in.max_age
+            max_age=course_in.max_age,
+            club_price_cents=course_in.club_price_cents,
+            parent_price_cents=course_in.parent_price_cents,
+            max_participants=course_in.max_participants,
+            billing_period=course_in.billing_period,
+
         )
         self.db.add(db_course)
         await self.db.commit()
@@ -237,5 +245,38 @@ class CourseService:
 
         await self.db.commit()
         return True
+
+
+    async def set_admin_course_pricing(
+        self,
+        course_id: uuid.UUID,
+        club_price_cents: int,
+        parent_price_cents: int
+    ) -> Course:
+        """
+        Permette a un Admin di Athlos di impostare il prezzo riservato al Club (es. 9000 = 90€)
+        e il prezzo mostrato/addebitato al Genitore (es. 9500 = 95€).
+        """
+        if parent_price_cents < club_price_cents:
+            raise ValueError("Errore di prezzo al genitore")
+        course = await self.get_course_by_id(course_id)
+        if not course:
+            raise ValueError("Corso non trovato")
+
+        course.club_price_cents = club_price_cents
+        course.parent_price_cents = parent_price_cents
+
+        await self.db.commit()
+        await self.db.refresh(course)
+        return course
+
+
+    async def get_enrolled_count(self, course_id: uuid.UUID) -> int:
+        """Conta quanti atleti sono attualmente iscritti a uno specifico corso."""
+
+        stmt = select(func.count(CourseEnrollment.id)).where(CourseEnrollment.course_id == course_id)
+        result = await self.db.execute(stmt)
+        counter = result.scalars().one()
+        return counter
 
 
