@@ -3,6 +3,7 @@ from sqlalchemy import select
 from app.models.club import Club
 from app.schemas.club import ClubCreate, ClubUpdate
 from app.services.geo_service import GeoService
+from app.services.places_service import GooglePlacesService
 import uuid
 from sqlalchemy.sql.functions import func
 
@@ -42,15 +43,31 @@ class ClubService:
         # se latitude e longitude sono a None, utilizzo il service di geo per
         # ottenerle automaticamente
 
+        places_service = GooglePlacesService()
+        query_str = f"{club_in.address.street}, {club_in.address.city}" if club_in.address else ""
+        places_info = await places_service.fetch_club_details(club_in.name, query_str)
+        # Dati da salvare
+        places_data_to_save = places_info if places_info else {}
+        website = places_info.get("website_url") if places_info else None
+        rating_val = places_info.get("rating") if places_info else None
+        # Se l'utente non ha specificato il telefono o ha lasciato quello base,
+        # puoi usare quello verificato da Google Places:
+        final_phone = club_in.phone_number
+        if places_info and places_info.get("phone_number"):
+            final_phone = places_info["phone_number"]
+
         club_db = Club(
             user_id=user_id,
             name=club_in.name,
             email_contact=club_in.email_contact,
-            phone_number=club_in.phone_number,
+            phone_number=final_phone,
             address=address_data,
             logo_url=club_in.logo_url,
             latitude=lat,
             longitude=lon,
+            places_data=places_data_to_save,
+            website_url=website,
+            rating=rating_val,
         )
 
         self.db.add(club_db)
@@ -78,6 +95,37 @@ class ClubService:
             if geo_results:
                 update_data["latitude"] = geo_results[0].latitude
                 update_data["longitude"] = geo_results[0].longitude
+
+        # Se l'indirizzo o il nome cambiano (o se il club non ha ancora i dati places), aggiorniamo Google Places
+        should_enrich_places = (
+            club_in.address is not None
+            or club_in.name is not None
+            or club.places_data is None
+        )
+        if should_enrich_places:
+            target_name = update_data.get("name", club.name)
+            addr_obj = club_in.address if club_in.address else club.address
+            street = ""
+            city = ""
+            if addr_obj:
+                if hasattr(addr_obj, "street"):
+                    street = getattr(addr_obj, "street", "") or ""
+                    city = getattr(addr_obj, "city", "") or ""
+                elif isinstance(addr_obj, dict):
+                    street = addr_obj.get("street", "") or ""
+                    city = addr_obj.get("city", "") or ""
+
+            query_places = f"{street}, {city}".strip()
+            places_service = GooglePlacesService()
+            places_info = await places_service.fetch_club_details(target_name, query_places)
+            if places_info:
+                update_data["places_data"] = places_info
+                if places_info.get("website_url"):
+                    update_data["website_url"] = places_info["website_url"]
+                if places_info.get("rating"):
+                    update_data["rating"] = places_info["rating"]
+                if places_info.get("phone_number") and not update_data.get("phone_number"):
+                    update_data["phone_number"] = places_info["phone_number"]
 
 
         for key, value in update_data.items():

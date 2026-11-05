@@ -34,6 +34,12 @@ class Club(Base):
 
     email_contact : Mapped[str] = mapped_column(String(255), nullable=False)
 
+    places_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=True)
+
+    website_url : Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    rating : Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     logo_url: Mapped[str] = mapped_column(String(255), nullable=True)
 
     latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

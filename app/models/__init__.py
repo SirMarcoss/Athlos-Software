@@ -18,3 +18,4 @@ from app.models.parent import Parent
 from app.models.evaluation import PhysicalTest, PsychologicalForm
 from app.models.sport import Sport
 from app.models.course import Course, CourseEnrollment
+from app.models.payment import Payment

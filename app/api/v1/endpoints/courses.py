@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User, UserRoleEnum
 from app.api.deps import require_role, get_optional_current_user
 from app.core.database import get_db
-from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate
+from app.schemas.course import CourseCreate,CourseAdminResponse, CourseClubResponse, CourseParentResponse, CourseUpdate
+from app.schemas.course import AdminCoursePricingUpdate
 from app.schemas.child import ChildResponse
 from app.services.course_service import CourseService
 from app.services.club_service import ClubService
@@ -16,7 +17,7 @@ router = APIRouter()
 
 # --- 1. CATALOGO CORSI (CON FILTRO GEOGRAFICO A 20 KM PER GENITORI) ---
 
-@router.get("/", response_model=List[CourseResponse])
+@router.get("/", response_model=List[CourseParentResponse])
 async def list_all_courses(
         skip: int = 0,
         limit: int = 20,
@@ -62,19 +63,19 @@ async def list_all_courses(
         )
         courses_response = []
         for course, dist in results:
-            resp = CourseResponse.model_validate(course)
+            resp = CourseParentResponse.model_validate(course)
             resp.distance_km = round(dist, 1)
             courses_response.append(resp)
         return courses_response
 
     # Nessuna coordinata: catalogo generale
     courses = await course_service.get_all_courses(skip=skip, limit=limit)
-    return [CourseResponse.model_validate(c) for c in courses]
+    return [CourseParentResponse.model_validate(c) for c in courses]
 
 
 # --- 2. GESTIONE CORSI PER I CLUB ---
 
-@router.post("/", response_model=CourseResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=CourseClubResponse, status_code=status.HTTP_201_CREATED)
 async def create_course(
         payload: CourseCreate,
         db: AsyncSession = Depends(get_db),
@@ -94,7 +95,7 @@ async def create_course(
     return await course_service.create_course(payload, club.id)
 
 
-@router.get("/my", response_model=List[CourseResponse])
+@router.get("/my", response_model=List[CourseClubResponse])
 async def list_my_club_courses(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(require_role(UserRoleEnum.CLUB))
@@ -112,7 +113,7 @@ async def list_my_club_courses(
 
 
 
-@router.patch("/{course_id}", response_model=CourseResponse)
+@router.patch("/{course_id}", response_model=CourseClubResponse)
 async def update_my_course(
         course_id: UUID,
         payload: CourseUpdate,
@@ -225,3 +226,27 @@ async def unenroll_athlete_from_course(
         await course_service.unenroll_child_from_course(course_id, child_id, club.id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.patch("/{course_id}/admin-pricing", response_model=CourseAdminResponse)
+async def set_course_pricing_by_admin(
+    course_id: UUID,
+    payload: AdminCoursePricingUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.ADMIN))
+):
+    """
+    Endpoint riservato allo staff/Admin Athlos per impostare il prezzo pattuito col club (es. 90€)
+    e il prezzo mostrato al genitore (es. 95€).
+    """
+    course_service = CourseService(db)
+
+    try:
+        course = await course_service.set_admin_course_pricing(course_id,
+                                                               payload.club_price_cents, payload.parent_price_cents)
+        return course
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )

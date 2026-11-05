@@ -9,10 +9,13 @@ class Settings(BaseSettings):
     SECRET_KEY : str = Field(..., min_length=32)
     ALGORITHM : str
     ACCESS_TOKEN_EXPIRE_MINUTES : int = 30
-    GEMINI_API_KEY: str = Field(...)
-    RESEND_API_KEY: str = Field(default="")
-    EMAIL_FROM: str = Field(default="Athlos <onboarding@resend.dev>")
-    FRONTEND_URL: str = Field(default="http://localhost:5173")
+    GEMINI_API_KEY : str = Field(...)
+    RESEND_API_KEY : str = Field(default="")
+    EMAIL_FROM : str = Field(default="Athlos <onboarding@resend.dev>")
+    FRONTEND_URL : str = Field(default="http://localhost:5173")
+    GOOGLE_PLACES_API_KEY: str = Field(default="")
+    STRIPE_SECRET_KEY : str = Field(default="")
+    STRIPE_WEBHOOK_SECRET : str = Field(default="")
 
 
     @field_validator('SECRET_KEY')
