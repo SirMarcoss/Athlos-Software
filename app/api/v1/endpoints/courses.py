@@ -228,8 +228,6 @@ async def unenroll_athlete_from_course(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-# In app/api/v1/endpoints/courses.py
-
 @router.patch("/{course_id}/admin-pricing", response_model=CourseAdminResponse)
 async def set_course_pricing_by_admin(
     course_id: UUID,
