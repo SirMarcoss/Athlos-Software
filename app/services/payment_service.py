@@ -140,4 +140,185 @@ class PaymentService:
         return {"checkout_url": checkout_url, "session_id": session_id, "payment_id": payment.id}
 
 
+    async def fulfill_payment(
+        self,
+        stripe_session_id: str,
+        payment_intent_id: str | None = None
+    ) -> Payment:
+        """
+        Conferma in modo IDEMPOTENTE e ATOMICO un pagamento completato su Stripe
+        e iscrive formalmente l'atleta al corso.
+        """
 
+        stmt_payment = select(Payment).where(Payment.stripe_checkout_session_id == stripe_session_id).with_for_update()
+        result = await self.db.execute(stmt_payment)
+        payment = result.scalars().first()
+        if not payment:
+            raise ValueError("Pagamento non trovato per questa sessione")
+
+        # 2. CONTROLLO DI IDEMPOTENZA:
+        if payment.status == PaymentStatusEnum.COMPLETED:
+            return payment
+
+        # 3. AGGIORNAMENTO STATO PAGAMENTO:
+        payment.status = PaymentStatusEnum.COMPLETED
+        payment.completed_at = datetime.now(timezone.utc)
+        if payment_intent_id is not None:
+            payment.stripe_payment_intent_id = payment_intent_id
+
+        stmt_course_enrollment = select(CourseEnrollment).where(CourseEnrollment.course_id == payment.course_id).where(
+            CourseEnrollment.child_id == payment.child_id
+        )
+        result = await self.db.execute(stmt_course_enrollment)
+        course_enrollment = result.scalars().first()
+        if not course_enrollment:
+            enrollment = CourseEnrollment(
+                course_id=payment.course_id,
+                child_id=payment.child_id,
+                enrolled_at=datetime.now(timezone.utc),
+            )
+
+            self.db.add(enrollment)
+
+            stmt_course = select(Course).where(Course.id == payment.course_id)
+            res_course = await self.db.execute(stmt_course)
+            course = res_course.scalars().first()
+            stmt_child = select(Child).where(Child.id == payment.child_id)
+            res_child = await self.db.execute(stmt_child)
+            child = res_child.scalars().first()
+            if child and course:
+                child.sport = course.name
+
+            #per modificare il valore di child.sport devo fare le due query perchè in payment abbiamo solo gli id
+            #non i valori specifici degli sport e del figlio
+
+        await self.db.commit()
+        await self.db.refresh(payment)
+
+        return payment
+
+
+    async def handle_stripe_webhook(self, payload_bytes: bytes, sig_header: str) -> dict:
+        """
+        Riceve la chiamata Server-to-Server (Webhook) dai server di Stripe,
+        verifica la firma crittografica HMAC-SHA256 e smista l'evento bancario.
+        """
+        # 1. VERIFICA PRESENZA DELLA CHIAVE SEGRETA DEL WEBHOOK:
+        #    Senza STRIPE_WEBHOOK_SECRET non potremmo verificare l'autenticità del mittente.
+        if not settings.STRIPE_WEBHOOK_SECRET:
+            raise ValueError("STRIPE_WEBHOOK_SECRET non configurato sul server")
+
+        # 2. VERIFICA CRITTOGRAFICA DELLA FIRMA (Anti-Spoofing / Anti-Manomissione):
+        #    `stripe.Webhook.construct_event` prende i byte grezzi del body HTTP (`payload_bytes`),
+        #    calcola l'HMAC-SHA256 usando `settings.STRIPE_WEBHOOK_SECRET` e lo confronta con `sig_header`
+        #    (l'header HTTP `Stripe-Signature` inviato da Stripe).
+        #    Se un malintenzionato provasse a inviare un falso messaggio JSON con Postman per iscrivere
+        #    un bambino gratis, la firma non coinciderebbe e verrebbe bloccato qui!
+        try:
+            event = stripe.Webhook.construct_event(
+                payload=payload_bytes,
+                sig_header=sig_header,
+                secret=settings.STRIPE_WEBHOOK_SECRET
+            )
+        except Exception as e:
+            raise ValueError(f"Firma Webhook Stripe non valida o payload manomesso: {e}")
+
+        # 3. ESTRAZIONE DEL TIPO DI EVENTO E DEI DATI DELLA SESSIONE:
+        event_type = event["type"]
+        session_data = event["data"]["object"]
+
+        # 4. SMISTAMENTO EVENTI (State Machine del Pagamento):
+        #    CASO A: La banca ha confermato l'addebito (95€ incassati da Athlos).
+        #    Anche se il genitore avesse chiuso il browser o perso la connessione subito dopo il pagamento,
+        #    questo evento Server-to-Server arriva comunque e iscrive il bambino in modo atomico e idempotente.
+        if event_type == "checkout.session.completed":
+            session_id = session_data["id"]
+            payment_intent_id = session_data.get("payment_intent")
+            await self.fulfill_payment(
+                stripe_session_id=session_id,
+                payment_intent_id=payment_intent_id
+            )
+
+        #    CASO B: Il genitore ha aperto la pagina di Stripe ma non ha completato il pagamento
+        #    entro la scadenza della sessione -> Segniamo il pagamento come FAILED.
+        elif event_type == "checkout.session.expired":
+            session_id = session_data["id"]
+            stmt_payment = (
+                select(Payment)
+                .where(Payment.stripe_checkout_session_id == session_id)
+                .with_for_update()
+            )
+            result = await self.db.execute(stmt_payment)
+            payment = result.scalars().first()
+
+            if payment and payment.status == PaymentStatusEnum.PENDING:
+                payment.status = PaymentStatusEnum.FAILED
+                await self.db.commit()
+
+        # 5. RISPOSTA DI CONFERMA A STRIPE:
+        #    Restituiamo 200 OK a Stripe per confermare di aver ricevuto ed elaborato l'evento,
+        #    così Stripe sa che non deve più reinviarlo.
+        return {"status": "received", "event_type": event_type}
+
+
+    async def handle_stripe_webhook(self, payload_bytes: bytes, sig_header: str) -> dict:
+        """
+        Riceve la chiamata Server-to-Server (Webhook) dai server di Stripe,
+        verifica la firma crittografica HMAC-SHA256 e smista l'evento bancario.
+        """
+        # 1. VERIFICA PRESENZA DELLA CHIAVE SEGRETA DEL WEBHOOK:
+        #    Senza STRIPE_WEBHOOK_SECRET non potremmo verificare l'autenticità del mittente.
+        if not settings.STRIPE_WEBHOOK_SECRET:
+            raise ValueError("STRIPE_WEBHOOK_SECRET non configurato sul server")
+
+        # 2. VERIFICA CRITTOGRAFICA DELLA FIRMA (Anti-Spoofing / Anti-Manomissione):
+        #    `stripe.Webhook.construct_event` prende i byte grezzi del body HTTP (`payload_bytes`),
+        #    calcola l'HMAC-SHA256 usando `settings.STRIPE_WEBHOOK_SECRET` e lo confronta con `sig_header`
+        #    (l'header HTTP `Stripe-Signature` inviato da Stripe).
+        #    Se un malintenzionato provasse a inviare un falso messaggio JSON con Postman per iscrivere
+        #    un bambino gratis, la firma non coinciderebbe e verrebbe bloccato qui!
+        try:
+            event = stripe.Webhook.construct_event(
+                payload=payload_bytes,
+                sig_header=sig_header,
+                secret=settings.STRIPE_WEBHOOK_SECRET
+            )
+        except Exception as e:
+            raise ValueError(f"Firma Webhook Stripe non valida o payload manomesso: {e}")
+
+        # 3. ESTRAZIONE DEL TIPO DI EVENTO E DEI DATI DELLA SESSIONE:
+        event_type = event["type"]
+        session_data = event["data"]["object"]
+
+        # 4. SMISTAMENTO EVENTI (State Machine del Pagamento):
+        #    CASO A: La banca ha confermato l'addebito (95€ incassati da Athlos).
+        #    Anche se il genitore avesse chiuso il browser o perso la connessione subito dopo il pagamento,
+        #    questo evento Server-to-Server arriva comunque e iscrive il bambino in modo atomico e idempotente.
+        if event_type == "checkout.session.completed":
+            session_id = session_data["id"]
+            payment_intent_id = session_data.get("payment_intent")
+            await self.fulfill_payment(
+                stripe_session_id=session_id,
+                payment_intent_id=payment_intent_id
+            )
+
+        #    CASO B: Il genitore ha aperto la pagina di Stripe ma non ha completato il pagamento
+        #    entro la scadenza della sessione -> Segniamo il pagamento come FAILED.
+        elif event_type == "checkout.session.expired":
+            session_id = session_data["id"]
+            stmt_payment = (
+                select(Payment)
+                .where(Payment.stripe_checkout_session_id == session_id)
+                .with_for_update()
+            )
+            result = await self.db.execute(stmt_payment)
+            payment = result.scalars().first()
+
+            if payment and payment.status == PaymentStatusEnum.PENDING:
+                payment.status = PaymentStatusEnum.FAILED
+                await self.db.commit()
+
+        # 5. RISPOSTA DI CONFERMA A STRIPE:
+        #    Restituiamo 200 OK a Stripe per confermare di aver ricevuto ed elaborato l'evento,
+        #    così Stripe sa che non deve più reinviarlo.
+        return {"status": "received", "event_type": event_type}
