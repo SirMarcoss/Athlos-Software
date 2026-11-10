@@ -8,6 +8,9 @@ from app.core.config import settings
 from app.models.payment import Payment, PaymentStatusEnum
 from app.models.course import Course, CourseEnrollment
 from app.models.child import Child
+from app.models.club import Club
+from app.models.parent import Parent
+from app.models.user import User
 
 
 class PaymentService:
@@ -261,64 +264,84 @@ class PaymentService:
         return {"status": "received", "event_type": event_type}
 
 
-    async def handle_stripe_webhook(self, payload_bytes: bytes, sig_header: str) -> dict:
+    async def get_parent_payments(self, parent_id: uuid.UUID) -> list[dict]:
         """
-        Riceve la chiamata Server-to-Server (Webhook) dai server di Stripe,
-        verifica la firma crittografica HMAC-SHA256 e smista l'evento bancario.
+        Restituisce lo storico ricevute per il GENITORE.
+        Mostra esclusivamente `parent_amount_cents` (es. 95,00 €).
         """
-        # 1. VERIFICA PRESENZA DELLA CHIAVE SEGRETA DEL WEBHOOK:
-        #    Senza STRIPE_WEBHOOK_SECRET non potremmo verificare l'autenticità del mittente.
-        if not settings.STRIPE_WEBHOOK_SECRET:
-            raise ValueError("STRIPE_WEBHOOK_SECRET non configurato sul server")
+        # 1. Costruiamo una singola query SQL con JOIN su 4 tabelle (Payment, Course, Club, Child).
+        #    Questo evita il problema delle query N+1: con un solo round-trip al database
+        #    recuperiamo tutti i dati necessari per comporre la ricevuta del genitore.
+        stmt = (
+            select(Payment, Course, Club, Child)
+            .join(Course, Payment.course_id == Course.id)
+            .join(Club, Payment.club_id == Club.id)
+            .join(Child, Payment.child_id == Child.id)
+            .where(Payment.parent_id == parent_id)
+            .order_by(Payment.created_at.desc())
+        )
+        result = await self.db.execute(stmt)
 
-        # 2. VERIFICA CRITTOGRAFICA DELLA FIRMA (Anti-Spoofing / Anti-Manomissione):
-        #    `stripe.Webhook.construct_event` prende i byte grezzi del body HTTP (`payload_bytes`),
-        #    calcola l'HMAC-SHA256 usando `settings.STRIPE_WEBHOOK_SECRET` e lo confronta con `sig_header`
-        #    (l'header HTTP `Stripe-Signature` inviato da Stripe).
-        #    Se un malintenzionato provasse a inviare un falso messaggio JSON con Postman per iscrivere
-        #    un bambino gratis, la firma non coinciderebbe e verrebbe bloccato qui!
-        try:
-            event = stripe.Webhook.construct_event(
-                payload=payload_bytes,
-                sig_header=sig_header,
-                secret=settings.STRIPE_WEBHOOK_SECRET
-            )
-        except Exception as e:
-            raise ValueError(f"Firma Webhook Stripe non valida o payload manomesso: {e}")
+        # 2. Iteriamo sulle tuple (payment, course, club, child) restituite dalla JOIN
+        #    e popoliamo `amount_cents` ESCLUSIVAMENTE con `payment.parent_amount_cents` (es. 9500 = 95,00 €).
+        payments_list: list[dict] = []
+        for payment, course, club, child in result.all():
+            payments_list.append({
+                "id": payment.id,
+                "course_id": course.id,
+                "course_name": course.name,
+                "club_name": club.name,
+                "child_id": child.id,
+                "child_name": f"{child.first_name} {child.last_name}",
+                "amount_cents": payment.parent_amount_cents,  # <-- Il genitore vede solo i 95€ che ha pagato!
+                "billing_period": course.billing_period,
+                "status": payment.status,
+                "receipt_number": payment.receipt_number,
+                "created_at": payment.created_at,
+                "completed_at": payment.completed_at,
+            })
 
-        # 3. ESTRAZIONE DEL TIPO DI EVENTO E DEI DATI DELLA SESSIONE:
-        event_type = event["type"]
-        session_data = event["data"]["object"]
+        return payments_list
 
-        # 4. SMISTAMENTO EVENTI (State Machine del Pagamento):
-        #    CASO A: La banca ha confermato l'addebito (95€ incassati da Athlos).
-        #    Anche se il genitore avesse chiuso il browser o perso la connessione subito dopo il pagamento,
-        #    questo evento Server-to-Server arriva comunque e iscrive il bambino in modo atomico e idempotente.
-        if event_type == "checkout.session.completed":
-            session_id = session_data["id"]
-            payment_intent_id = session_data.get("payment_intent")
-            await self.fulfill_payment(
-                stripe_session_id=session_id,
-                payment_intent_id=payment_intent_id
-            )
 
-        #    CASO B: Il genitore ha aperto la pagina di Stripe ma non ha completato il pagamento
-        #    entro la scadenza della sessione -> Segniamo il pagamento come FAILED.
-        elif event_type == "checkout.session.expired":
-            session_id = session_data["id"]
-            stmt_payment = (
-                select(Payment)
-                .where(Payment.stripe_checkout_session_id == session_id)
-                .with_for_update()
-            )
-            result = await self.db.execute(stmt_payment)
-            payment = result.scalars().first()
+    async def get_club_payments(self, club_id: uuid.UUID) -> list[dict]:
+        """
+        Restituisce il registro incassi in entrata per il CLUB SPORTIVO.
+        Mostra esclusivamente `club_amount_cents` (es. 90,00 €).
+        """
+        # 1. Costruiamo una singola query SQL con JOIN su 5 tabelle (Payment, Course, Child, Parent, User)
+        #    per fornire alla segreteria del club anche il codice fiscale dell'atleta e i contatti del genitore.
+        stmt = (
+            select(Payment, Course, Child, Parent, User)
+            .join(Course, Payment.course_id == Course.id)
+            .join(Child, Payment.child_id == Child.id)
+            .join(Parent, Payment.parent_id == Parent.id)
+            .join(User, Parent.user_id == User.id)
+            .where(Payment.club_id == club_id)
+            .order_by(Payment.created_at.desc())
+        )
+        result = await self.db.execute(stmt)
 
-            if payment and payment.status == PaymentStatusEnum.PENDING:
-                payment.status = PaymentStatusEnum.FAILED
-                await self.db.commit()
+        # 2. Iteriamo sulle tuple restituite dalla JOIN e popoliamo `amount_cents`
+        #    ESCLUSIVAMENTE con `payment.club_amount_cents` (es. 9000 = 90,00 €).
+        #    Il prezzo pagato dal genitore a Athlos (95€) non viene mai esposto al club!
+        payments_list: list[dict] = []
+        for payment, course, child, parent, user in result.all():
+            payments_list.append({
+                "id": payment.id,
+                "course_id": course.id,
+                "course_name": course.name,
+                "child_id": child.id,
+                "child_name": f"{child.first_name} {child.last_name}",
+                "child_fiscal_code": child.fiscal_code,
+                "parent_name": f"{parent.first_name} {parent.last_name}",
+                "parent_email": user.email,
+                "amount_cents": payment.club_amount_cents,    # <-- Il club vede solo i 90€ di sua spettanza!
+                "billing_period": course.billing_period,
+                "status": payment.status,
+                "receipt_number": payment.receipt_number,
+                "created_at": payment.created_at,
+                "completed_at": payment.completed_at,
+            })
 
-        # 5. RISPOSTA DI CONFERMA A STRIPE:
-        #    Restituiamo 200 OK a Stripe per confermare di aver ricevuto ed elaborato l'evento,
-        #    così Stripe sa che non deve più reinviarlo.
-        return {"status": "received", "event_type": event_type}
+        return payments_list
