@@ -472,11 +472,18 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
   // Toast di conferma con cleanup del timer
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<'warning' | 'success'>('warning');
   const toastTimerRef = useRef<number | null>(null);
-  const showToast = (msg: string) => {
+  const stripeReturnHandledRef = useRef(false);
+  const showToast = (
+    msg: string,
+    durationMs = 3500,
+    type: 'warning' | 'success' = 'warning'
+  ) => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    setToastType(type);
     setToastMessage(msg);
-    toastTimerRef.current = window.setTimeout(() => setToastMessage(null), 3500);
+    toastTimerRef.current = window.setTimeout(() => setToastMessage(null), durationMs);
   };
 
   // Ricarica pagamenti reali del genitore dal backend
@@ -490,74 +497,8 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
       .catch(() => {});
   };
 
-  // === CARICAMENTO DATI REALI DAL BACK-END FASTAPI ===
-  useEffect(() => {
-    // Gestione ritorno da Stripe Checkout reale (?payment=success&session_id=...)
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const paymentStatus = params.get('payment');
-      const sessionId = params.get('session_id');
-      if (paymentStatus === 'success' || paymentStatus === 'mock_success') {
-        if (sessionId) {
-          verifyCheckoutSessionStatus(sessionId)
-            .then(() => {
-              refreshParentPayments();
-              loadClubsAndCourses();
-              showToast('Pagamento confermato da Stripe! Tuo figlio è iscritto al corso.');
-            })
-            .catch(() => {
-              showToast('Pagamento completato con successo! Iscrizione confermata.');
-            });
-        } else {
-          showToast('Pagamento completato con successo! Iscrizione confermata.');
-        }
-        window.history.replaceState({}, '', window.location.pathname);
-      } else if (paymentStatus === 'cancelled') {
-        showToast('Pagamento annullato. Nessun addebito è stato effettuato.');
-        window.history.replaceState({}, '', window.location.pathname);
-      }
-    }
-
-    if (!getToken()) {
-      setNearbyClubs(DEMO_FALLBACK_CLUBS);
-      return;
-    }
-
-    // 1. Profilo Genitore
-    getMyParentProfile()
-      .then(profile => {
-        setParentProfile({
-          id: profile.id,
-          first_name: profile.first_name,
-          last_name: profile.last_name,
-          phone: profile.phone_number,
-          fiscal_code: profile.fiscal_code,
-          street: profile.address?.street || '',
-          city: profile.address?.city || '',
-          province: profile.address?.province || '',
-          postal_code: profile.address?.postal_code || '',
-          extra_notes: profile.info || ''
-        });
-        setNewChildLastName(profile.last_name);
-        if (profile.referral_code) {
-          setMyReferralCode(profile.referral_code);
-          setMyReferralLink(`${window.location.origin}/?ref=${profile.referral_code}`);
-        }
-      })
-      .catch(() => {});
-
-    // 1b. Storico Pagamenti Genitore dal backend
-    refreshParentPayments();
-
-    // 2. Link Referral
-    getMyReferral()
-      .then(refData => {
-        setMyReferralCode(refData.referral_code);
-        setMyReferralLink(`${window.location.origin}/?ref=${refData.referral_code}`);
-      })
-      .catch(() => {});
-
-    // 3. Figli + Valutazioni Trimestrali + Test Motori
+  // Ricarica figli, sport attuale, valutazioni trimestrali e test motori
+  const refreshChildrenAndEvaluations = () => {
     getMyChildren()
       .then(async apiChildren => {
         const mappedChildren: Child[] = apiChildren.map(c => ({
@@ -612,6 +553,102 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
         setPhysicalTestsByChild(loadedTests);
       })
       .catch(() => {});
+  };
+
+  // === CARICAMENTO DATI REALI DAL BACK-END FASTAPI ===
+  useEffect(() => {
+    // Gestione ritorno da Stripe Checkout reale (?payment=success&session_id=...)
+    if (typeof window !== 'undefined' && !stripeReturnHandledRef.current) {
+      const params = new URLSearchParams(window.location.search);
+      const paymentStatus = params.get('payment');
+      const sessionId = params.get('session_id');
+      if (paymentStatus === 'success' || paymentStatus === 'mock_success') {
+        stripeReturnHandledRef.current = true;
+        if (sessionId) {
+          verifyCheckoutSessionStatus(sessionId)
+            .then(verifiedPayment => {
+              refreshParentPayments();
+              refreshChildrenAndEvaluations();
+              loadClubsAndCourses();
+              if (verifiedPayment.status === 'SUCCEEDED') {
+                showToast(
+                  'Pagamento confermato da Stripe! Tuo figlio è ufficialmente iscritto al corso.',
+                  6000,
+                  'success'
+                );
+              } else if (verifiedPayment.status === 'FAILED') {
+                showToast('Il pagamento non è andato a buon fine o è scaduto.', 6000);
+              } else {
+                showToast(
+                  'Pagamento in elaborazione. Controlla lo storico ricevute tra qualche istante.',
+                  6000
+                );
+              }
+            })
+            .catch(err => {
+              refreshParentPayments();
+              refreshChildrenAndEvaluations();
+              const msg =
+                err instanceof Error
+                  ? err.message
+                  : 'Impossibile verificare subito il pagamento. Controlla lo storico ricevute.';
+              showToast(msg, 6000);
+            })
+            .finally(() => {
+              window.history.replaceState({}, '', window.location.pathname);
+            });
+        } else {
+          showToast('Sessione di pagamento non specificata. Controlla lo storico ricevute.', 5000);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      } else if (paymentStatus === 'cancelled') {
+        stripeReturnHandledRef.current = true;
+        showToast('Pagamento annullato. Nessun addebito è stato effettuato.', 5000);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+
+    if (!getToken()) {
+      setNearbyClubs(DEMO_FALLBACK_CLUBS);
+      return;
+    }
+
+    // 1. Profilo Genitore
+    getMyParentProfile()
+      .then(profile => {
+        setParentProfile({
+          id: profile.id,
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+          phone: profile.phone_number,
+          fiscal_code: profile.fiscal_code,
+          street: profile.address?.street || '',
+          city: profile.address?.city || '',
+          province: profile.address?.province || '',
+          postal_code: profile.address?.postal_code || '',
+          extra_notes: profile.info || ''
+        });
+        setNewChildLastName(profile.last_name);
+        if (profile.referral_code) {
+          setMyReferralCode(profile.referral_code);
+          setMyReferralLink(`${window.location.origin}/?ref=${profile.referral_code}`);
+        }
+      })
+      .catch(() => {});
+
+    // 1b. Storico Pagamenti Genitore dal backend
+    refreshParentPayments();
+
+    // 2. Link Referral
+    getMyReferral()
+      .then(refData => {
+        setMyReferralCode(refData.referral_code);
+        setMyReferralLink(`${window.location.origin}/?ref=${refData.referral_code}`);
+      })
+      .catch(() => {});
+
+    // 3. Figli + Valutazioni Trimestrali + Test Motori
+    refreshChildrenAndEvaluations();
 
     // 4. Club Vicini e Corsi Disponibili
     loadClubsAndCourses();
@@ -881,9 +918,15 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -24, scale: 0.95 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed top-8 left-1/2 -translate-x-1/2 z-[99999] bg-[#1E2046] text-white px-7 py-4 rounded-2xl shadow-2xl shadow-black/50 border-2 border-amber-300 flex items-center gap-3.5 font-bold text-sm pointer-events-auto max-w-md text-center sm:text-left"
+            className={`fixed top-8 left-1/2 -translate-x-1/2 z-[99999] bg-[#1E2046] text-white px-7 py-4 rounded-2xl shadow-2xl shadow-black/50 border-2 flex items-center gap-3.5 font-bold text-sm pointer-events-auto max-w-md text-center sm:text-left ${
+              toastType === 'success' ? 'border-emerald-400' : 'border-amber-300'
+            }`}
           >
-            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+            {toastType === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+            )}
             <span className="leading-snug">{toastMessage}</span>
           </motion.div>
         )}
@@ -1309,9 +1352,11 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                           <h2 className="text-xl sm:text-2xl font-black text-[#1E2046] mt-0.5 tracking-tight leading-tight">
                             {selectedReceiptPayment.club_name}
                           </h2>
-                          <p className="text-xs font-mono font-bold text-slate-600 mt-1">
-                            Codice Fiscale / P.IVA: {selectedReceiptPayment.club_fiscal_code || '93048210874'}
-                          </p>
+                          {selectedReceiptPayment.club_fiscal_code && (
+                            <p className="text-xs font-mono font-bold text-slate-600 mt-1">
+                              Codice Fiscale / P.IVA: {selectedReceiptPayment.club_fiscal_code}
+                            </p>
+                          )}
                           <p className="text-xs text-slate-500 mt-0.5">
                             Affiliata ad Organismo Sportivo riconosciuto dal CONI
                           </p>

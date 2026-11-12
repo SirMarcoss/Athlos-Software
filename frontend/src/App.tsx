@@ -144,6 +144,7 @@ export default function App() {
 
   // STATO DI SESSIONE REALE ('none' | 'parent' | 'club' | 'admin')
   const [isLoggedInAs, setIsLoggedInAs] = useState<'none' | 'parent' | 'club' | 'admin'>('none');
+  const [isRestoringSession, setIsRestoringSession] = useState(() => Boolean(getToken()));
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
@@ -403,7 +404,10 @@ export default function App() {
   // Ripristino automatico della sessione al caricamento della pagina se esiste un token JWT valido
   useEffect(() => {
     const existingToken = getToken();
-    if (!existingToken) return;
+    if (!existingToken) {
+      setIsRestoringSession(false);
+      return;
+    }
 
     getCurrentUser()
       .then(user => {
@@ -419,6 +423,9 @@ export default function App() {
       .catch(() => {
         clearToken();
         clearAdminToken();
+      })
+      .finally(() => {
+        setIsRestoringSession(false);
       });
   }, []);
 
@@ -819,7 +826,20 @@ const nearbyClubs = useMemo(() => {
 
   return (
     <AnimatePresence mode="wait">
-      {isLoggedInAs === 'admin' ? (
+      {isRestoringSession ? (
+        <motion.div
+          key="session-loading"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="min-h-screen bg-[#f4f8fc] flex flex-col items-center justify-center gap-4 text-[#1E2046] font-sans"
+        >
+          <div className="w-11 h-11 rounded-full border-4 border-[#1E2046]/15 border-t-[#E52B6D] animate-spin" />
+          <p className="text-sm font-bold tracking-wide text-slate-600">
+            Caricamento area personale Athlos...
+          </p>
+        </motion.div>
+      ) : isLoggedInAs === 'admin' ? (
         <motion.div
           key="admin-console"
           initial={{ opacity: 0 }}

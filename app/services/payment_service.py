@@ -1,6 +1,5 @@
 import uuid
 import secrets
-import asyncio
 from datetime import datetime, timezone, timedelta
 import stripe
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,6 +72,23 @@ class PaymentService:
 
         # Controlla eventuali sessioni PENDING avviate negli ultimi 15 minuti da altri genitori
         fifteen_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=15)
+
+        # Libera eventuali tentativi PENDING abbandonati dallo STESSO genitore per questo figlio e corso
+        stmt_old_pending = select(Payment).where(
+            Payment.parent_id == parent_id,
+            Payment.course_id == course_id,
+            Payment.child_id == child_id,
+            Payment.status == PaymentStatusEnum.PENDING,
+        )
+        old_pendings = (await self.db.execute(stmt_old_pending)).scalars().all()
+        for old_p in old_pendings:
+            old_p.status = PaymentStatusEnum.FAILED
+        if old_pendings:
+            await self.db.flush() # utilizzo flush e non commit perchè flush invia l'UPDATE a PostgreSQL dentro
+            # la transazione aperta, mantenendo il lucchetto al corso. commit() chiuderebe la transazione e mollerebbe
+            # il lucchetto .with_for_update()
+
+
         stmt_pending = (
             select(func.count(Payment.id))
             .where(
@@ -98,8 +114,6 @@ class PaymentService:
         # Stripe ci restituirà un link (checkout_url) a cui reindirizzeremo il browser del genitore.
         if settings.STRIPE_SECRET_KEY:
             session = await stripe.checkout.Session.create_async(
-                # Metodi di pagamento accettati: carte di credito/debito, con supporto automatico ad Apple Pay e Google Pay
-                payment_method_types=["card"],
 
                 # Modalità "payment": pagamento una tantum (a differenza di "subscription" per abbonamenti ricorrenti)
                 mode="payment",
@@ -287,7 +301,7 @@ class PaymentService:
         return {"status": "received", "event_type": event_type}
 
 
-    async def verify_checkout_session(self, session_id: str) -> dict:
+    async def verify_checkout_session(self, session_id: str, parent_id: uuid.UUID) -> dict:
         """
         Verifica lo stato di una sessione di checkout Stripe al rientro del genitore.
         Se il pagamento risulta saldato (o in modalità mock), finalizza immediatamente
@@ -298,7 +312,7 @@ class PaymentService:
             .join(Course, Payment.course_id == Course.id)
             .join(Club, Payment.club_id == Club.id)
             .join(Child, Payment.child_id == Child.id)
-            .where(Payment.stripe_checkout_session_id == session_id)
+            .where(Payment.stripe_checkout_session_id == session_id).where(Payment.parent_id == parent_id)
         )
         res = await self.db.execute(stmt)
         row = res.first()
@@ -307,8 +321,8 @@ class PaymentService:
 
         payment, course, club, child = row
 
-        if payment.status != PaymentStatusEnum.SUCCEEDED:
-            if not settings.STRIPE_SECRET_KEY or session_id.startswith("mock_"):
+        if payment.status == PaymentStatusEnum.PENDING:
+            if not settings.STRIPE_SECRET_KEY and session_id.startswith("cs_test_mock_"):
                 payment = await self.fulfill_payment(
                     stripe_session_id=session_id,
                     payment_intent_id=f"mock_pi_{session_id[:8]}"
@@ -322,7 +336,7 @@ class PaymentService:
                             payment_intent_id=getattr(session_obj, "payment_intent", None)
                         )
                 except Exception as e:
-                    print(f"[PaymentService] Errore verifica sessione Stripe ({e})")
+                    raise ValueError(f"[PaymentService] Errore verifica sessione Stripe ({e})")
 
         return {
             "id": payment.id,
@@ -331,6 +345,7 @@ class PaymentService:
             "club_name": club.name,
             "child_id": child.id,
             "child_name": f"{child.first_name} {child.last_name}",
+            "child_fiscal_code": child.fiscal_code,
             "amount_cents": payment.parent_amount_cents,
             "billing_period": course.billing_period,
             "status": payment.status,
@@ -369,6 +384,7 @@ class PaymentService:
                 "club_name": club.name,
                 "child_id": child.id,
                 "child_name": f"{child.first_name} {child.last_name}",
+                "child_fiscal_code": child.fiscal_code,
                 "amount_cents": payment.parent_amount_cents,  # <-- Il genitore vede solo i 95€ che ha pagato!
                 "billing_period": course.billing_period,
                 "status": payment.status,
@@ -393,7 +409,7 @@ class PaymentService:
             .join(Child, Payment.child_id == Child.id)
             .join(Parent, Payment.parent_id == Parent.id)
             .join(User, Parent.user_id == User.id)
-            .where(Payment.club_id == club_id)
+            .where(Payment.club_id == club_id, Payment.status == PaymentStatusEnum.SUCCEEDED)
             .order_by(Payment.created_at.desc())
         )
         result = await self.db.execute(stmt)
@@ -411,6 +427,7 @@ class PaymentService:
                 "child_name": f"{child.first_name} {child.last_name}",
                 "child_fiscal_code": child.fiscal_code,
                 "parent_name": f"{parent.first_name} {parent.last_name}",
+                "parent_fiscal_code": parent.fiscal_code,
                 "parent_email": user.email,
                 "amount_cents": payment.club_amount_cents,    # <-- Il club vede solo i 90€ di sua spettanza!
                 "billing_period": course.billing_period,

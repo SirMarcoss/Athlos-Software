@@ -29,6 +29,7 @@ class PaymentParentResponse(BaseModel):
     club_name : str
     child_id : UUID
     child_name : str
+    child_fiscal_code: str
     amount_cents : int              #(conterrà parent_amount_cents, es. 9500)
     billing_period : str
     status: PaymentStatusEnum
@@ -50,6 +51,7 @@ class PaymentClubResponse(BaseModel):
     child_id : UUID
     child_name : str
     child_fiscal_code : str
+    parent_fiscal_code: Optional[str] = None
     parent_name : str
     parent_email : str
     amount_cents : int              #(conterrà club_amount_cents, es. 9000)

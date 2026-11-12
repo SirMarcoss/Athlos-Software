@@ -1,7 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.database import get_db
 from app.api.deps import require_role
 from app.models.user import User, UserRoleEnum
@@ -69,9 +68,14 @@ async def verify_checkout_session(
     Verifica lo stato della sessione di checkout Stripe al rientro del genitore
     e conferma formalmente l'iscrizione del figlio.
     """
+    parent_service = ParentService(db)
+    parent = await parent_service.get_parent_by_user_id(current_user.id)
+    if not parent:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Profilo genitore non trovato")
+
     payment_service = PaymentService(db)
     try:
-        return await payment_service.verify_checkout_session(session_id)
+        return await payment_service.verify_checkout_session(session_id, parent.id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
