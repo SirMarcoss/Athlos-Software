@@ -118,6 +118,8 @@ class PaymentService:
                 # Modalità "payment": pagamento una tantum (a differenza di "subscription" per abbonamenti ricorrenti)
                 mode="payment",
 
+                expires_at=int((datetime.now(timezone.utc) + timedelta(minutes=30)).timestamp()),
+
                 # Dettagli del prodotto che il genitore visualizzerà nel riepilogo d'ordine di Stripe
                 line_items=[{
                     "price_data": {
@@ -150,14 +152,8 @@ class PaymentService:
             )
             session_id = session.id
             checkout_url = session.url
-        else:
-            # FALLBACK / MOCK PER SVILUPPO LOCALE:
-            # Se la chiave STRIPE_SECRET_KEY non è ancora configurata nel file .env,
-            # l'applicazione non crasha. Genera invece un ID e un link simulati,
-            # consentendoti di testare l'intera logica end-to-end anche offline o senza un account Stripe attivo.
-            session_id = f"cs_test_mock_{uuid.uuid4().hex}"
-            checkout_url = f"{settings.FRONTEND_URL}/?payment=mock_success&session_id={session_id}"
-
+            if not settings.STRIPE_SECRET_KEY:
+                raise ValueError("Pagamenti Stripe non configurati sul server (STRIPE_SECRET_KEY mancante)")
 
         payment = Payment(
             parent_id=parent_id,
@@ -322,21 +318,15 @@ class PaymentService:
         payment, course, club, child = row
 
         if payment.status == PaymentStatusEnum.PENDING:
-            if not settings.STRIPE_SECRET_KEY and session_id.startswith("cs_test_mock_"):
-                payment = await self.fulfill_payment(
-                    stripe_session_id=session_id,
-                    payment_intent_id=f"mock_pi_{session_id[:8]}"
-                )
-            else:
-                try:
-                    session_obj = await stripe.checkout.Session.retrieve_async(session_id)
-                    if session_obj and getattr(session_obj, "payment_status", None) == "paid":
-                        payment = await self.fulfill_payment(
-                            stripe_session_id=session_id,
-                            payment_intent_id=getattr(session_obj, "payment_intent", None)
-                        )
-                except Exception as e:
-                    raise ValueError(f"[PaymentService] Errore verifica sessione Stripe ({e})")
+            try:
+                session_obj = await stripe.checkout.Session.retrieve_async(session_id)
+                if session_obj and getattr(session_obj, "payment_status", None) == "paid":
+                    payment = await self.fulfill_payment(
+                        stripe_session_id=session_id,
+                        payment_intent_id=getattr(session_obj, "payment_intent", None)
+                    )
+            except Exception as e:
+                raise ValueError(f"[PaymentService] Errore verifica sessione Stripe ({e})")
 
         return {
             "id": payment.id,
