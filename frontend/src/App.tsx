@@ -10,6 +10,13 @@ import {
   createClubProfile,
   getCurrentUser,
   getAllUsers,
+  getAllClubsAdmin,
+  getAdminCourses,
+  createAdminCourse,
+  updateAdminCourse,
+  deleteAdminCourse,
+  formatEuroFromCents,
+  formatBillingPeriodLabel,
   impersonateUser,
   requestPasswordReset,
   confirmPasswordReset,
@@ -21,6 +28,8 @@ import {
   clearAdminToken,
   autocompleteGeo,
   type ApiUserResponse,
+  type ApiClubResponse,
+  type ApiAdminCourseResponse,
   type ApiGeoSearchResult
 } from './api';
 import { 
@@ -35,7 +44,11 @@ import {
   Trophy,
   Sparkles,
   Clock,
-  Compass
+  Compass,
+  Plus,
+  Edit3,
+  Trash2,
+  Euro
 } from 'lucide-react';
 
 
@@ -144,6 +157,23 @@ export default function App() {
 
   // Stato Console Admin & Impersonation
   const [adminUsers, setAdminUsers] = useState<ApiUserResponse[]>([]);
+  const [adminClubs, setAdminClubs] = useState<ApiClubResponse[]>([]);
+  const [adminCourses, setAdminCourses] = useState<ApiAdminCourseResponse[]>([]);
+  const [adminCourseClubFilter, setAdminCourseClubFilter] = useState<string>('all');
+  const [adminCourseModalOpen, setAdminCourseModalOpen] = useState(false);
+  const [editingAdminCourseId, setEditingAdminCourseId] = useState<string | null>(null);
+  const [adminCourseClubId, setAdminCourseClubId] = useState<string>('');
+  const [adminCourseName, setAdminCourseName] = useState<string>('');
+  const [adminCourseMinAge, setAdminCourseMinAge] = useState<number>(6);
+  const [adminCourseMaxAge, setAdminCourseMaxAge] = useState<number>(10);
+  const [adminCourseClubPriceEuro, setAdminCourseClubPriceEuro] = useState<string>('90');
+  const [adminCourseParentPriceEuro, setAdminCourseParentPriceEuro] = useState<string>('95');
+  const [adminCourseMaxParticipants, setAdminCourseMaxParticipants] = useState<number>(20);
+  const [adminCourseBillingPeriod, setAdminCourseBillingPeriod] = useState<
+    'trimestrale' | 'mensile' | 'annuale' | 'quota_unica'
+  >('trimestrale');
+  const [adminCourseError, setAdminCourseError] = useState<string | null>(null);
+  const [adminCourseSaving, setAdminCourseSaving] = useState(false);
   const [isAdminLoading, setIsAdminLoading] = useState(false);
   const [adminSearch, setAdminSearch] = useState('');
   const [adminRoleFilter, setAdminRoleFilter] = useState<'all' | 'parent' | 'club'>('all');
@@ -251,12 +281,122 @@ export default function App() {
   const loadAdminUsers = async () => {
     setIsAdminLoading(true);
     try {
-      const users = await getAllUsers();
-      setAdminUsers(users);
+      const [usersRes, clubsRes, coursesRes] = await Promise.allSettled([
+        getAllUsers(),
+        getAllClubsAdmin(),
+        getAdminCourses()
+      ]);
+      if (usersRes.status === 'fulfilled') setAdminUsers(usersRes.value);
+      if (clubsRes.status === 'fulfilled') setAdminClubs(clubsRes.value);
+      if (coursesRes.status === 'fulfilled') setAdminCourses(coursesRes.value);
     } catch {
       // Ignora errori se non admin
     } finally {
       setIsAdminLoading(false);
+    }
+  };
+
+  const openAdminCreateCourseModal = (preselectedClubId?: string) => {
+    setEditingAdminCourseId(null);
+    setAdminCourseClubId(preselectedClubId || adminClubs[0]?.id || '');
+    setAdminCourseName('');
+    setAdminCourseMinAge(6);
+    setAdminCourseMaxAge(10);
+    setAdminCourseClubPriceEuro('90');
+    setAdminCourseParentPriceEuro('95');
+    setAdminCourseMaxParticipants(20);
+    setAdminCourseBillingPeriod('trimestrale');
+    setAdminCourseError(null);
+    setAdminCourseModalOpen(true);
+  };
+
+  const openAdminEditCourseModal = (course: ApiAdminCourseResponse) => {
+    setEditingAdminCourseId(course.id);
+    setAdminCourseClubId(course.clubs_id);
+    setAdminCourseName(course.name);
+    setAdminCourseMinAge(course.min_age);
+    setAdminCourseMaxAge(course.max_age);
+    setAdminCourseClubPriceEuro((course.club_price_cents / 100).toString());
+    setAdminCourseParentPriceEuro((course.parent_price_cents / 100).toString());
+    setAdminCourseMaxParticipants(course.max_participants);
+    setAdminCourseBillingPeriod(course.billing_period);
+    setAdminCourseError(null);
+    setAdminCourseModalOpen(true);
+  };
+
+  const handleAdminSaveCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminCourseError(null);
+
+    if (!adminCourseClubId) {
+      setAdminCourseError('Seleziona una società sportiva.');
+      return;
+    }
+    if (!adminCourseName.trim()) {
+      setAdminCourseError('Inserisci il nome del corso.');
+      return;
+    }
+    if (adminCourseMinAge < 5 || adminCourseMaxAge > 13 || adminCourseMinAge > adminCourseMaxAge) {
+      setAdminCourseError("La fascia d'età deve essere compresa tra 5 e 13 anni (min ≤ max).");
+      return;
+    }
+
+    const clubEuro = parseFloat(adminCourseClubPriceEuro.replace(',', '.'));
+    const parentEuro = parseFloat(adminCourseParentPriceEuro.replace(',', '.'));
+    if (isNaN(clubEuro) || clubEuro < 0 || isNaN(parentEuro) || parentEuro < 0) {
+      setAdminCourseError('Inserisci importi validi in Euro.');
+      return;
+    }
+    const clubCents = Math.round(clubEuro * 100);
+    const parentCents = Math.round(parentEuro * 100);
+    if (parentCents < clubCents) {
+      setAdminCourseError('La quota Genitore non può essere inferiore alla quota pattuita con il Club.');
+      return;
+    }
+
+    setAdminCourseSaving(true);
+    try {
+      if (editingAdminCourseId) {
+        const updated = await updateAdminCourse(editingAdminCourseId, {
+          name: adminCourseName.trim(),
+          min_age: adminCourseMinAge,
+          max_age: adminCourseMaxAge,
+          club_price_cents: clubCents,
+          parent_price_cents: parentCents,
+          max_participants: adminCourseMaxParticipants,
+          billing_period: adminCourseBillingPeriod
+        });
+        setAdminCourses(prev => prev.map(c => (c.id === editingAdminCourseId ? updated : c)));
+      } else {
+        const created = await createAdminCourse({
+          clubs_id: adminCourseClubId,
+          name: adminCourseName.trim(),
+          min_age: adminCourseMinAge,
+          max_age: adminCourseMaxAge,
+          club_price_cents: clubCents,
+          parent_price_cents: parentCents,
+          max_participants: adminCourseMaxParticipants,
+          billing_period: adminCourseBillingPeriod
+        });
+        setAdminCourses(prev => [...prev, created]);
+      }
+      setAdminCourseModalOpen(false);
+    } catch (err) {
+      setAdminCourseError(
+        err instanceof Error ? err.message : 'Errore durante il salvataggio del corso.'
+      );
+    } finally {
+      setAdminCourseSaving(false);
+    }
+  };
+
+  const handleAdminDeleteCourse = async (courseId: string, courseName: string) => {
+    if (!window.confirm(`Sei sicuro di voler eliminare il corso "${courseName}"?`)) return;
+    try {
+      await deleteAdminCourse(courseId);
+      setAdminCourses(prev => prev.filter(c => c.id !== courseId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Impossibile eliminare il corso.');
     }
   };
 
@@ -754,6 +894,331 @@ const nearbyClubs = useMemo(() => {
                 </button>
               </div>
             </div>
+
+            {/* GESTIONE CORSI & TARIFFE CLUB (SOLO ADMIN) */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-[#E52B6D]">
+                    Controllo Commerciale & Dual Pricing
+                  </span>
+                  <h2 className="text-2xl font-black text-[#1E2046] mt-0.5">
+                    Gestione Corsi & Tariffe Club ({adminCourses.length})
+                  </h2>
+                  <p className="text-slate-500 text-sm font-medium">
+                    Crea i corsi per le società sportive, stabilisci la quota convenzionata Club e la quota pubblica Genitore.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() =>
+                      openAdminCreateCourseModal(
+                        adminCourseClubFilter !== 'all' ? adminCourseClubFilter : undefined
+                      )
+                    }
+                    disabled={adminClubs.length === 0}
+                    className="px-4 py-2.5 rounded-xl bg-[#E52B6D] hover:bg-[#1E2046] disabled:opacity-50 text-white font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" /> Crea Nuovo Corso
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 mb-6">
+                <select
+                  value={adminCourseClubFilter}
+                  onChange={e => setAdminCourseClubFilter(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] text-sm font-bold text-[#1E2046]"
+                >
+                  <option value="all">Tutti i Club ({adminClubs.length})</option>
+                  {adminClubs.map(cl => (
+                    <option key={cl.id} value={cl.id}>
+                      {cl.name}
+                    </option>
+                  ))}
+                </select>
+                {adminClubs.length === 0 && (
+                  <span className="text-xs text-amber-600 font-bold">
+                    Nessun profilo Club trovato. Crea prima un utente Club con il relativo profilo centro sportivo.
+                  </span>
+                )}
+              </div>
+
+              {(() => {
+                const visibleCourses =
+                  adminCourseClubFilter === 'all'
+                    ? adminCourses
+                    : adminCourses.filter(c => c.clubs_id === adminCourseClubFilter);
+
+                if (visibleCourses.length === 0) {
+                  return (
+                    <div className="text-center py-10 text-slate-400 font-medium text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      Nessun corso configurato per questo filtro.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="divide-y divide-slate-100">
+                    {visibleCourses.map(course => {
+                      const clubName =
+                        adminClubs.find(cl => cl.id === course.clubs_id)?.name ||
+                        'Club sconosciuto';
+                      const marginCents = course.parent_price_cents - course.club_price_cents;
+
+                      return (
+                        <div
+                          key={course.id}
+                          className="py-4 flex flex-wrap items-center justify-between gap-4 hover:bg-slate-50/70 px-3 rounded-2xl transition-colors"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-black text-[#1E2046] text-base">
+                                {course.name}
+                              </span>
+                              <span className="text-[11px] font-bold bg-sky-100 text-sky-800 px-2.5 py-0.5 rounded-full">
+                                {clubName}
+                              </span>
+                              <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full">
+                                {course.min_age}-{course.max_age} anni •{' '}
+                                {formatBillingPeriodLabel(course.billing_period)}
+                              </span>
+                              <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full">
+                                Iscritti: {course.enrolled_count ?? 0}/{course.max_participants}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
+                              <span className="text-slate-600">
+                                Quota Club:{' '}
+                                <strong className="text-[#1E2046]">
+                                  {formatEuroFromCents(course.club_price_cents)}
+                                </strong>
+                              </span>
+                              <span className="text-slate-600">
+                                Quota Genitore:{' '}
+                                <strong className="text-emerald-700">
+                                  {formatEuroFromCents(course.parent_price_cents)}
+                                </strong>
+                              </span>
+                              <span className="text-slate-600">
+                                Margine Athlos:{' '}
+                                <strong className="text-[#E52B6D]">
+                                  {formatEuroFromCents(marginCents)}
+                                </strong>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openAdminEditCourseModal(course)}
+                              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-[#1E2046] hover:text-white text-[#1E2046] font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" /> Modifica
+                            </button>
+                            <button
+                              onClick={() => handleAdminDeleteCourse(course.id, course.name)}
+                              className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Elimina
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* MODALE ADMIN CREAZIONE / MODIFICA CORSO E TARIFFE */}
+            {adminCourseModalOpen && (
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-white rounded-[28px] p-6 sm:p-8 w-full max-w-xl shadow-2xl relative max-h-[92vh] overflow-y-auto">
+                  <button
+                    onClick={() => setAdminCourseModalOpen(false)}
+                    className="absolute top-6 right-6 text-slate-400 hover:text-[#1E2046] transition-colors cursor-pointer"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+
+                  <h3 className="text-2xl font-black text-[#1E2046] mb-1">
+                    {editingAdminCourseId ? 'Modifica Corso e Tariffe' : 'Nuovo Corso per Club'}
+                  </h3>
+                  <p className="text-slate-500 text-xs font-medium mb-5">
+                    Le tariffe impostate qui vengono salvate direttamente nel database PostgreSQL e usate per Stripe Checkout.
+                  </p>
+
+                  {adminCourseError && (
+                    <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                      {adminCourseError}
+                    </div>
+                  )}
+
+                  <form className="space-y-4" onSubmit={handleAdminSaveCourse}>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        Società Sportiva (Club)
+                      </label>
+                      <select
+                        value={adminCourseClubId}
+                        disabled={Boolean(editingAdminCourseId)}
+                        onChange={e => setAdminCourseClubId(e.target.value)}
+                        required
+                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-bold text-[#1E2046] disabled:opacity-60"
+                      >
+                        {adminClubs.map(cl => (
+                          <option key={cl.id} value={cl.id}>
+                            {cl.name} ({cl.address?.city || 'N/D'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        Nome del Corso
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Es. Scuola Calcio Pulcini, Basket Under 10..."
+                        value={adminCourseName}
+                        onChange={e => setAdminCourseName(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                          Età Min
+                        </label>
+                        <input
+                          type="number"
+                          min={5}
+                          max={13}
+                          required
+                          value={adminCourseMinAge}
+                          onChange={e => setAdminCourseMinAge(Number(e.target.value))}
+                          className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                          Età Max
+                        </label>
+                        <input
+                          type="number"
+                          min={5}
+                          max={13}
+                          required
+                          value={adminCourseMaxAge}
+                          onChange={e => setAdminCourseMaxAge(Number(e.target.value))}
+                          className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                          Posti Max
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          required
+                          value={adminCourseMaxParticipants}
+                          onChange={e => setAdminCourseMaxParticipants(Number(e.target.value))}
+                          className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                          Frequenza
+                        </label>
+                        <select
+                          value={adminCourseBillingPeriod}
+                          onChange={e =>
+                            setAdminCourseBillingPeriod(
+                              e.target.value as
+                                | 'trimestrale'
+                                | 'mensile'
+                                | 'annuale'
+                                | 'quota_unica'
+                            )
+                          }
+                          className="w-full px-2.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-bold text-[#1E2046] text-xs"
+                        >
+                          <option value="trimestrale">Trimestrale</option>
+                          <option value="mensile">Mensile</option>
+                          <option value="annuale">Annuale</option>
+                          <option value="quota_unica">Quota Unica</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-sky-50/80 border border-sky-100 space-y-3">
+                      <div className="flex items-center gap-2 text-xs font-black text-[#1E2046] uppercase tracking-wider">
+                        <Euro className="w-4 h-4 text-[#E52B6D]" /> Dual Pricing (Club vs Genitore)
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                            Quota pattuita Club (€)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.50"
+                            required
+                            value={adminCourseClubPriceEuro}
+                            onChange={e => setAdminCourseClubPriceEuro(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                            Quota pubblica Genitore (€)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.50"
+                            required
+                            value={adminCourseParentPriceEuro}
+                            onChange={e => setAdminCourseParentPriceEuro(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-emerald-700"
+                          />
+                        </div>
+                      </div>
+                      <div className="text-xs font-bold text-slate-600 flex justify-between pt-1 border-t border-sky-100">
+                        <span>Margine Athlos stimato per iscrizione:</span>
+                        <span className="font-black text-[#E52B6D]">
+                          {(() => {
+                            const c = parseFloat(adminCourseClubPriceEuro.replace(',', '.'));
+                            const p = parseFloat(adminCourseParentPriceEuro.replace(',', '.'));
+                            if (isNaN(c) || isNaN(p)) return '—';
+                            return formatEuroFromCents(Math.round((p - c) * 100));
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={adminCourseSaving}
+                      className="w-full py-3.5 bg-[#E52B6D] hover:bg-[#1E2046] disabled:opacity-50 text-white rounded-xl font-black text-base transition-colors cursor-pointer"
+                    >
+                      {adminCourseSaving
+                        ? 'Salvataggio...'
+                        : editingAdminCourseId
+                        ? 'Salva Modifiche Corso'
+                        : 'Crea Corso e Attiva Tariffe'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
 
             {/* LISTA UTENTI REALE CON IMPERSONATION */}
             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm">

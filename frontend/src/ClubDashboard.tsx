@@ -8,7 +8,6 @@ import {
   Mail,
   Plus,
   Trash2,
-  Edit3,
   Activity,
   Users,
   Sparkles,
@@ -23,9 +22,7 @@ import {
   CreditCard,
   ShieldCheck,
   RefreshCw,
-  Euro,
   FileText,
-  RotateCcw,
   Star,
   Camera
 } from 'lucide-react';
@@ -36,9 +33,6 @@ import {
   createClubProfile,
   deleteMyClubProfile,
   getMyClubCourses,
-  createClubCourse,
-  updateClubCourse,
-  deleteClubCourse,
   submitEvaluationSession,
   sendEvaluationEmail,
   getCourseEvaluations,
@@ -49,13 +43,6 @@ import {
   enrollAthleteInCourse,
   unenrollAthleteFromCourse,
   getMyClubPayments,
-  refundClubPayment,
-  getSavedCoursePricing,
-  saveCoursePricing,
-  getLocalPaymentsLedger,
-  updateLocalPaymentStatus,
-  getLocalEnrollments,
-  removeLocalEnrollment,
   formatEuroFromCents,
   formatBillingPeriodLabel,
   formatPaymentStatusLabel,
@@ -250,13 +237,11 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
 
   // Modali
   const [activeModal, setActiveModal] = useState<
-    'none' | 'profile' | 'course-form' | 'analysis' | 'add-athlete'
+    'none' | 'profile' | 'analysis' | 'add-athlete'
   >('none');
 
   // --- PAGAMENTI E ISCRIZIONI CLUB ---
-  const [clubPayments, setClubPayments] = useState<ApiPaymentRecord[]>(() =>
-    getLocalPaymentsLedger()
-  );
+  const [clubPayments, setClubPayments] = useState<ApiPaymentRecord[]>([]);
 
   // Messaggio di conferma rapido (Toast)
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -307,19 +292,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   const [profileForm, setProfileForm] = useState<ClubProfile>(DEFAULT_EMPTY_CLUB);
   const [geoResults, setGeoResults] = useState<GeoSearchResult[]>([]);
   const [confirmDeleteClub, setConfirmDeleteClub] = useState(false);
-
-  // --- STATO MODALE CREA / MODIFICA CORSO ---
-  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
-  const [courseName, setCourseName] = useState('');
-  const [courseSportCategory, setCourseSportCategory] = useState('Basket');
-  const [courseMinAge, setCourseMinAge] = useState(6);
-  const [courseMaxAge, setCourseMaxAge] = useState(10);
-  const [coursePriceEuro, setCoursePriceEuro] = useState<string>('150');
-  const [courseMaxParticipants, setCourseMaxParticipants] = useState<number>(20);
-  const [courseBillingPeriod, setCourseBillingPeriod] = useState<
-    'trimestrale' | 'mensile' | 'annuale' | 'quota_unica'
-  >('trimestrale');
-  const [courseFormError, setCourseFormError] = useState<string | null>(null);
 
   // --- STATO MODALE AGGIUNGI BAMBINO ---
   const [targetCourseForAthlete, setTargetCourseForAthlete] = useState<string | null>(null);
@@ -385,16 +357,14 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
         console.warn('Profilo club non trovato o errore:', err);
       }
 
-      // 1b. Pagamenti e iscrizioni del club dal backend (con fallback locale)
+      // 1b. Pagamenti del club dal backend
       try {
         const remotePayments = await getMyClubPayments();
         if (isMounted && remotePayments) {
           setClubPayments(remotePayments);
         }
       } catch {
-        if (isMounted) {
-          setClubPayments(getLocalPaymentsLedger());
-        }
+        // nessun fallback locale
       }
 
       // 2. Corsi del Club e Valutazioni salvate
@@ -404,7 +374,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           const loadedCourses: ClubCourse[] = [];
           const loadedEvals: Record<string, EvaluationSessionRecord> = {};
           const loadedTests: Record<string, PhysicalTestItem[]> = {};
-          const localEnrollments = getLocalEnrollments();
 
           for (const ac of apiCourses) {
             try {
@@ -470,27 +439,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               // fallback silenzioso se la chiamata fallisce
             }
 
-            // Unisce anche eventuali iscrizioni completate dal genitore tramite il Checkout Stripe
-            const courseLocalEnrollments = localEnrollments.filter(le => le.course_id === ac.id);
-            for (const le of courseLocalEnrollments) {
-              if (!enrolledAthletes.some(ea => ea.id === le.child_id)) {
-                const birthYear = le.child_date_of_birth
-                  ? parseInt(le.child_date_of_birth.split('-')[0], 10)
-                  : 2017;
-                const calculatedAge = new Date().getFullYear() - birthYear;
-                enrolledAthletes.push({
-                  id: le.child_id,
-                  first_name: le.child_first_name,
-                  last_name: le.child_last_name,
-                  date_of_birth: le.child_date_of_birth,
-                  age: calculatedAge >= 5 && calculatedAge <= 18 ? calculatedAge : 8,
-                  gender: le.child_gender || 'M',
-                  from_athlos: true,
-                  skills: []
-                });
-              }
-            }
-
             let savedMotorTests: CourseMotorTest[] = [];
             let savedSportCat = ac.name;
             try {
@@ -502,18 +450,16 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               // Ignora errori localStorage
             }
 
-            const pricingMeta = getSavedCoursePricing(ac.id);
-
             loadedCourses.push({
               id: ac.id,
               clubs_id: ac.clubs_id,
               name: ac.name,
-              sport_category: pricingMeta.sport_category || savedSportCat,
+              sport_category: savedSportCat,
               min_age: ac.min_age,
               max_age: ac.max_age,
-              price_cents: ac.price_cents ?? pricingMeta.price_cents,
-              max_participants: ac.max_participants ?? pricingMeta.max_participants,
-              billing_period: ac.billing_period ?? pricingMeta.billing_period,
+              price_cents: ac.price_cents,
+              max_participants: ac.max_participants ?? 20,
+              billing_period: ac.billing_period ?? 'trimestrale',
               motor_tests: savedMotorTests,
               athletes: enrolledAthletes
             });
@@ -565,62 +511,29 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     };
   }, []);
 
-  // --- SINCRONIZZAZIONE AUTOMATICA REAL-TIME DELLE TRANSAZIONI & ISCRIZIONI IN CORSO ---
+  // --- SINCRONIZZAZIONE AUTOMATICA REAL-TIME DELLE TRANSAZIONI ---
+  const refreshClubPayments = () => {
+    getMyClubPayments()
+      .then(remote => {
+        if (remote) setClubPayments(remote);
+      })
+      .catch(() => {});
+  };
+
   useEffect(() => {
-    const refreshPayments = () => {
-      // 1. Controlla e scade automaticamente i checkout PENDING più vecchi di 15 minuti liberando il posto
-      const current = getLocalPaymentsLedger();
-      const now = Date.now();
-      let hasExpiredAny = false;
-      const updated = current.map(p => {
-        if (p.status === 'PENDING') {
-          const createdAt = new Date(p.created_at).getTime();
-          // 15 minuti = 15 * 60 * 1000 = 900.000 ms
-          if (now - createdAt > 15 * 60 * 1000) {
-            hasExpiredAny = true;
-            return { ...p, status: 'EXPIRED' as const };
-          }
-        }
-        return p;
-      });
-
-      if (hasExpiredAny) {
-        localStorage.setItem('athlos_payments_ledger', JSON.stringify(updated));
-      }
-
-      // 2. Chiamata API backend (con fallback istantaneo su ledger locale)
-      getMyClubPayments()
-        .then(remote => {
-          if (remote && remote.length > 0) setClubPayments(remote);
-          else setClubPayments(getLocalPaymentsLedger());
-        })
-        .catch(() => {
-          setClubPayments(getLocalPaymentsLedger());
-        });
-    };
-
-    // Ascolta eventi di storage da altre schede/finestre (es. genitore che avvia o completa il pagamento)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'athlos_payments_ledger' || e.key === 'athlos_enrollments') {
-        refreshPayments();
-      }
-    };
-
     // Ri-sincronizza subito non appena l'utente torna sulla finestra
     const handleFocus = () => {
-      refreshPayments();
+      refreshClubPayments();
     };
 
-    // Polling periodico in background ogni 6 secondi per tenere aggiornati i KPI in tempo reale
-    const timer = window.setInterval(refreshPayments, 6000);
+    // Polling periodico in background ogni 10 secondi per tenere aggiornati i KPI in tempo reale
+    const timer = window.setInterval(refreshClubPayments, 10000);
 
-    window.addEventListener('storage', handleStorageChange);
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleFocus);
 
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleFocus);
     };
@@ -1075,189 +988,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const openCreateCourseModal = () => {
-    setEditingCourseId(null);
-    setCourseName('');
-    setCourseSportCategory('Basket');
-    setCourseMinAge(6);
-    setCourseMaxAge(10);
-    setCoursePriceEuro('150');
-    setCourseMaxParticipants(20);
-    setCourseBillingPeriod('trimestrale');
-    setCourseFormError(null);
-    setActiveModal('course-form');
-  };
-
-  const openEditCourseModal = (course: ClubCourse) => {
-    setEditingCourseId(course.id);
-    setCourseName(course.name);
-    setCourseSportCategory(course.sport_category);
-    setCourseMinAge(course.min_age);
-    setCourseMaxAge(course.max_age);
-    setCoursePriceEuro(((course.price_cents ?? 15000) / 100).toString());
-    setCourseMaxParticipants(course.max_participants ?? 20);
-    setCourseBillingPeriod(course.billing_period ?? 'trimestrale');
-    setCourseFormError(null);
-    setActiveModal('course-form');
-  };
-
-  const handleSaveCourse = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCourseFormError(null);
-
-    if (!courseName.trim()) {
-      setCourseFormError('Inserisci il nome del corso.');
-      return;
-    }
-    if (courseMinAge < 5 || courseMaxAge > 13 || courseMinAge > courseMaxAge) {
-      setCourseFormError("L'età deve essere compresa tra 5 e 13 anni.");
-      return;
-    }
-
-    const parsedEuro = parseFloat(coursePriceEuro.replace(',', '.'));
-    if (isNaN(parsedEuro) || parsedEuro <= 0) {
-      setCourseFormError('Inserisci un prezzo di iscrizione valido (maggiore di 0 €).');
-      return;
-    }
-    const priceCents = Math.round(parsedEuro * 100);
-    const maxCap = Math.max(1, Math.min(200, Number(courseMaxParticipants) || 20));
-
-    try {
-      if (editingCourseId) {
-        const updated = await updateClubCourse(editingCourseId, {
-          name: courseName.trim(),
-          min_age: courseMinAge,
-          max_age: courseMaxAge,
-          price_cents: priceCents,
-          max_participants: maxCap,
-          billing_period: courseBillingPeriod
-        });
-        saveCoursePricing(editingCourseId, {
-          price_cents: priceCents,
-          max_participants: maxCap,
-          billing_period: courseBillingPeriod,
-          sport_category: courseSportCategory
-        });
-        setCourses(prev =>
-          prev.map(c =>
-            c.id === editingCourseId
-              ? {
-                  ...c,
-                  name: updated.name,
-                  sport_category: courseSportCategory,
-                  min_age: updated.min_age,
-                  max_age: updated.max_age,
-                  price_cents: priceCents,
-                  max_participants: maxCap,
-                  billing_period: courseBillingPeriod
-                }
-              : c
-          )
-        );
-        showToast(
-          `Corso "${courseName.trim()}" aggiornato (${formatEuroFromCents(priceCents)} • ${formatBillingPeriodLabel(courseBillingPeriod)})!`
-        );
-      } else {
-        const created = await createClubCourse({
-          name: courseName.trim(),
-          min_age: courseMinAge,
-          max_age: courseMaxAge,
-          price_cents: priceCents,
-          max_participants: maxCap,
-          billing_period: courseBillingPeriod
-        });
-        saveCoursePricing(created.id, {
-          price_cents: priceCents,
-          max_participants: maxCap,
-          billing_period: courseBillingPeriod,
-          sport_category: courseSportCategory
-        });
-        const newCourse: ClubCourse = {
-          id: created.id,
-          clubs_id: created.clubs_id,
-          name: created.name,
-          sport_category: courseSportCategory,
-          min_age: created.min_age,
-          max_age: created.max_age,
-          price_cents: priceCents,
-          max_participants: maxCap,
-          billing_period: courseBillingPeriod,
-          motor_tests: [],
-          athletes: []
-        };
-        setCourses(prev => [...prev, newCourse]);
-        showToast(
-          `Corso "${newCourse.name}" creato (${formatEuroFromCents(priceCents)} • max ${maxCap} posti)!`
-        );
-      }
-      setActiveModal('none');
-    } catch (err) {
-      setCourseFormError(
-        err instanceof Error ? err.message : 'Errore durante il salvataggio del corso'
-      );
-    }
-  };
-
-  // === HANDLERS STRIPE CONNECT & PAGAMENTI ===
-
-  const handleRefundPayment = async (payment: ApiPaymentRecord) => {
-    if (
-      !window.confirm(
-        `Vuoi emettere un rimborso di ${formatEuroFromCents(payment.amount_cents)} su Stripe per l'iscrizione di ${payment.child_name} al corso "${payment.course_name}"? L'atleta verrà rimosso dal corso e il posto tornerà disponibile.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const refunded = await refundClubPayment(payment.id);
-      setClubPayments(prev => prev.map(p => (p.id === payment.id ? refunded : p)));
-    } catch {
-      updateLocalPaymentStatus(payment.id, 'REFUNDED');
-      setClubPayments(getLocalPaymentsLedger());
-    }
-
-    // Rimuove l'iscrizione anche dal corso e libera il posto
-    removeLocalEnrollment(payment.course_id, payment.child_id);
-    try {
-      await unenrollAthleteFromCourse(payment.course_id, payment.child_id);
-    } catch {
-      // ignora se era solo locale
-    }
-
-    setCourses(prev =>
-      prev.map(c =>
-        c.id === payment.course_id
-          ? { ...c, athletes: c.athletes.filter(a => a.id !== payment.child_id) }
-          : c
-      )
-    );
-
-    showToast(
-      `Rimborso di ${formatEuroFromCents(payment.amount_cents)} emesso su Stripe e posto liberato!`
-    );
-  };
-
-  const handleDeleteCourse = async (courseId: string, name: string) => {
-    try {
-      await deleteClubCourse(courseId);
-      const remaining = courses.filter(c => c.id !== courseId);
-      setCourses(remaining);
-      if (motorCourseId === courseId) {
-        setMotorCourseId(remaining[0]?.id || '');
-        setSelectedMotorTestId(remaining[0]?.motor_tests[0]?.id || '');
-        setBatchScores({});
-      }
-      if (psychCourseId === courseId) {
-        setPsychCourseId(remaining[0]?.id || '');
-        setPsychChildId(remaining[0]?.athletes[0]?.id || '');
-      }
-      showToast(`Corso "${name}" rimosso dal database.`);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Errore nella rimozione del corso');
-    }
-  };
-
   const openAddAthleteModal = (courseId: string) => {
     setTargetCourseForAthlete(courseId);
     setAthleteFiscalCode('');
@@ -1341,21 +1071,21 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     athleteId: string,
     athleteName: string
   ) => {
-    removeLocalEnrollment(courseId, athleteId);
     try {
       await unenrollAthleteFromCourse(courseId, athleteId);
+      setCourses(prev =>
+        prev.map(c =>
+          c.id === courseId
+            ? { ...c, athletes: c.athletes.filter(a => a.id !== athleteId) }
+            : c
+        )
+      );
       showToast(`${athleteName} rimosso dal corso.`);
-    } catch {
-      showToast(`${athleteName} rimosso dal corso.`);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : `Impossibile rimuovere ${athleteName} dal corso.`
+      );
     }
-
-    setCourses(prev =>
-      prev.map(c =>
-        c.id === courseId
-          ? { ...c, athletes: c.athletes.filter(a => a.id !== athleteId) }
-          : c
-      )
-    );
   };
 
   return (
@@ -1398,8 +1128,8 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           {/* Badge Iscrizioni & Incassi */}
           <button
             onClick={() => {
-              setClubPayments(getLocalPaymentsLedger());
               setActiveTab('payments');
+              refreshClubPayments();
             }}
             className="px-4 py-2.5 rounded-full font-bold text-xs flex items-center gap-2 border backdrop-blur-md transition-all cursor-pointer bg-white/10 hover:bg-white/20 border-white/25 text-white"
           >
@@ -1408,12 +1138,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
             <span>Iscrizioni & Incassi</span>
           </button>
 
-          <button
-            onClick={openCreateCourseModal}
-            className="px-5 py-2.5 bg-[#E52B6D] hover:bg-[#FF4F8B] backdrop-blur-md border border-pink-400/40 rounded-full font-bold transition-colors text-sm flex items-center gap-2 shadow-lg cursor-pointer"
-          >
-            <Plus className="w-4 h-4" /> Nuovo Corso
-          </button>
           <button
             onClick={() => {
               setProfileForm(club);
@@ -1483,8 +1207,8 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
             </button>
             <button
               onClick={() => {
-                setClubPayments(getLocalPaymentsLedger());
                 setActiveTab('payments');
+                refreshClubPayments();
               }}
               className={`px-5 py-3 rounded-xl font-black text-sm transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'payments'
@@ -1515,16 +1239,10 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                   <div className="w-16 h-16 rounded-2xl bg-sky-50 text-[#E52B6D] flex items-center justify-center mx-auto mb-4 font-black text-2xl">
                     🏆
                   </div>
-                  <h3 className="text-2xl font-black text-[#1E2046] mb-2">Nessun corso creato</h3>
-                  <p className="text-slate-500 mb-6 text-sm">
-                    Non hai ancora creato nessun corso. Inizia subito creando il tuo primo corso con quota di iscrizione per permettere ai genitori di iscrivere i figli.
+                  <h3 className="text-2xl font-black text-[#1E2046] mb-2">Nessun corso assegnato</h3>
+                  <p className="text-slate-500 text-sm leading-relaxed">
+                    Non ci sono ancora corsi attivi associati alla tua struttura. L'attivazione dei corsi e la configurazione delle tariffe convenzionate vengono gestite direttamente dall'amministrazione centrale Athlos. Contatta il team Athlos per configurare il tuo primo corso.
                   </p>
-                  <button
-                    onClick={openCreateCourseModal}
-                    className="px-6 py-3 bg-[#E52B6D] hover:bg-[#FF4F8B] text-white rounded-full font-bold text-sm shadow-md transition-colors cursor-pointer inline-flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> Crea il tuo primo Corso
-                  </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1570,20 +1288,12 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => openEditCourseModal(course)}
-                            title="Modifica Corso e Prezzo"
-                            className="p-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 text-slate-500 hover:text-[#1E2046] border border-slate-200/80 transition-colors cursor-pointer"
+                          <span
+                            title="Corso e tariffe gestiti dall'Amministrazione Athlos"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-50 text-[#1E2046] border border-sky-100 text-[11px] font-bold"
                           >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCourse(course.id, course.name)}
-                            title="Elimina Corso"
-                            className="p-2.5 rounded-xl bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200/80 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                            <ShieldCheck className="w-3.5 h-3.5 text-[#E52B6D]" /> Gestito da Athlos
+                          </span>
                         </div>
                       </div>
 
@@ -2755,7 +2465,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                         <button
                           type="button"
                           onClick={() => {
-                            setClubPayments(getLocalPaymentsLedger());
+                            refreshClubPayments();
                             showToast('Registro transazioni aggiornato!');
                           }}
                           className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#1E2046] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
@@ -2833,16 +2543,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                                   </div>
                                 </div>
 
-                                {payment.status === 'SUCCEEDED' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRefundPayment(payment)}
-                                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 hover:border-rose-300 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                                  >
-                                    <RotateCcw className="w-3.5 h-3.5" />
-                                    Rimborsa
-                                  </button>
-                                )}
+
                               </div>
                             </div>
                           ))}
@@ -3179,167 +2880,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                         </div>
                       )}
                     </div>
-                  </form>
-                </div>
-              )}
-
-              {/* MODALE CREA / MODIFICA CORSO */}
-              {activeModal === 'course-form' && (
-                <div className="pt-2">
-                  <h3 className="text-2xl font-black text-[#1E2046] mb-1">
-                    {editingCourseId ? 'Modifica Corso e Quota' : 'Nuovo Corso Sportivo'}
-                  </h3>
-                  <p className="text-slate-400 text-sm font-medium mb-6">
-                    Imposta nome, sport, fascia d'età, quota d'iscrizione e posti disponibili per i genitori.
-                  </p>
-
-                  {courseFormError && (
-                    <div className="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-bold">
-                      {courseFormError}
-                    </div>
-                  )}
-
-                  <form className="space-y-4" onSubmit={handleSaveCourse}>
-                    <div>
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                        Nome del Corso
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Es. Corso Basket, Pallavolo Pulcini..."
-                        value={courseName}
-                        onChange={e => setCourseName(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                        Sport
-                      </label>
-                      <select
-                        value={courseSportCategory}
-                        onChange={e => setCourseSportCategory(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-bold text-[#1E2046]"
-                      >
-                        <option value="Basket">🏀 Basket</option>
-                        <option value="Pallavolo">🏐 Pallavolo</option>
-                        <option value="Calcio">⚽ Calcio</option>
-                        <option value="Scherma">🤺 Scherma</option>
-                        <option value="Nuoto">🏊 Nuoto</option>
-                        <option value="Ginnastica">🤸 Ginnastica</option>
-                        <option value="Judo">🥋 Judo / Arti Marziali</option>
-                        <option value="Tennis">🎾 Tennis</option>
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                          Età Minima (5-13 anni)
-                        </label>
-                        <input
-                          type="number"
-                          min={5}
-                          max={13}
-                          required
-                          value={courseMinAge}
-                          onChange={e => setCourseMinAge(Number(e.target.value))}
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046] text-lg"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                          Età Massima (5-13 anni)
-                        </label>
-                        <input
-                          type="number"
-                          min={5}
-                          max={13}
-                          required
-                          value={courseMaxAge}
-                          onChange={e => setCourseMaxAge(Number(e.target.value))}
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046] text-lg"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Sezione Prezzo e Capienza Posti per Stripe Checkout */}
-                    <div className="p-4 rounded-2xl bg-sky-50/70 border border-sky-100 space-y-4">
-                      <div className="flex items-center gap-2 text-xs font-black text-[#1E2046] uppercase tracking-wider">
-                        <Euro className="w-4 h-4 text-[#E52B6D]" />
-                        Configurazione Pagamento Stripe & Capienza
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
-                            Quota (€)
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              min={1}
-                              step="0.50"
-                              required
-                              value={coursePriceEuro}
-                              onChange={e => setCoursePriceEuro(e.target.value)}
-                              className="w-full pl-3.5 pr-8 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046] text-base"
-                            />
-                            <span className="absolute right-3 top-2.5 font-black text-slate-400">
-                              €
-                            </span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
-                            Frequenza Quota
-                          </label>
-                          <select
-                            value={courseBillingPeriod}
-                            onChange={e =>
-                              setCourseBillingPeriod(
-                                e.target.value as
-                                  | 'trimestrale'
-                                  | 'mensile'
-                                  | 'annuale'
-                                  | 'quota_unica'
-                              )
-                            }
-                            className="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-bold text-[#1E2046] text-sm"
-                          >
-                            <option value="trimestrale">Trimestrale</option>
-                            <option value="mensile">Mensile</option>
-                            <option value="annuale">Annuale</option>
-                            <option value="quota_unica">Quota Unica</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
-                            Posti Massimi
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={200}
-                            required
-                            value={courseMaxParticipants}
-                            onChange={e => setCourseMaxParticipants(Number(e.target.value))}
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046] text-base"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-4 mt-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer"
-                    >
-                      {editingCourseId ? 'Salva Corso e Quota' : 'Crea Corso'}
-                    </button>
                   </form>
                 </div>
               )}

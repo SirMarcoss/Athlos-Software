@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.club import Club
+from app.models.payment import Payment, PaymentStatusEnum
 from app.schemas.club import ClubCreate, ClubUpdate
 from app.services.geo_service import GeoService
 from app.services.places_service import GooglePlacesService
@@ -19,6 +20,13 @@ class ClubService:
         stmt = select(Club).where(Club.user_id == user_id)
         result = await self.db.execute(stmt)
         return result.scalars().first()
+
+
+    async def get_all_clubs(self) -> list[Club]:
+        """Restituisce tutte le società sportive registrate (riservato all'Admin)."""
+        stmt = select(Club).order_by(Club.name.asc())
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
 
     async def create_club(self, club_in: ClubCreate, user_id: uuid.UUID) -> Club:
@@ -50,11 +58,10 @@ class ClubService:
         places_data_to_save = places_info if places_info else {}
         website = places_info.get("website_url") if places_info else None
         rating_val = places_info.get("rating") if places_info else None
-        # Se l'utente non ha specificato il telefono o ha lasciato quello base,
-        # puoi usare quello verificato da Google Places:
-        final_phone = club_in.phone_number
-        if places_info and places_info.get("phone_number"):
-            final_phone = places_info["phone_number"]
+        # Priorità al telefono inserito dal Club; Google Places usato solo come fallback se vuoto
+        final_phone = (club_in.phone_number or "").strip()
+        if not final_phone and places_info and places_info.get("phone_number"):
+            final_phone = places_info["phone_number"][:20]
 
         club_db = Club(
             user_id=user_id,
@@ -137,11 +144,21 @@ class ClubService:
 
 
     async def delete_club(self, user_id: uuid.UUID) -> None:
-        """Elimina il Club loggato."""
+        """Elimina il Club loggato verificando l'assenza di pagamenti confermati."""
 
         club = await self.get_club_by_user_id(user_id)
         if not club:
             raise ValueError("Club non trovato")
+
+        # Controlla pagamenti associati
+        stmt_payments = select(Payment).where(Payment.club_id == club.id)
+        payments = (await self.db.execute(stmt_payments)).scalars().all()
+        if any(p.status == PaymentStatusEnum.SUCCEEDED for p in payments):
+            raise ValueError("Impossibile eliminare il centro sportivo: sono presenti transazioni e incassi registrati nello storico contabile.")
+
+        # Elimina eventuali pagamenti pendenti o falliti
+        for p in payments:
+            await self.db.delete(p)
 
         await self.db.delete(club)
         await self.db.commit()

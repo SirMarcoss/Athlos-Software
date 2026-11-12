@@ -59,6 +59,23 @@ async def stripe_webhook(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.get("/verify/{session_id}", response_model=PaymentParentResponse)
+async def verify_checkout_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.PARENT))
+):
+    """
+    Verifica lo stato della sessione di checkout Stripe al rientro del genitore
+    e conferma formalmente l'iscrizione del figlio.
+    """
+    payment_service = PaymentService(db)
+    try:
+        return await payment_service.verify_checkout_session(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
 @router.get("/parent/me", response_model=List[PaymentParentResponse])
 async def list_my_parent_payments(
     db: AsyncSession = Depends(get_db),

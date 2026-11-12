@@ -53,8 +53,8 @@ class Parent(Base):
 
     def __repr__(self) -> str:
         return (
-            f"Club_id = {self.id!r},"
-            f"first_name = {self.first_name!r},"
-            f"last_name = {self.last_name!r}"
-            f"phone_number = {self.phone_number!r}"
+            f"<Parent(id={self.id!r}, "
+            f"first_name={self.first_name!r}, "
+            f"last_name={self.last_name!r}, "
+            f"phone_number={self.phone_number!r})>"
         )

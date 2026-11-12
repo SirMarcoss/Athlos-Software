@@ -19,29 +19,35 @@ class UserService:
         self.db = db
 
 
-    async def get_user_by_email(self, email: str) -> User | None:
+    async def get_user_by_email(self, email: str, include_deleted: bool = False) -> User | None:
         """
         Cerca un utente nel database tramite la sua email.
-        Ritorna l'oggetto User di SQLAlchemy se trovato, altrimenti None.
+        Di default esclude gli utenti soft-deleted (deleted_at IS NOT NULL).
         """
-        # Creiamo lo statement SQL (Sintassi SQLAlchemy 2.0)
         stmt = select(User).where(func.lower(User.email) == email.strip().lower())
+        if not include_deleted:
+            stmt = stmt.where(User.deleted_at.is_(None))
 
-        # Eseguiamo la query in modo asincrono
         result = await self.db.execute(stmt)
-
-        # Estraiamo il primo risultato (o None se non esiste)
         return result.scalars().first()
-        # perchè scalar: PostgreSQL restituisce i dati sotto forma di righe (Tuple)
-        # scalar scompatta la tupla e ti restituisce l'oggetto Python pulito (User)
 
+    async def get_deleted_user_by_email(self, email: str) -> User | None:
+        """Cerca se esiste un utente disattivato/eliminato tramite email."""
+        stmt = select(User).where(
+            func.lower(User.email) == email.strip().lower(),
+            User.deleted_at.isnot(None)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().first()
 
-    async def get_user_by_id(self, user_id: str | uuid.UUID) -> User | None:
+    async def get_user_by_id(self, user_id: str | uuid.UUID, include_deleted: bool = False) -> User | None:
         """
         Cerca un utente nel database tramite l'ID.
-        Ritorna l'oggetto User di SQLAlchemy se trovato, altrimenti None.
+        Di default esclude gli utenti soft-deleted.
         """
         stmt = select(User).where(User.id == user_id)
+        if not include_deleted:
+            stmt = stmt.where(User.deleted_at.is_(None))
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
@@ -51,21 +57,18 @@ class UserService:
         Crea un nuovo utente.
         Implementa la validazione logica (email duplicata) e l'hashing della password.
         """
-        # 1. Validazione di Business: L'email esiste già?
+        # 1. Validazione di Business: L'email esiste già tra gli account attivi?
         existing_user = await self.get_user_by_email(user_in.email)
         if existing_user:
-            # Solleviamo un'eccezione di dominio pura, non un'eccezione HTTP.
-            # Sarà il Router a catturarla e trasformarla in un 400 Bad Request.
             raise ValueError("Un utente con questa email è già registrato.")
 
+        # Controllo account precedentemente disattivato/eliminato (Scelta 1)
+        deleted_user = await self.get_deleted_user_by_email(user_in.email)
+        if deleted_user:
+            raise ValueError("ACCOUNT_DELETED: Questa email appartiene a un account precedentemente disattivato. Contatta l'assistenza Athlos per richiederne la riattivazione.")
+
         # 2. Sicurezza: Hash della password in chiaro in arrivo da Pydantic
-        password_bytes = user_in.password.encode('utf-8')
-        if len(password_bytes) > 72:
-            # Tronca esattamente a 72 byte e ritrasforma in stringa
-            safe_password = password_bytes[:72].decode('utf-8', errors='ignore')
-        else:
-            safe_password = user_in.password
-        hashed_pwd = hash_password(safe_password)
+        hashed_pwd = hash_password(user_in.password)
 
         # 3. Mappatura: Creazione dell'oggetto SQLAlchemy
         db_user = User(
@@ -91,11 +94,15 @@ class UserService:
     async def authenticate_user(self, email: str, password: str) -> User | None:
         """
         Verifica le credenziali di un utente per il login.
-        Ritorna l'utente se le credenziali sono valide, altrimenti None.
+        Ritorna l'utente se le credenziali sono valide, solleva ValueError se eliminato, altrimenti None.
         """
-        # 1. Cerchiamo l'utente
+        # 1. Cerchiamo l'utente attivo
         user = await self.get_user_by_email(email)
         if not user:
+            # Controllo se l'email appartiene a un account eliminato
+            deleted_user = await self.get_deleted_user_by_email(email)
+            if deleted_user:
+                raise ValueError("ACCOUNT_DELETED: Questo account risulta eliminato. Contatta l'assistenza Athlos per richiederne la riattivazione.")
             return None
 
         # 2. Verifichiamo la password confrontando l'hash
@@ -106,9 +113,9 @@ class UserService:
 
 
     async def get_all_users(self) ->list[User]:
-        """Restituisce tutti gli utenti registrati (usato dalla dashboard Admin)."""
+        """Restituisce tutti gli utenti attivi registrati (usato dalla dashboard Admin)."""
 
-        stmt = select(User).order_by(User.created_at.desc())
+        stmt = select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc())
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
@@ -116,11 +123,12 @@ class UserService:
     async def request_password_reset(self, email: str) -> None:
         """
         Cerca l'utente per email, genera il token monouso di reset e invia l'email tramite Resend.
+        Seguendo le linee guida OWASP, se l'email non esiste ritorna silenziosamente per evitare user enumeration.
         """
         # 1. Cerchiamo l'utente nel database tramite l'email inserita nel form
         user = await self.get_user_by_email(email.strip())
         if not user:
-            raise ValueError("Nessun account trovato con questo indirizzo email.")
+            return
 
         # 2. Generiamo il token JWT temporaneo (15 min) firmato con l'impronta della password attuale
         token = create_password_reset_token(user.email, user.password_hash)
@@ -158,12 +166,7 @@ class UserService:
             raise ValueError("Il codice inserito non corrisponde a questo indirizzo email.")
 
         # 4. Eseguiamo l'hash sicuro (bcrypt) della nuova password scelta dall'utente
-        password_bytes = new_password.encode('utf-8')
-        if len(password_bytes) > 72:
-            safe_password = password_bytes[:72].decode('utf-8', errors='ignore')
-        else:
-            safe_password = new_password
-        hashed_pwd = hash_password(safe_password)
+        hashed_pwd = hash_password(new_password)
 
         # 5. Salviamo il nuovo hash nel database: da questo istante il vecchio token diventa inutilizzabile!
         user.password_hash = hashed_pwd

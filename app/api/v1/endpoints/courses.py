@@ -73,26 +73,35 @@ async def list_all_courses(
     return [CourseParentResponse.model_validate(c) for c in courses]
 
 
-# --- 2. GESTIONE CORSI PER I CLUB ---
+# --- 2. GESTIONE CORSI (RISERVATA ALL'ADMIN) & LETTURA PER I CLUB ---
 
-@router.post("/", response_model=CourseClubResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=CourseAdminResponse, status_code=status.HTTP_201_CREATED)
 async def create_course(
         payload: CourseCreate,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(require_role(UserRoleEnum.CLUB))  # 👈 Solo i CLUB!
+        current_user: User = Depends(require_role(UserRoleEnum.ADMIN))
 ):
-    """Crea un nuovo corso offerto dal Club loggato."""
+    """Crea un nuovo corso per uno specifico Club (riservato all'Admin Athlos)."""
 
-    club_service = ClubService(db)
     course_service = CourseService(db)
+    try:
+        return await course_service.create_course(payload)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
-    # 1. Recuperiamo il profilo club dell'utente loggato
-    club = await club_service.get_club_by_user_id(current_user.id)
-    if not club:
-        raise HTTPException(status_code=400, detail="Devi prima creare il profilo della società sportiva")
 
-    # 2. Creiamo il corso associandolo al suo club
-    return await course_service.create_course(payload, club.id)
+@router.get("/admin", response_model=List[CourseAdminResponse])
+async def list_admin_courses(
+        club_id: Optional[UUID] = Query(None, description="Filtra per ID società sportiva"),
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(require_role(UserRoleEnum.ADMIN))
+):
+    """Restituisce tutti i corsi (con entrambi i prezzi club/genitore) per la console Admin."""
+    course_service = CourseService(db)
+    return await course_service.get_admin_courses(club_id)
 
 
 @router.get("/my", response_model=List[CourseClubResponse])
@@ -100,7 +109,7 @@ async def list_my_club_courses(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(require_role(UserRoleEnum.CLUB))
 ):
-    """Restituisce solo i corsi creati dalla società loggata."""
+    """Restituisce i corsi assegnati alla società sportiva loggata (in sola lettura sulle tariffe)."""
 
     club_service = ClubService(db)
     course_service = CourseService(db)
@@ -112,54 +121,40 @@ async def list_my_club_courses(
     return await course_service.get_courses_by_club(club.id)
 
 
-
-@router.patch("/{course_id}", response_model=CourseClubResponse)
-async def update_my_course(
+@router.patch("/{course_id}", response_model=CourseAdminResponse)
+async def update_course_by_admin(
         course_id: UUID,
         payload: CourseUpdate,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(require_role(UserRoleEnum.CLUB))
+        current_user: User = Depends(require_role(UserRoleEnum.ADMIN))
 ):
-    """Aggiorna un corso del club."""
+    """Aggiorna un corso e le relative tariffe (riservato all'Admin Athlos)."""
 
-    club_service = ClubService(db)
     course_service = CourseService(db)
-
-    club = await club_service.get_club_by_user_id(current_user.id)
-    if not club:
-        raise HTTPException(status_code=400, detail="Profilo club mancante")
-
     try:
-        course = await course_service.update_course(course_id, payload, club.id)
+        course = await course_service.update_course(course_id, payload)
         return course
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        if "non trovato" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_my_course(
+async def delete_course_by_admin(
         course_id: UUID,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(require_role(UserRoleEnum.CLUB))
+        current_user: User = Depends(require_role(UserRoleEnum.ADMIN))
 ):
-    """Elimina un corso del club."""
+    """Elimina un corso (riservato all'Admin Athlos)."""
 
-    club_service = ClubService(db)
     course_service = CourseService(db)
-
-    club = await club_service.get_club_by_user_id(current_user.id)
-    if not club:
-        raise HTTPException(status_code=400, detail="Profilo club mancante")
-
     try:
-        course = await course_service.delete_course(course_id, club.id)
-        return course
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND)
+        await course_service.delete_course(course_id)
+    except ValueError as e:
+        if "non trovato" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # --- 4. GESTIONE ATLETI ISCRITTI AL CORSO ---

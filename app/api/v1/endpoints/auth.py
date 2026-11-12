@@ -30,11 +30,14 @@ async def register_user(payload: UserCreate, db: AsyncSession = Depends(get_db))
         return user
 
     except ValueError as e:
-        # Se il Service lancia un ValueError, il codice salta immediatamente qui.
-        # Catturiamo l'errore nella variabile 'e' e lo trasformiamo in un errore HTTP pulito.
+        if "ACCOUNT_DELETED" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(e).replace("ACCOUNT_DELETED: ", "")
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)  # Questo stamperà esattamente la stringa definita nel Service
+            detail=str(e)
         )
 
 
@@ -48,24 +51,31 @@ class Token(BaseModel):
 
 @router.post("/login", response_model=Token)
 async def login_user(
-        form_data: OAuth2PasswordRequestForm = Depends(), # standard per il login, richiede due campi:
-        # username e password (da validare)
-        db: AsyncSession = Depends(get_db) # richiede l'apertura di una sessione del db' 1 volta per tutte le richieste
+        form_data: OAuth2PasswordRequestForm = Depends(),
+        db: AsyncSession = Depends(get_db)
 ):
     """
     Endpoint per autenticare un utente e restituire un JWT.
     """
+    user_service = UserService(db)
+    try:
+        user = await user_service.authenticate_user(form_data.username, form_data.password)
+    except ValueError as e:
+        if "ACCOUNT_DELETED" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(e).replace("ACCOUNT_DELETED: ", "")
+            )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    user_service = UserService(db) # istanziamo il service per l'autenticazione
-    user = await user_service.authenticate_user(form_data.username, form_data.password)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password",
-                            headers={"WWW-Authenticate": "Bearer"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenziali non valide o utente non trovato",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
 
-    access_token = create_access_token(data={"sub": str(user.id)}) # creiamo il token JWT
-    # forzo str perchè l'ID di PostgreSQL è un oggetto UUID ed è
-    # sempre buona norma passare stringhe pulite alle librerie crittografiche come JOSE
-
+    access_token = create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -91,6 +101,11 @@ async def register_club_user(payload: UserCreate, db: AsyncSession = Depends(get
         user = await user_service.create_user(payload, role=UserRoleEnum.CLUB)
         return user
     except ValueError as e:
+        if "ACCOUNT_DELETED" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(e).replace("ACCOUNT_DELETED: ", "")
+            )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
@@ -152,17 +167,18 @@ async def forgot_password(
         db: AsyncSession = Depends(get_db)
 ):
     """
-    Endpoint chiamato dallo Step 1 del modal Front-End per inviare il codice di recupero via email.
+    Endpoint per richiedere il codice di recupero password via email.
+    Risponde sempre con esito generico positivo per prevenire l'enumerazione degli utenti.
     """
     user_service = UserService(db)
     try:
         await user_service.request_password_reset(payload.email)
-        return {"message": "Codice di recupero inviato via email. Controlla la tua casella di posta."}
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    except Exception as e:
+        print(f"[Auth] Errore invio email reset password: {e}")
+
+    return {
+        "message": "Se l'indirizzo email è registrato, riceverai un'email con il codice di sicurezza."
+    }
 
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)

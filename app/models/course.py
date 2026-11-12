@@ -1,9 +1,9 @@
 import uuid
 from typing import TYPE_CHECKING
-from sqlalchemy import String, ForeignKey, text, UniqueConstraint, DateTime, Integer
+from sqlalchemy import String, ForeignKey, text, UniqueConstraint, DateTime, Integer, select
 from sqlalchemy.sql.functions import func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, column_property
 from app.models.base import Base
 from datetime import datetime
 
@@ -78,3 +78,12 @@ class CourseEnrollment(Base):
     enrolled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+# Calcola dinamicamente il numero di iscritti attivi a livello SQL per ogni corso
+Course.enrolled_count = column_property(
+    select(func.count(CourseEnrollment.id))
+    .where(CourseEnrollment.course_id == Course.id)
+    .correlate_except(CourseEnrollment)
+    .scalar_subquery()
+)

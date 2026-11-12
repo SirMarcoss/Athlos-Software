@@ -56,4 +56,5 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_payments_parent_id'), table_name='payments')
     op.drop_index(op.f('ix_payments_club_id'), table_name='payments')
     op.drop_table('payments')
+    sa.Enum(name='payment_status_enum').drop(op.get_bind(), checkfirst=True)
     # ### end Alembic commands ###

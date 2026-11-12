@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User, UserRoleEnum
@@ -9,6 +10,17 @@ from app.services.places_service import GooglePlacesService
 
 
 router = APIRouter()
+
+
+@router.get("/", response_model=List[ClubResponse])
+async def list_all_clubs(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.ADMIN))
+):
+    """Restituisce tutte le società sportive registrate (riservato all'Admin Athlos)."""
+    club_service = ClubService(db)
+    return await club_service.get_all_clubs()
+
 
 @router.post("/", response_model=ClubResponse, status_code=status.HTTP_201_CREATED)
 async def create_my_club(
@@ -76,10 +88,10 @@ async def delete_my_club(
 
     try:
         await club_service.delete_club(current_user.id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+    except ValueError as e:
+        if "non trovato" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/me/enrich", response_model=ClubResponse)

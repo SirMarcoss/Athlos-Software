@@ -43,9 +43,8 @@ class Child(Base):
 
     def __repr__(self) -> str:
         return (
-            f"Club_id = {self.id!r},"
-            f"first_name = {self.first_name!r},"
-            f"last_name = {self.last_name!r},"
-            f"sport = {self.sport!r},"
-            f"skills = {self.skills!r}"
+            f"<Child(id={self.id!r}, "
+            f"first_name={self.first_name!r}, "
+            f"last_name={self.last_name!r}, "
+            f"sport={self.sport!r})>"
         )

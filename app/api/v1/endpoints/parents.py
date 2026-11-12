@@ -76,10 +76,10 @@ async def delete_my_profile(
     parent_service = ParentService(db)
     try:
         await parent_service.delete_parent(current_user.id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND
-        )
+    except ValueError as e:
+        if "non trovato" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/me/referral")

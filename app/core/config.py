@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic.fields import Field
+from pydantic import AliasChoices
 from pydantic.functional_validators import field_validator
 
 
@@ -11,7 +12,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES : int = 30
     GEMINI_API_KEY : str = Field(...)
     RESEND_API_KEY : str = Field(default="")
-    EMAIL_FROM : str = Field(default="Athlos <onboarding@resend.dev>")
+    EMAIL_FROM : str = Field(
+        default="Athlos <onboarding@resend.dev>",
+        validation_alias=AliasChoices("EMAIL_FROM", "RESEND_FROM_EMAIL")
+    )
     FRONTEND_URL : str = Field(default="http://localhost:5173")
     GOOGLE_PLACES_API_KEY: str = Field(default="")
     STRIPE_SECRET_KEY : str = Field(default="")

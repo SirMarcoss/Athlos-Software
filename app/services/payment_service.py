@@ -1,6 +1,7 @@
 import uuid
 import secrets
-from datetime import datetime, timezone
+import asyncio
+from datetime import datetime, timezone, timedelta
 import stripe
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -47,20 +48,42 @@ class PaymentService:
         if not course:
             raise ValueError("Corso non trovato")
 
-        #CONTROLLO DOPPIA ISCRIZIONE:
+        # CONTROLLO FASCIA D'ETÀ DELL'ATLETA:
+        today = datetime.now(timezone.utc).date()
+        dob = child.date_of_birth
+        child_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        if not (course.min_age <= child_age <= course.max_age):
+            raise ValueError(
+                f"{child.first_name} ha {child_age} anni, ma il corso '{course.name}' è riservato alla fascia {course.min_age}-{course.max_age} anni"
+            )
+
+        # CONTROLLO DOPPIA ISCRIZIONE:
         stmt_course_enrollment = select(CourseEnrollment).where(CourseEnrollment.course_id == course_id).where(CourseEnrollment.child_id == child_id)
         course_enrollment = await self.db.execute(stmt_course_enrollment)
         existing_enrollment = course_enrollment.scalars().first()
         if existing_enrollment:
             raise ValueError("L'atleta è già iscritto a questo corso")
 
-
-        #CONTROLLO DISPONIBILITÀ POSTI (CAPIENZA)
+        # CONTROLLO DISPONIBILITÀ POSTI (CAPIENZA):
         stmt_count = select(func.count(CourseEnrollment.id)).where(CourseEnrollment.course_id == course_id)
         result_count = await self.db.execute(stmt_count)
-        enrolled_count = result_count.scalars().one() # per un singolo numero si usa one()
+        enrolled_count = result_count.scalars().one()
         if enrolled_count >= course.max_participants:
             raise ValueError("Posti esauriti per questo corso")
+
+        # Controlla eventuali sessioni PENDING avviate negli ultimi 15 minuti da altri genitori
+        fifteen_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=15)
+        stmt_pending = (
+            select(func.count(Payment.id))
+            .where(
+                Payment.course_id == course_id,
+                Payment.status == PaymentStatusEnum.PENDING,
+                Payment.created_at >= fifteen_mins_ago
+            )
+        )
+        pending_count = (await self.db.execute(stmt_pending)).scalar() or 0
+        if (enrolled_count + pending_count) >= course.max_participants:
+            raise ValueError("I posti per questo corso sono attualmente in fase di completamento da parte di altri utenti. Riprova tra pochi minuti.")
 
         #CALCOLO DELLO SNAPSHOT DUAL-PRICING
         parent_amount = course.parent_price_cents
@@ -74,7 +97,7 @@ class PaymentService:
         # Chiediamo alle API di Stripe di predisporre una pagina di pagamento sicura:
         # Stripe ci restituirà un link (checkout_url) a cui reindirizzeremo il browser del genitore.
         if settings.STRIPE_SECRET_KEY:
-            session = stripe.checkout.Session.create(
+            session = await stripe.checkout.Session.create_async(
                 # Metodi di pagamento accettati: carte di credito/debito, con supporto automatico ad Apple Pay e Google Pay
                 payment_method_types=["card"],
 
@@ -160,11 +183,11 @@ class PaymentService:
             raise ValueError("Pagamento non trovato per questa sessione")
 
         # 2. CONTROLLO DI IDEMPOTENZA:
-        if payment.status == PaymentStatusEnum.COMPLETED:
+        if payment.status in (PaymentStatusEnum.SUCCEEDED, PaymentStatusEnum.COMPLETED):
             return payment
 
         # 3. AGGIORNAMENTO STATO PAGAMENTO:
-        payment.status = PaymentStatusEnum.COMPLETED
+        payment.status = PaymentStatusEnum.SUCCEEDED
         payment.completed_at = datetime.now(timezone.utc)
         if payment_intent_id is not None:
             payment.stripe_payment_intent_id = payment_intent_id
@@ -262,6 +285,59 @@ class PaymentService:
         #    Restituiamo 200 OK a Stripe per confermare di aver ricevuto ed elaborato l'evento,
         #    così Stripe sa che non deve più reinviarlo.
         return {"status": "received", "event_type": event_type}
+
+
+    async def verify_checkout_session(self, session_id: str) -> dict:
+        """
+        Verifica lo stato di una sessione di checkout Stripe al rientro del genitore.
+        Se il pagamento risulta saldato (o in modalità mock), finalizza immediatamente
+        l'iscrizione tramite fulfill_payment senza attendere il webhook.
+        """
+        stmt = (
+            select(Payment, Course, Club, Child)
+            .join(Course, Payment.course_id == Course.id)
+            .join(Club, Payment.club_id == Club.id)
+            .join(Child, Payment.child_id == Child.id)
+            .where(Payment.stripe_checkout_session_id == session_id)
+        )
+        res = await self.db.execute(stmt)
+        row = res.first()
+        if not row:
+            raise ValueError("Sessione di pagamento non trovata")
+
+        payment, course, club, child = row
+
+        if payment.status != PaymentStatusEnum.SUCCEEDED:
+            if not settings.STRIPE_SECRET_KEY or session_id.startswith("mock_"):
+                payment = await self.fulfill_payment(
+                    stripe_session_id=session_id,
+                    payment_intent_id=f"mock_pi_{session_id[:8]}"
+                )
+            else:
+                try:
+                    session_obj = await stripe.checkout.Session.retrieve_async(session_id)
+                    if session_obj and getattr(session_obj, "payment_status", None) == "paid":
+                        payment = await self.fulfill_payment(
+                            stripe_session_id=session_id,
+                            payment_intent_id=getattr(session_obj, "payment_intent", None)
+                        )
+                except Exception as e:
+                    print(f"[PaymentService] Errore verifica sessione Stripe ({e})")
+
+        return {
+            "id": payment.id,
+            "course_id": course.id,
+            "course_name": course.name,
+            "club_name": club.name,
+            "child_id": child.id,
+            "child_name": f"{child.first_name} {child.last_name}",
+            "amount_cents": payment.parent_amount_cents,
+            "billing_period": course.billing_period,
+            "status": payment.status,
+            "receipt_number": payment.receipt_number,
+            "created_at": payment.created_at,
+            "completed_at": payment.completed_at,
+        }
 
 
     async def get_parent_payments(self, parent_id: uuid.UUID) -> list[dict]:

@@ -15,7 +15,6 @@ import {
   Trash2,
   CreditCard,
   FileText,
-  AlertTriangle,
   Loader2,
   Printer,
   Download,
@@ -34,7 +33,6 @@ import {
   getToken,
   getMyParentProfile,
   updateMyParentProfile,
-  updateChild,
   getMyReferral,
   getMyNearbyClubs,
   getCatalogCourses,
@@ -47,13 +45,6 @@ import {
   createCourseCheckoutSession,
   verifyCheckoutSessionStatus,
   getMyParentPayments,
-  getSavedCoursePricing,
-  getSavedClubStripeStatus,
-  getLocalPaymentsLedger,
-  saveLocalPaymentRecord,
-  updateLocalPaymentStatus,
-  getLocalEnrollments,
-  addLocalEnrollment,
   formatEuroFromCents,
   formatBillingPeriodLabel,
   formatPaymentStatusLabel,
@@ -61,7 +52,6 @@ import {
   type ApiPhysicalTestResponse,
   type ApiGeoSearchResult,
   type ApiPaymentRecord,
-  type LocalEnrollmentEntry,
   type ApiPlacesData
 } from './api';
 
@@ -356,7 +346,6 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     | 'analysis'
     | 'add-child'
     | 'enroll-course'
-    | 'stripe-checkout'
     | 'payments-history'
     | 'receipt-preview'
   >('none');
@@ -370,18 +359,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
   const [selectedChildForEnrollId, setSelectedChildForEnrollId] = useState<string>('');
   const [enrollAcceptTerms, setEnrollAcceptTerms] = useState<boolean>(true);
   const [isCreatingCheckout, setIsCreatingCheckout] = useState<boolean>(false);
-  const [activePendingPayment, setActivePendingPayment] = useState<ApiPaymentRecord | null>(null);
-  const [checkoutStep, setCheckoutStep] = useState<'form' | 'webhook-polling' | 'succeeded' | 'failed'>('form');
-  const [cardHolderName, setCardHolderName] = useState<string>('');
-  const [cardNumber, setCardNumber] = useState<string>('4242 •••• •••• 4242');
-  const [cardExpiry, setCardExpiry] = useState<string>('12/28');
-  const [cardCvc, setCardCvc] = useState<string>('424');
-  const [parentPayments, setParentPayments] = useState<ApiPaymentRecord[]>(() =>
-    getLocalPaymentsLedger()
-  );
-  const [localEnrollments, setLocalEnrollments] = useState<LocalEnrollmentEntry[]>(() =>
-    getLocalEnrollments()
-  );
+  const [parentPayments, setParentPayments] = useState<ApiPaymentRecord[]>([]);
   const [selectedReceiptPayment, setSelectedReceiptPayment] = useState<ApiPaymentRecord | null>(
     null
   );
@@ -433,12 +411,8 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
   };
 
   const mapBackendClubsToUi = (clubsRes: any[], coursesRes: any[]): Club[] => {
-    const currentLocalEnrollments = getLocalEnrollments();
     return clubsRes.map(cl => {
-      const clubStripe = getSavedClubStripeStatus(cl.id);
-      const chargesEnabled =
-        cl.stripe_charges_enabled ??
-        (clubStripe.onboarding_completed && clubStripe.charges_enabled);
+      const chargesEnabled = cl.stripe_charges_enabled ?? true;
       const clubCourses = coursesRes.filter(cr => cr.clubs_id === cl.id);
       const minDistance = clubCourses.find(cr => cr.distance_km != null)?.distance_km;
       const addrParts = [cl.address?.street, cl.address?.city].filter(Boolean);
@@ -448,29 +422,25 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
         address: addrParts.join(', ') || 'Indirizzo del centro sportivo',
         distance: minDistance != null ? `${minDistance} km` : 'Vicino a te',
         stripe_charges_enabled: chargesEnabled,
-        fiscal_code_or_vat: clubStripe.fiscal_code_or_vat || '93048210874',
         website_url: cl.website_url || cl.places_data?.website_url || null,
         rating: cl.rating ?? cl.places_data?.rating ?? null,
         phone_number: cl.phone_number || cl.places_data?.phone_number || undefined,
         email_contact: cl.email_contact || undefined,
         places_data: cl.places_data || null,
         courses: clubCourses.map(cr => {
-          const pricing = getSavedCoursePricing(cr.id);
-          const extraEnrolled = currentLocalEnrollments.filter(e => e.course_id === cr.id).length;
           return {
             id: cr.id,
             club_id: cl.id,
             club_name: cl.name,
-            club_fiscal_code: clubStripe.fiscal_code_or_vat || '93048210874',
             name: cr.name,
             min_age: cr.min_age,
             max_age: cr.max_age,
             age_range: `${cr.min_age}-${cr.max_age}`,
-            sport: pricing.sport_category || cr.name,
-            price_cents: cr.price_cents ?? pricing.price_cents,
-            billing_period: cr.billing_period ?? pricing.billing_period,
-            max_participants: cr.max_participants ?? pricing.max_participants,
-            enrolled_count: (cr.enrolled_count ?? 4) + extraEnrolled,
+            sport: cr.name,
+            price_cents: cr.price_cents,
+            billing_period: cr.billing_period ?? 'trimestrale',
+            max_participants: cr.max_participants ?? 20,
+            enrolled_count: cr.enrolled_count ?? 0,
             stripe_charges_enabled: chargesEnabled
           };
         })
@@ -509,6 +479,17 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     toastTimerRef.current = window.setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Ricarica pagamenti reali del genitore dal backend
+  const refreshParentPayments = () => {
+    getMyParentPayments()
+      .then(records => {
+        if (records) {
+          setParentPayments(records);
+        }
+      })
+      .catch(() => {});
+  };
+
   // === CARICAMENTO DATI REALI DAL BACK-END FASTAPI ===
   useEffect(() => {
     // Gestione ritorno da Stripe Checkout reale (?payment=success&session_id=...)
@@ -516,12 +497,12 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
       const params = new URLSearchParams(window.location.search);
       const paymentStatus = params.get('payment');
       const sessionId = params.get('session_id');
-      if (paymentStatus === 'success') {
+      if (paymentStatus === 'success' || paymentStatus === 'mock_success') {
         if (sessionId) {
           verifyCheckoutSessionStatus(sessionId)
-            .then(record => {
-              saveLocalPaymentRecord(record);
-              setParentPayments(getLocalPaymentsLedger());
+            .then(() => {
+              refreshParentPayments();
+              loadClubsAndCourses();
               showToast('Pagamento confermato da Stripe! Tuo figlio è iscritto al corso.');
             })
             .catch(() => {
@@ -558,7 +539,6 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
           extra_notes: profile.info || ''
         });
         setNewChildLastName(profile.last_name);
-        setCardHolderName(`${profile.first_name} ${profile.last_name}`);
         if (profile.referral_code) {
           setMyReferralCode(profile.referral_code);
           setMyReferralLink(`${window.location.origin}/?ref=${profile.referral_code}`);
@@ -566,16 +546,8 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
       })
       .catch(() => {});
 
-    // 1b. Storico Pagamenti Genitore dal backend (con fallback locale)
-    getMyParentPayments()
-      .then(records => {
-        if (records && records.length > 0) {
-          setParentPayments(records);
-        }
-      })
-      .catch(() => {
-        setParentPayments(getLocalPaymentsLedger());
-      });
+    // 1b. Storico Pagamenti Genitore dal backend
+    refreshParentPayments();
 
     // 2. Link Referral
     getMyReferral()
@@ -588,20 +560,16 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     // 3. Figli + Valutazioni Trimestrali + Test Motori
     getMyChildren()
       .then(async apiChildren => {
-        const currentEnrollments = getLocalEnrollments();
-        const mappedChildren: Child[] = apiChildren.map(c => {
-          const latestEnrollment = currentEnrollments.find(e => e.child_id === c.id);
-          return {
-            id: c.id,
-            first_name: c.first_name,
-            last_name: c.last_name,
-            date_of_birth: c.date_of_birth,
-            gender: c.gender,
-            sport: latestEnrollment ? latestEnrollment.course_name : c.sport,
-            fiscal_code: c.fiscal_code,
-            skills: c.skills
-          };
-        });
+        const mappedChildren: Child[] = apiChildren.map(c => ({
+          id: c.id,
+          first_name: c.first_name,
+          last_name: c.last_name,
+          date_of_birth: c.date_of_birth,
+          gender: c.gender,
+          sport: c.sport,
+          fiscal_code: c.fiscal_code,
+          skills: c.skills
+        }));
         setChildren(mappedChildren);
 
         const loadedForms: Record<string, PsychForm> = {};
@@ -792,7 +760,9 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
   // === HANDLERS ISCRIZIONE CORSO E CHECKOUT STRIPE ===
 
   const isChildAlreadyEnrolledInCourse = (courseId: string, childId: string): boolean => {
-    return localEnrollments.some(e => e.course_id === courseId && e.child_id === childId);
+    return parentPayments.some(
+      p => p.course_id === courseId && p.child_id === childId && p.status === 'SUCCEEDED'
+    );
   };
 
   const openEnrollCourseModal = (course: Course) => {
@@ -841,147 +811,25 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     }
 
     setIsCreatingCheckout(true);
-
-    // 1. Creiamo il record Payment in stato PENDING (con blocco temporaneo del posto per 15 min)
-    const sessionRand = Math.random().toString(36).slice(2, 12);
-    const pendingPayment: ApiPaymentRecord = {
-      id: `pay_${crypto.randomUUID()}`,
-      parent_id: parentProfile.id || 'parent-local',
-      parent_name:
-        parentProfile.first_name && parentProfile.last_name
-          ? `${parentProfile.first_name} ${parentProfile.last_name}`
-          : 'Genitore Athlos',
-      parent_fiscal_code: parentProfile.fiscal_code || 'MZZMRC85A01C351X',
-      child_id: targetChild.id,
-      child_name: `${targetChild.first_name} ${targetChild.last_name}`,
-      child_fiscal_code: targetChild.fiscal_code || 'MZZGBR18E10C351K',
-      course_id: selectedCourseForEnroll.id,
-      course_name: selectedCourseForEnroll.name,
-      club_id: selectedCourseForEnroll.club_id,
-      club_name: selectedCourseForEnroll.club_name,
-      club_fiscal_code: selectedCourseForEnroll.club_fiscal_code || '93048210874',
-      amount_cents: selectedCourseForEnroll.price_cents,
-      currency: 'eur',
-      billing_period: selectedCourseForEnroll.billing_period,
-      status: 'PENDING',
-      stripe_checkout_session_id: `cs_test_${sessionRand}`,
-      stripe_payment_intent_id: `pi_3Athlos${sessionRand}`,
-      receipt_number: `${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
-      created_at: new Date().toISOString()
-    };
-
     try {
-      // Prova a chiamare l'endpoint reale del Backend FastAPI (quando lo implementeremo)
       const apiSession = await createCourseCheckoutSession({
         course_id: selectedCourseForEnroll.id,
         child_id: targetChild.id
       });
       if (apiSession.checkout_url) {
-        saveLocalPaymentRecord(pendingPayment);
         window.location.href = apiSession.checkout_url;
         return;
       }
-    } catch {
-      // Il backend /payments/checkout-session non è ancora attivo: apriamo l'esperienza Hosted Stripe Checkout integrata
+      showToast('URL di pagamento Stripe non disponibile. Riprova più tardi.');
+    } catch (err) {
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Errore durante l'avvio del pagamento Stripe. Verifica i dati e riprova."
+      );
     } finally {
       setIsCreatingCheckout(false);
     }
-
-    saveLocalPaymentRecord(pendingPayment);
-    setParentPayments(getLocalPaymentsLedger());
-    setActivePendingPayment(pendingPayment);
-    setCardHolderName(
-      parentProfile.first_name
-        ? `${parentProfile.first_name} ${parentProfile.last_name}`
-        : 'Marco Mazzone'
-    );
-    setCheckoutStep('form');
-    setActiveModal('stripe-checkout');
-  };
-
-  const handleSimulateStripeWebhookCompletion = async (
-    outcome: 'SUCCEEDED' | 'FAILED'
-  ) => {
-    if (!activePendingPayment || !selectedCourseForEnroll) return;
-
-    if (outcome === 'FAILED') {
-      updateLocalPaymentStatus(activePendingPayment.id, 'FAILED');
-      setParentPayments(getLocalPaymentsLedger());
-      setCheckoutStep('failed');
-      showToast('Pagamento rifiutato dalla banca: nessun addebito effettuato.');
-      return;
-    }
-
-    // 1. Mostra lo stato di attesa conferma Webhook server-to-server (idempotente)
-    setCheckoutStep('webhook-polling');
-
-    window.setTimeout(async () => {
-      // 2. Aggiorna lo stato del pagamento a SUCCEEDED
-      const updated = updateLocalPaymentStatus(activePendingPayment.id, 'SUCCEEDED');
-      const targetChild = children.find(c => c.id === activePendingPayment.child_id);
-
-      if (targetChild) {
-        // 3. Registra l'iscrizione atomica in CourseEnrollment
-        const enrollmentEntry: LocalEnrollmentEntry = {
-          course_id: selectedCourseForEnroll.id,
-          course_name: selectedCourseForEnroll.name,
-          club_id: selectedCourseForEnroll.club_id,
-          club_name: selectedCourseForEnroll.club_name,
-          child_id: targetChild.id,
-          child_first_name: targetChild.first_name,
-          child_last_name: targetChild.last_name,
-          child_date_of_birth: targetChild.date_of_birth || '2018-05-10',
-          child_gender: targetChild.gender || 'M',
-          child_fiscal_code: targetChild.fiscal_code || 'MZZGBR18E10C351K',
-          payment_id: activePendingPayment.id,
-          enrolled_at: new Date().toISOString()
-        };
-        addLocalEnrollment(enrollmentEntry);
-        setLocalEnrollments(getLocalEnrollments());
-
-        // 4. Aggiorna lo sport del figlio su stato React e (se loggato) su Backend
-        setChildren(prev =>
-          prev.map(ch =>
-            ch.id === targetChild.id
-              ? { ...ch, sport: selectedCourseForEnroll.name }
-              : ch
-          )
-        );
-        if (getToken()) {
-          updateChild(targetChild.id, { sport: selectedCourseForEnroll.name }).catch(() => {});
-        }
-      }
-
-      // 5. Incrementa il contatore iscritti del corso nella UI
-      setNearbyClubs(prev =>
-        prev.map(cl => ({
-          ...cl,
-          courses: cl.courses.map(cr =>
-            cr.id === selectedCourseForEnroll.id
-              ? { ...cr, enrolled_count: cr.enrolled_count + 1 }
-              : cr
-          )
-        }))
-      );
-
-      if (updated) {
-        setActivePendingPayment(updated);
-      }
-      setParentPayments(getLocalPaymentsLedger());
-      setCheckoutStep('succeeded');
-      showToast(
-        `Iscrizione confermata! ${activePendingPayment.child_name} è ora iscritto a ${selectedCourseForEnroll.name}.`
-      );
-    }, 1600);
-  };
-
-  const handleCancelStripeCheckout = () => {
-    if (activePendingPayment && checkoutStep === 'form') {
-      updateLocalPaymentStatus(activePendingPayment.id, 'EXPIRED');
-      setParentPayments(getLocalPaymentsLedger());
-      showToast('Sessione di checkout annullata. Il posto bloccato è stato liberato.');
-    }
-    setActiveModal('none');
   };
 
   const handleDownloadReceiptHtml = (payment: ApiPaymentRecord) => {
@@ -1066,7 +914,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
           </button>
           <button
             onClick={() => {
-              setParentPayments(getLocalPaymentsLedger());
+              refreshParentPayments();
               setActiveModal('payments-history');
             }}
             className="px-5 py-2.5 bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/25 rounded-full font-bold transition-colors text-sm flex items-center gap-2 cursor-pointer"
@@ -1117,7 +965,6 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               className={`bg-white rounded-[32px] p-8 w-full shadow-2xl relative my-8 max-h-[92vh] overflow-y-auto transform-gpu ${
                 activeModal === 'analysis' ||
-                activeModal === 'stripe-checkout' ||
                 activeModal === 'payments-history' ||
                 activeModal === 'receipt-preview'
                   ? 'max-w-4xl'
@@ -1125,11 +972,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
               }`}
             >
               <button
-                onClick={() =>
-                  activeModal === 'stripe-checkout'
-                    ? handleCancelStripeCheckout()
-                    : setActiveModal('none')
-                }
+                onClick={() => setActiveModal('none')}
                 className="absolute top-6 right-6 text-slate-400 hover:text-[#1E2046] transition-colors cursor-pointer z-20"
               >
                 <X className="w-6 h-6" />
@@ -1353,315 +1196,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
               )}
 
               {/* =================================================================
-                  MODALE 2: PAGINA HOSTED STRIPE CHECKOUT + CONFERMA WEBHOOK
-              ================================================================= */}
-              {activeModal === 'stripe-checkout' &&
-                activePendingPayment &&
-                selectedCourseForEnroll && (
-                  <div className="pt-1">
-                    {checkoutStep === 'form' && (
-                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                        {/* Colonna Sinistra: Riepilogo Iscrizione */}
-                        <div className="lg:col-span-5 bg-[#1E2046] text-white rounded-3xl p-6 flex flex-col justify-between">
-                          <div className="space-y-6">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-black uppercase tracking-wider text-sky-200">
-                                Riepilogo Iscrizione
-                              </span>
-                              <span className="text-xs font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full">
-                                In attesa di pagamento
-                              </span>
-                            </div>
-
-                            <div>
-                              <p className="text-xs text-sky-200 uppercase font-bold tracking-wider">
-                                Quota intestata a
-                              </p>
-                              <h4 className="text-xl font-black mt-0.5">
-                                {activePendingPayment.club_name}
-                              </h4>
-                              <p className="text-3xl font-black text-white mt-3">
-                                {formatEuroFromCents(activePendingPayment.amount_cents)}
-                              </p>
-                              <p className="text-xs text-sky-200/80 mt-0.5">
-                                Quota {formatBillingPeriodLabel(activePendingPayment.billing_period)}
-                              </p>
-                            </div>
-
-                            <div className="bg-white/10 rounded-2xl p-4 space-y-2.5 text-xs border border-white/10">
-                              <div className="flex justify-between">
-                                <span className="text-sky-200">Corso:</span>
-                                <span className="font-bold">{activePendingPayment.course_name}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-sky-200">Atleta:</span>
-                                <span className="font-bold">{activePendingPayment.child_name}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-sky-200">CF Atleta:</span>
-                                <span className="font-mono font-bold">
-                                  {activePendingPayment.child_fiscal_code}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-sky-200">Genitore:</span>
-                                <span className="font-bold">
-                                  {activePendingPayment.parent_name}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="pt-6 border-t border-white/10 mt-6 space-y-2 text-xs text-sky-200/90">
-                            <div className="flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                              <span>Pagamento per <strong>{activePendingPayment.club_name}</strong> gestito tramite la piattaforma Athlos.</span>
-                            </div>
-                            <div className="text-[11px] text-sky-300/80">
-                              Ricevuta rilasciata subito al termine del pagamento.
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Colonna Destra: Inserimento Carta / Apple Pay e Simulazione Webhook */}
-                        <div className="lg:col-span-7 space-y-5">
-                          <div>
-                            <h3 className="text-2xl font-black text-[#1E2046]">
-                              Metodo di Pagamento
-                            </h3>
-                            <p className="text-xs text-slate-500 font-medium mt-0.5">
-                              Scegli come completare il pagamento della quota d'iscrizione.
-                            </p>
-                          </div>
-
-                          {/* Express Checkout Wallet Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleSimulateStripeWebhookCompletion('SUCCEEDED')}
-                            className="w-full py-3.5 rounded-xl bg-black hover:bg-slate-900 text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all"
-                          >
-                            <span> Pay</span>
-                            <span className="text-white/40">|</span>
-                            <span>G Pay • Paga con un click</span>
-                          </button>
-
-                          <div className="relative flex py-1 items-center">
-                            <div className="flex-grow border-t border-slate-200"></div>
-                            <span className="flex-shrink mx-3 text-[11px] font-bold text-slate-400 uppercase">
-                              oppure con carta o bancomat
-                            </span>
-                            <div className="flex-grow border-t border-slate-200"></div>
-                          </div>
-
-                          <div className="space-y-3.5">
-                            <div>
-                              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
-                                Nome intestatario carta
-                              </label>
-                              <input
-                                type="text"
-                                value={cardHolderName}
-                                onChange={e => setCardHolderName(e.target.value)}
-                                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-[#1E2046] text-sm"
-                                placeholder="es. Mario Rossi"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
-                                Numero Carta
-                              </label>
-                              <div className="relative">
-                                <CreditCard className="w-4 h-4 text-[#E52B6D] absolute left-3.5 top-3" />
-                                <input
-                                  type="text"
-                                  value={cardNumber}
-                                  onChange={e => setCardNumber(e.target.value)}
-                                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-[#1E2046] text-sm"
-                                  placeholder="•••• •••• •••• ••••"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
-                                  Scadenza (MM/AA)
-                                </label>
-                                <input
-                                  type="text"
-                                  value={cardExpiry}
-                                  onChange={e => setCardExpiry(e.target.value)}
-                                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-[#1E2046] text-sm"
-                                  placeholder="12/28"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">
-                                  CVV / CVC
-                                </label>
-                                <input
-                                  type="text"
-                                  value={cardCvc}
-                                  onChange={e => setCardCvc(e.target.value)}
-                                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-[#1E2046] text-sm"
-                                  placeholder="123"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2.5 pt-2">
-                            <button
-                              type="button"
-                              onClick={() => handleSimulateStripeWebhookCompletion('SUCCEEDED')}
-                              className="w-full py-4 bg-[#E52B6D] hover:bg-[#FF4F8B] text-white rounded-xl font-black text-base shadow-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                            >
-                              <CreditCard className="w-5 h-5" />
-                              <span>
-                                Paga {formatEuroFromCents(activePendingPayment.amount_cents)}
-                              </span>
-                            </button>
-
-                            <div className="flex justify-between items-center pt-2">
-                              <button
-                                type="button"
-                                onClick={handleCancelStripeCheckout}
-                                className="text-xs text-slate-500 hover:text-slate-800 font-bold transition-colors cursor-pointer"
-                              >
-                                ← Annulla e torna indietro
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSimulateStripeWebhookCompletion('FAILED')}
-                                className="text-[11px] text-slate-400 hover:text-rose-500 font-medium transition-colors cursor-pointer"
-                              >
-                                Test: simula carta non valida
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* STEP 2: ELABORAZIONE DEL PAGAMENTO */}
-                    {checkoutStep === 'webhook-polling' && (
-                      <div className="py-16 text-center space-y-4">
-                        <Loader2 className="w-14 h-14 text-[#E52B6D] animate-spin mx-auto" />
-                        <span className="px-3 py-1 rounded-full bg-pink-50 text-[#E52B6D] font-black text-xs uppercase">
-                          Elaborazione in corso
-                        </span>
-                        <h3 className="text-2xl font-black text-[#1E2046]">
-                          Conferma del pagamento in corso...
-                        </h3>
-                        <p className="text-sm text-slate-500 max-w-md mx-auto font-medium">
-                          Un attimo di pazienza, stiamo completando la registrazione dell'iscrizione di tuo figlio.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* STEP 3: PAGAMENTO CONFERMATO */}
-                    {checkoutStep === 'succeeded' && (
-                      <div className="py-8 text-center space-y-5">
-                        <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
-                          <CheckCircle2 className="w-10 h-10" />
-                        </div>
-                        <div>
-                          <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-black text-xs uppercase tracking-wider">
-                            Pagamento Confermato
-                          </span>
-                          <h3 className="text-3xl font-black text-[#1E2046] mt-2">
-                            Iscrizione Completata con Successo!
-                          </h3>
-                          <p className="text-slate-500 text-sm font-medium mt-1">
-                            <strong>{activePendingPayment.child_name}</strong> è ufficialmente iscritto al corso{' '}
-                            <strong>{activePendingPayment.course_name}</strong> presso{' '}
-                            <strong>{activePendingPayment.club_name}</strong>.
-                          </p>
-                        </div>
-
-                        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 max-w-lg mx-auto text-left space-y-2 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-slate-400 font-bold">Ricevuta di Pagamento:</span>
-                            <span className="font-mono font-black text-[#1E2046]">
-                              #{activePendingPayment.receipt_number}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-400 font-bold">Importo pagato:</span>
-                            <span className="font-black text-emerald-600">
-                              {formatEuroFromCents(activePendingPayment.amount_cents)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-400 font-bold">Corso registrato:</span>
-                            <span className="font-black text-[#E52B6D]">
-                              {activePendingPayment.course_name}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap justify-center gap-3 pt-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedReceiptPayment(activePendingPayment);
-                              setActiveModal('receipt-preview');
-                            }}
-                            className="px-6 py-3 rounded-xl bg-white border border-slate-200 hover:border-[#1E2046] text-[#1E2046] font-black text-sm flex items-center gap-2 cursor-pointer shadow-sm"
-                          >
-                            <Printer className="w-4 h-4 text-[#E52B6D]" />
-                            Visualizza Ricevuta
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveModal('none')}
-                            className="px-6 py-3 rounded-xl bg-[#1E2046] hover:bg-[#E52B6D] text-white font-black text-sm cursor-pointer shadow-sm"
-                          >
-                            Torna alla Dashboard
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* CASO CARTA RIFIUTATA */}
-                    {checkoutStep === 'failed' && (
-                      <div className="py-10 text-center space-y-4">
-                        <div className="w-16 h-16 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-                          <AlertTriangle className="w-9 h-9" />
-                        </div>
-                        <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-700 font-black text-xs uppercase">
-                          Pagamento Non Riuscito
-                        </span>
-                        <h3 className="text-2xl font-black text-[#1E2046]">
-                          La carta non è andata a buon fine
-                        </h3>
-                        <p className="text-sm text-slate-500 max-w-md mx-auto">
-                          La transazione non è stata autorizzata dalla tua banca. Nessun importo è stato addebitato.
-                        </p>
-                        <div className="flex justify-center gap-3 pt-2">
-                          <button
-                            type="button"
-                            onClick={() => setCheckoutStep('form')}
-                            className="px-6 py-3 rounded-xl bg-[#1E2046] hover:bg-[#E52B6D] text-white font-black text-sm cursor-pointer"
-                          >
-                            Riprova con un altro metodo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveModal('none')}
-                            className="px-6 py-3 rounded-xl bg-slate-100 text-slate-700 font-bold text-sm cursor-pointer"
-                          >
-                            Chiudi
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-              {/* =================================================================
-                  MODALE 3: STORICO PAGAMENTI & RICEVUTE
+                  MODALE 2: STORICO PAGAMENTI & RICEVUTE
               ================================================================= */}
               {activeModal === 'payments-history' && (
                 <div className="pt-2 space-y-6">
@@ -2823,9 +2358,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       const spotsLeft = Math.max(0, course.max_participants - course.enrolled_count);
                       const isFull = spotsLeft <= 0;
                       const enrolledChildrenInCourse = children.filter((ch) =>
-                        localEnrollments.some(
-                          (enr) => enr.child_id === ch.id && enr.course_id === course.id
-                        )
+                        isChildAlreadyEnrolledInCourse(course.id, ch.id)
                       );
 
                       return (
@@ -3057,9 +2590,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                         const spotsLeft = Math.max(0, course.max_participants - course.enrolled_count);
                         const isFull = spotsLeft <= 0;
                         const enrolledChildrenInCourse = children.filter((ch) =>
-                          localEnrollments.some(
-                            (enr) => enr.child_id === ch.id && enr.course_id === course.id
-                          )
+                          isChildAlreadyEnrolledInCourse(course.id, ch.id)
                         );
 
                         return (

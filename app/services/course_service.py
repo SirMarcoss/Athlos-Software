@@ -1,10 +1,12 @@
+import uuid
+from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.models.course import Course, CourseEnrollment
 from app.models.child import Child
 from app.models.club import Club
+from app.models.payment import Payment, PaymentStatusEnum
 from app.schemas.course import CourseCreate, CourseUpdate
-import uuid
 
 class CourseService:
     def __init__(self, db: AsyncSession):
@@ -17,24 +19,22 @@ class CourseService:
         return result.scalars().first()
 
 
-    async def create_course(self, course_in: CourseCreate, club_id: uuid.UUID) -> Course:
-        """Crea un nuovo corso per un determinato club."""
+    async def create_course(self, course_in: CourseCreate) -> Course:
+        """Crea un nuovo corso per un determinato club (riservato all'Admin)."""
 
-        # Per Parent e Club facevamo il controllo di esistenza perché sono relazioni 1-a-1:
-        # un utente può avere UN SOLO profilo genitore e UN SOLO club.
-        # E lì cercavamo tramite user_id (che già conoscevamo dal token). Perché NON ha senso per Course?
-        # La relazione tra Club e Corsi è 1-a-Molti (1-to-N): una società sportiva può (e deve!) creare tanti corsi
+        # Verifica che la società sportiva esista
+        stmt_club = select(Club).where(Club.id == course_in.clubs_id)
+        club = (await self.db.execute(stmt_club)).scalars().first()
+        if not club:
+            raise ValueError("Società sportiva (club) non trovata")
 
-        stmt = select(Course).where(Course.clubs_id == club_id).where(Course.name == course_in.name)
+        stmt = select(Course).where(Course.clubs_id == course_in.clubs_id).where(Course.name == course_in.name)
         result = await self.db.execute(stmt)
         if result.scalars().first():
-            raise ValueError("Hai già creato un corso con questo nome")
-
-        if course_in.parent_price_cents is None:
-            course_in.parent_price_cents = course_in.club_price_cents
+            raise ValueError("Esiste già un corso con questo nome per il club selezionato")
 
         db_course = Course(
-            clubs_id=club_id,
+            clubs_id=course_in.clubs_id,
             name=course_in.name,
             min_age=course_in.min_age,
             max_age=course_in.max_age,
@@ -42,12 +42,21 @@ class CourseService:
             parent_price_cents=course_in.parent_price_cents,
             max_participants=course_in.max_participants,
             billing_period=course_in.billing_period,
-
         )
         self.db.add(db_course)
         await self.db.commit()
         await self.db.refresh(db_course)
         return db_course
+
+
+    async def get_admin_courses(self, club_id: uuid.UUID | None = None) -> list[Course]:
+        """Restituisce i corsi per la console Admin (tutti o filtrati per club)."""
+        stmt = select(Course)
+        if club_id is not None:
+            stmt = stmt.where(Course.clubs_id == club_id)
+        stmt = stmt.order_by(Course.name.asc())
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
 
     async def get_courses_by_club(self, club_id: uuid.UUID) -> list[Course]:
@@ -100,16 +109,34 @@ class CourseService:
         return list(result.all())
 
 
-    async def update_course(self, course_id: uuid.UUID, course_in: CourseUpdate, club_id: uuid.UUID) -> Course:
-        """Aggiorna un corso, verificando che appartenga al club loggato."""
+    async def update_course(self, course_id: uuid.UUID, course_in: CourseUpdate) -> Course:
+        """Aggiorna un corso e le relative tariffe (riservato all'Admin)."""
 
-        stmt = select(Course).where(Course.id == course_id).where(Course.clubs_id == club_id)
-        result = await self.db.execute(stmt)
-        course = result.scalars().first()
+        course = await self.get_course_by_id(course_id)
         if not course:
-            raise ValueError("Corso non trovato o non autorizzato")
+            raise ValueError("Corso non trovato")
 
         update_data = course_in.model_dump(exclude_unset=True)
+
+        new_min_age = update_data.get("min_age", course.min_age)
+        new_max_age = update_data.get("max_age", course.max_age)
+        if new_min_age > new_max_age:
+            raise ValueError("L'età minima (min_age) non può essere superiore all'età massima (max_age)")
+
+        new_club_price = update_data.get("club_price_cents", course.club_price_cents)
+        new_parent_price = update_data.get("parent_price_cents", course.parent_price_cents)
+        if new_parent_price < new_club_price:
+            raise ValueError("La quota per il genitore non può essere inferiore alla quota pattuita con il club")
+
+        if "name" in update_data and update_data["name"] != course.name:
+            stmt_dup = select(Course).where(
+                Course.clubs_id == course.clubs_id,
+                Course.name == update_data["name"],
+                Course.id != course_id
+            )
+            if (await self.db.execute(stmt_dup)).scalars().first():
+                raise ValueError("Esiste già un corso con questo nome per questo club")
+
         for key, value in update_data.items():
             setattr(course, key, value)
 
@@ -118,14 +145,22 @@ class CourseService:
         return course
 
 
-    async def delete_course(self, course_id: uuid.UUID, club_id: uuid.UUID) -> None:
-        """Elimina un corso verificando l'ownership."""
+    async def delete_course(self, course_id: uuid.UUID) -> None:
+        """Elimina un corso (riservato all'Admin) verificando l'assenza di pagamenti confermati."""
 
-        stmt = select(Course).where(Course.id == course_id).where(Course.clubs_id == club_id)
-        result = await self.db.execute(stmt)
-        course = result.scalars().first()
+        course = await self.get_course_by_id(course_id)
         if not course:
-            raise ValueError("Corso non trovato o non autorizzato")
+            raise ValueError("Corso non trovato")
+
+        # Controlla pagamenti associati
+        stmt_payments = select(Payment).where(Payment.course_id == course_id)
+        payments = (await self.db.execute(stmt_payments)).scalars().all()
+        if any(p.status == PaymentStatusEnum.SUCCEEDED for p in payments):
+            raise ValueError("Impossibile eliminare il corso: sono presenti pagamenti/ricevute confermate nello storico contabile.")
+
+        # Elimina eventuali pagamenti pendenti o falliti
+        for p in payments:
+            await self.db.delete(p)
 
         await self.db.delete(course)
         await self.db.commit()
@@ -155,7 +190,22 @@ class CourseService:
         if not child:
             raise ValueError("Atleta non trovato")
 
-        # 3. Verifica se è già iscritto
+        # 3. Verifica fascia d'età del bambino
+        today = date.today()
+        dob = child.date_of_birth
+        child_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        if not (course.min_age <= child_age <= course.max_age):
+            raise ValueError(
+                f"{child.first_name} {child.last_name} ha {child_age} anni, ma il corso '{course.name}' è riservato alla fascia {course.min_age}-{course.max_age} anni"
+            )
+
+        # 4. Verifica disponibilità posti (capienza massima)
+        stmt_count = select(func.count(CourseEnrollment.id)).where(CourseEnrollment.course_id == course_id)
+        current_enrolled = (await self.db.execute(stmt_count)).scalar() or 0
+        if current_enrolled >= course.max_participants:
+            raise ValueError(f"Il corso '{course.name}' ha raggiunto la capienza massima di {course.max_participants} partecipanti")
+
+        # 5. Verifica se è già iscritto
         stmt_check = select(CourseEnrollment).where(
             CourseEnrollment.course_id == course_id,
             CourseEnrollment.child_id == child_id
@@ -164,7 +214,7 @@ class CourseService:
         if res_check.scalars().first():
             raise ValueError(f"{child.first_name} {child.last_name} è già iscritto a questo corso")
 
-        # 4. Creazione dell'iscrizione e aggiornamento dello sport praticato dal bambino
+        # 6. Creazione dell'iscrizione e aggiornamento dello sport praticato dal bambino
         enrollment = CourseEnrollment(
             course_id=course_id,
             child_id=child_id

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, computed_field
+from pydantic import BaseModel, Field, ConfigDict, computed_field, model_validator
 from typing import Optional, Literal
 from uuid import UUID
 
@@ -6,26 +6,44 @@ BillingPeriodType = Literal["trimestrale", "mensile", "annuale", "quota_unica"]
 
 
 class CourseCreate(BaseModel):
+    clubs_id: UUID = Field(..., description="ID della società sportiva a cui assegnare il corso")
     name: str = Field(max_length=100)
     min_age: int = Field(ge=5)
     max_age: int = Field(le=13)
-    # Quando il club (o lo staff) crea il corso, inserisce il prezzo pattuito per il club (es. 9000 = 90€)
-    club_price_cents: int = Field(default=9000, ge=0, description="Prezzo concordato col club in centesimi")
-    # Se parent_price_cents non viene specificato in creazione, nel service puoi inizializzarlo
-    # uguale a club_price_cents o con un markup di default, finché l'Admin Athlos non lo imposta (es. 9500 = 95€)
-    parent_price_cents: Optional[int] = Field(default=None, ge=0)
+    # Solo l'Admin crea i corsi impostando sia il prezzo pattuito col club sia la quota finale del genitore
+    club_price_cents: int = Field(..., ge=0, description="Prezzo concordato col club in centesimi")
+    parent_price_cents: int = Field(..., ge=0, description="Prezzo pubblico mostrato e addebitato al genitore in centesimi")
     max_participants: int = Field(default=20, ge=1, le=500)
     billing_period: BillingPeriodType = "trimestrale"
+
+    @model_validator(mode="after")
+    def validate_course_rules(self) -> "CourseCreate":
+        if self.min_age > self.max_age:
+            raise ValueError("L'età minima (min_age) non può essere superiore all'età massima (max_age)")
+        if self.parent_price_cents < self.club_price_cents:
+            raise ValueError("La quota per il genitore non può essere inferiore alla quota pattuita con il club")
+        return self
 
 
 class CourseUpdate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=100)
     min_age: Optional[int] = Field(default=None, ge=5)
     max_age: Optional[int] = Field(default=None, le=13)
-    # Il club può aggiornare il proprio prezzo concordato o la capienza, ma NON parent_price_cents
+    # Riservato all'Admin Athlos
     club_price_cents: Optional[int] = Field(default=None, ge=0)
+    parent_price_cents: Optional[int] = Field(default=None, ge=0)
     max_participants: Optional[int] = Field(default=None, ge=1, le=500)
     billing_period: Optional[BillingPeriodType] = None
+
+    @model_validator(mode="after")
+    def validate_course_rules(self) -> "CourseUpdate":
+        if self.min_age is not None and self.max_age is not None:
+            if self.min_age > self.max_age:
+                raise ValueError("L'età minima (min_age) non può essere superiore all'età massima (max_age)")
+        if self.club_price_cents is not None and self.parent_price_cents is not None:
+            if self.parent_price_cents < self.club_price_cents:
+                raise ValueError("La quota per il genitore non può essere inferiore alla quota pattuita con il club")
+        return self
 
 
 class AdminCoursePricingUpdate(BaseModel):

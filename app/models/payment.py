@@ -10,10 +10,11 @@ from app.models.base import Base
 
 
 class PaymentStatusEnum(str, enum.Enum):
-    PENDING = "pending"       # Sessione Stripe creata, in attesa che il genitore paghi
-    COMPLETED = "completed"   # Pagamento confermato dal Webhook Stripe -> Iscrizione attiva!
-    FAILED = "failed"         # Pagamento fallito o sessione scaduta
-    REFUNDED = "refunded"     # Eventuale rimborso
+    PENDING = "PENDING"       # Sessione Stripe creata, in attesa che il genitore paghi
+    SUCCEEDED = "SUCCEEDED"   # Pagamento confermato dal Webhook Stripe -> Iscrizione attiva!
+    COMPLETED = "SUCCEEDED"   # Alias per retrocompatibilità
+    FAILED = "FAILED"         # Pagamento fallito o sessione scaduta
+    REFUNDED = "REFUNDED"     # Eventuale rimborso
 
 
 class Payment(Base):
@@ -52,7 +53,11 @@ class Payment(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default=text("'eur'"))
 
     status: Mapped[PaymentStatusEnum] = mapped_column(
-        Enum(PaymentStatusEnum, name="payment_status_enum"),
+        Enum(
+            PaymentStatusEnum,
+            name="payment_status_enum",
+            values_callable=lambda obj: list(dict.fromkeys(e.value for e in obj))
+        ),
         nullable=False,
         default=PaymentStatusEnum.PENDING
     )

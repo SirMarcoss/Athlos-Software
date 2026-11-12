@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, delete
 from app.models.parent import Parent
+from app.models.club import Club
 from app.services.email_service import EmailService
 from datetime import date
 import uuid
@@ -57,8 +58,37 @@ class EvaluationService:
         dob = child.date_of_birth
         age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
-        # 4. PREPARAZIONE SPORT DISPONIBILI (Discipline attive nel centro sportivo e strutture limitrofe)
-        stmt_names = select(Course.name).distinct()
+        # 4. PREPARAZIONE SPORT DISPONIBILI (Discipline attive nel centro sportivo e strutture limitrofe nel raggio geografico)
+        stmt_parent = select(Parent).where(Parent.id == child.parent_id)
+        res_parent = await self.db.execute(stmt_parent)
+        parent = res_parent.scalars().first()
+
+        stmt_club = select(Club).where(Club.id == course.clubs_id)
+        res_club = await self.db.execute(stmt_club)
+        club = res_club.scalars().first()
+
+        ref_lat = parent.latitude if parent and parent.latitude is not None else (club.latitude if club else None)
+        ref_lon = parent.longitude if parent and parent.longitude is not None else (club.longitude if club else None)
+
+        if ref_lat is not None and ref_lon is not None:
+            cos_val = (
+                func.sin(func.radians(ref_lat)) * func.sin(func.radians(Club.latitude)) +
+                func.cos(func.radians(ref_lat)) * func.cos(func.radians(Club.latitude)) *
+                func.cos(func.radians(Club.longitude) - func.radians(ref_lon))
+            )
+            clamped_cos = func.least(1.0, func.greatest(-1.0, cos_val))
+            distance_expr = 6371.0 * func.acos(clamped_cos)
+
+            stmt_names = (
+                select(Course.name)
+                .join(Club, Course.clubs_id == Club.id)
+                .where(Club.latitude.isnot(None), Club.longitude.isnot(None))
+                .where(distance_expr <= 25.0)
+                .distinct()
+            )
+        else:
+            stmt_names = select(Course.name).where(Course.clubs_id == course.clubs_id).distinct()
+
         res_names = await self.db.execute(stmt_names)
         active_sports = [row[0] for row in res_names.all() if row[0]]
 
@@ -87,7 +117,15 @@ class EvaluationService:
         )
 
         # 6. SALVATAGGIO NEL DATABASE
-        # A) Salvataggio PhysicalTests
+        # Rimuove eventuali test fisici precedenti per lo stesso trimestre per evitare duplicazioni
+        await self.db.execute(
+            delete(PhysicalTest).where(
+                PhysicalTest.course_id == course_id,
+                PhysicalTest.child_id == child_id,
+                PhysicalTest.trimester_id == session_in.session_id
+            )
+        )
+
         saved_tests_count = 0
         for pt_in in session_in.physical_tests:
             db_pt = PhysicalTest(
@@ -100,21 +138,39 @@ class EvaluationService:
             self.db.add(db_pt)
             saved_tests_count += 1
 
-        # B) Salvataggio PsychologicalForm con il verdetto AI
-        db_pf = PsychologicalForm(
-            course_id=course_id,
-            child_id=child_id,
-            trimester_id=session_in.session_id,
-            creativity_score=session_in.psychological_form.creativity_score,
-            teamwork_score=session_in.psychological_form.teamwork_score,
-            stress_management_score=session_in.psychological_form.stress_management_score,
-            leadership_score=session_in.psychological_form.leadership_score,
-            game_reading_score=session_in.psychological_form.game_reading_score,
-            motivation_score=session_in.psychological_form.motivation_score,
-            coach_notes=session_in.coach_notes,
-            ai_recommended_sport=ai_sport
+        # B) Aggiorna o crea PsychologicalForm per questo trimestre (Upsert)
+        stmt_existing_pf = select(PsychologicalForm).where(
+            PsychologicalForm.course_id == course_id,
+            PsychologicalForm.child_id == child_id,
+            PsychologicalForm.trimester_id == session_in.session_id
         )
-        self.db.add(db_pf)
+        res_existing_pf = await self.db.execute(stmt_existing_pf)
+        db_pf = res_existing_pf.scalars().first()
+
+        if db_pf:
+            db_pf.creativity_score = session_in.psychological_form.creativity_score
+            db_pf.teamwork_score = session_in.psychological_form.teamwork_score
+            db_pf.stress_management_score = session_in.psychological_form.stress_management_score
+            db_pf.leadership_score = session_in.psychological_form.leadership_score
+            db_pf.game_reading_score = session_in.psychological_form.game_reading_score
+            db_pf.motivation_score = session_in.psychological_form.motivation_score
+            db_pf.coach_notes = session_in.coach_notes
+            db_pf.ai_recommended_sport = ai_sport
+        else:
+            db_pf = PsychologicalForm(
+                course_id=course_id,
+                child_id=child_id,
+                trimester_id=session_in.session_id,
+                creativity_score=session_in.psychological_form.creativity_score,
+                teamwork_score=session_in.psychological_form.teamwork_score,
+                stress_management_score=session_in.psychological_form.stress_management_score,
+                leadership_score=session_in.psychological_form.leadership_score,
+                game_reading_score=session_in.psychological_form.game_reading_score,
+                motivation_score=session_in.psychological_form.motivation_score,
+                coach_notes=session_in.coach_notes,
+                ai_recommended_sport=ai_sport
+            )
+            self.db.add(db_pf)
         
         await self.db.commit()
         await self.db.refresh(db_pf)
