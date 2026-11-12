@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.parent import Parent
+from app.models.payment import Payment, PaymentStatusEnum
 from app.schemas.parent import ParentCreate, ParentUpdate
 from app.services.geo_service import GeoService
 import uuid
@@ -24,6 +25,12 @@ class ParentService:
         existing_parent = await self.get_parent_by_user_id(user_id)
         if existing_parent:
             raise ValueError("Profilo già esistente")
+
+        clean_cf = parent_in.fiscal_code.strip().upper()
+        stmt_cf = select(Parent).where(Parent.fiscal_code == clean_cf)
+        existing_cf = (await self.db.execute(stmt_cf)).scalars().first()
+        if existing_cf:
+            raise ValueError("Un genitore con questo Codice Fiscale è già registrato.")
 
         address_data = parent_in.address.model_dump() if parent_in.address else None
         new_referral_code = str(uuid.uuid4()).split('-')[0].upper()
@@ -78,6 +85,15 @@ class ParentService:
         update_data = parent_in.model_dump(exclude_unset=True)
         # contiene solo i campi che il Front-End ha effettivamente modificato
 
+        # Controllo unicità Codice Fiscale se modificato
+        if "fiscal_code" in update_data and update_data["fiscal_code"]:
+            clean_cf = update_data["fiscal_code"].strip().upper()
+            update_data["fiscal_code"] = clean_cf
+            stmt_cf = select(Parent).where(Parent.fiscal_code == clean_cf, Parent.id != parent.id)
+            existing_cf = (await self.db.execute(stmt_cf)).scalars().first()
+            if existing_cf:
+                raise ValueError("Un altro genitore con questo Codice Fiscale è già registrato.")
+
         # Se l'utente sta modificando l'indirizzo le ricalcoliamo automaticamente con GeoService
         if parent_in.address:
             geo_service = GeoService()
@@ -96,11 +112,21 @@ class ParentService:
 
 
     async def delete_parent(self, user_id: uuid.UUID) -> None:
-        """Elimina il profilo genitore collegato all'utente."""
+        """Elimina il profilo genitore collegato all'utente verificando l'assenza di pagamenti confermati."""
 
         parent = await self.get_parent_by_user_id(user_id)
         if not parent:
             raise ValueError("Profilo genitore non trovato")
+
+        # Controlla pagamenti associati
+        stmt_payments = select(Payment).where(Payment.parent_id == parent.id)
+        payments = (await self.db.execute(stmt_payments)).scalars().all()
+        if any(p.status == PaymentStatusEnum.SUCCEEDED for p in payments):
+            raise ValueError("Impossibile eliminare l'account genitore: sono presenti ricevute e pagamenti registrati nello storico contabile.")
+
+        # Elimina eventuali pagamenti pendenti o falliti
+        for p in payments:
+            await self.db.delete(p)
 
         await self.db.delete(parent)
         await self.db.commit()

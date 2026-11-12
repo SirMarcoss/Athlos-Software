@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1.endpoints import auth, parents, children, club, courses, evaluations, geo
+from app.api.v1.endpoints import auth, parents, children, club, courses, evaluations, geo, payments
 from app.core.config import settings
 
 
@@ -21,6 +21,7 @@ app.include_router(club.router, prefix="/club", tags=["Club"])
 app.include_router(courses.router, prefix="/courses", tags=["Corsi"])
 app.include_router(evaluations.router, prefix="/evaluations", tags=["Valutazioni AI"])
 app.include_router(geo.router, prefix="/geo", tags=["Geolocalizzazione"])
+app.include_router(payments.router, prefix="/payments", tags=["Pagamenti"])
 
 
 @app.get("/") # the function right below is in charge of handling requests that go to: the path (/)

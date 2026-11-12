@@ -92,21 +92,117 @@ export interface ApiClubCreate {
   longitude?: number | null;
 }
 
+export interface ApiPlacesOpeningHours {
+  open_now?: boolean;
+  weekday_descriptions?: string[];
+}
+
+export interface ApiPlacesData {
+  google_place_id?: string;
+  website_url?: string | null;
+  phone_number?: string | null;
+  rating?: number | null;
+  reviews_count?: number;
+  opening_hours?: ApiPlacesOpeningHours | null;
+  photos?: string[];
+  description?: string | null;
+}
+
 export interface ApiClubResponse extends ApiClubCreate {
   id: string;
   user_id: string;
+  places_data?: ApiPlacesData | null;
+  website_url?: string | null;
+  rating?: number | null;
+  stripe_account_id?: string | null;
+  stripe_onboarding_completed?: boolean;
+  stripe_charges_enabled?: boolean;
+  stripe_payouts_enabled?: boolean;
 }
 
-export interface ApiCourseCreate {
+export interface ApiAdminCourseCreate {
+  clubs_id: string;
   name: string;
   min_age: number;
   max_age: number;
+  club_price_cents: number;
+  parent_price_cents: number;
+  max_participants?: number;
+  billing_period?: 'trimestrale' | 'mensile' | 'annuale' | 'quota_unica';
 }
 
-export interface ApiCourseResponse extends ApiCourseCreate {
+export interface ApiCourseResponse {
   id: string;
   clubs_id: string;
+  name: string;
+  min_age: number;
+  max_age: number;
+  price_cents: number;
+  max_participants: number;
+  billing_period: 'trimestrale' | 'mensile' | 'annuale' | 'quota_unica';
   distance_km?: number | null;
+  enrolled_count?: number;
+}
+
+export interface ApiAdminCourseResponse {
+  id: string;
+  clubs_id: string;
+  name: string;
+  min_age: number;
+  max_age: number;
+  club_price_cents: number;
+  parent_price_cents: number;
+  max_participants: number;
+  billing_period: 'trimestrale' | 'mensile' | 'annuale' | 'quota_unica';
+  distance_km?: number | null;
+  enrolled_count?: number;
+}
+
+export type PaymentLifecycleStatus =
+  | 'DRAFT'
+  | 'PENDING'
+  | 'SUCCEEDED'
+  | 'EXPIRED'
+  | 'FAILED'
+  | 'REFUNDED'
+  | 'DISPUTED';
+
+export interface ApiCheckoutSessionRequest {
+  course_id: string;
+  child_id: string;
+}
+
+export interface ApiCheckoutSessionResponse {
+  checkout_url: string;
+  session_id: string;
+  payment_id: string;
+  expires_at?: string;
+}
+
+export interface ApiPaymentRecord {
+  id: string;
+  parent_id: string;
+  parent_name?: string;
+  parent_fiscal_code?: string;
+  parent_email?: string;
+  child_id: string;
+  child_name: string;
+  child_fiscal_code: string;
+  course_id: string;
+  course_name: string;
+  club_id: string;
+  club_name: string;
+  club_fiscal_code?: string;
+  amount_cents: number;
+  currency: string;
+  billing_period?: string;
+  status: PaymentLifecycleStatus;
+  stripe_checkout_session_id: string;
+  stripe_payment_intent_id?: string | null;
+  stripe_event_id?: string | null;
+  receipt_number?: string;
+  created_at: string;
+  completed_at?: string | null;
 }
 
 export interface ApiPhysicalTestCreate {
@@ -375,6 +471,10 @@ export async function getChildByFiscalCode(fiscalCode: string): Promise<ApiChild
 
 // === 4. ENDPOINT CLUB SPORTIVO (/club) ===
 
+export async function getAllClubsAdmin(): Promise<ApiClubResponse[]> {
+  return apiFetch<ApiClubResponse[]>('/club/');
+}
+
 export async function createClubProfile(payload: ApiClubCreate): Promise<ApiClubResponse> {
   return apiFetch<ApiClubResponse>('/club/', {
     method: 'POST',
@@ -401,6 +501,12 @@ export async function deleteMyClubProfile(): Promise<void> {
   });
 }
 
+export async function enrichMyClub(): Promise<ApiClubResponse> {
+  return apiFetch<ApiClubResponse>('/club/me/enrich', {
+    method: 'POST'
+  });
+}
+
 // === 5. ENDPOINT CORSI (/courses) ===
 
 export async function getCatalogCourses(params?: {
@@ -422,24 +528,31 @@ export async function getMyClubCourses(): Promise<ApiCourseResponse[]> {
   return apiFetch<ApiCourseResponse[]>('/courses/my');
 }
 
-export async function createClubCourse(payload: ApiCourseCreate): Promise<ApiCourseResponse> {
-  return apiFetch<ApiCourseResponse>('/courses/', {
+export async function getAdminCourses(clubId?: string): Promise<ApiAdminCourseResponse[]> {
+  const qs = clubId ? `?club_id=${encodeURIComponent(clubId)}` : '';
+  return apiFetch<ApiAdminCourseResponse[]>(`/courses/admin${qs}`);
+}
+
+export async function createAdminCourse(
+  payload: ApiAdminCourseCreate
+): Promise<ApiAdminCourseResponse> {
+  return apiFetch<ApiAdminCourseResponse>('/courses/', {
     method: 'POST',
     body: JSON.stringify(payload)
   });
 }
 
-export async function updateClubCourse(
+export async function updateAdminCourse(
   courseId: string,
-  payload: Partial<ApiCourseCreate>
-): Promise<ApiCourseResponse> {
-  return apiFetch<ApiCourseResponse>(`/courses/${courseId}`, {
+  payload: Partial<Omit<ApiAdminCourseCreate, 'clubs_id'>>
+): Promise<ApiAdminCourseResponse> {
+  return apiFetch<ApiAdminCourseResponse>(`/courses/${courseId}`, {
     method: 'PATCH',
     body: JSON.stringify(payload)
   });
 }
 
-export async function deleteClubCourse(courseId: string): Promise<void> {
+export async function deleteAdminCourse(courseId: string): Promise<void> {
   return apiFetch<void>(`/courses/${courseId}`, {
     method: 'DELETE'
   });
@@ -712,3 +825,78 @@ export async function autocompleteGeo(
 
   return [];
 }
+
+// === 8. ENDPOINT PAGAMENTI STRIPE (/payments) ===
+
+export function formatEuroFromCents(cents: number | undefined | null): string {
+  const safeCents = typeof cents === 'number' && !isNaN(cents) ? cents : 0;
+  return new Intl.NumberFormat('it-IT', {
+    style: 'currency',
+    currency: 'EUR'
+  }).format(safeCents / 100);
+}
+
+export function formatBillingPeriodLabel(
+  period?: 'trimestrale' | 'mensile' | 'annuale' | 'quota_unica' | string | null
+): string {
+  switch (period) {
+    case 'mensile':
+      return 'Mensile';
+    case 'annuale':
+      return 'Annuale';
+    case 'quota_unica':
+      return 'Quota Unica';
+    case 'trimestrale':
+    default:
+      return 'Trimestrale';
+  }
+}
+
+export function formatPaymentStatusLabel(
+  status?: PaymentLifecycleStatus | string | null
+): string {
+  switch (status) {
+    case 'SUCCEEDED':
+      return 'Pagato';
+    case 'PENDING':
+      return 'In attesa';
+    case 'FAILED':
+      return 'Non riuscito';
+    case 'REFUNDED':
+      return 'Rimborsato';
+    case 'EXPIRED':
+      return 'Annullato';
+    case 'DISPUTED':
+      return 'Contestato';
+    case 'DRAFT':
+      return 'In corso';
+    default:
+      return status || 'In corso';
+  }
+}
+
+export async function createCourseCheckoutSession(
+  payload: ApiCheckoutSessionRequest
+): Promise<ApiCheckoutSessionResponse> {
+  return apiFetch<ApiCheckoutSessionResponse>('/payments/checkout-session', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function verifyCheckoutSessionStatus(
+  sessionId: string
+): Promise<ApiPaymentRecord> {
+  return apiFetch<ApiPaymentRecord>(
+    `/payments/verify/${encodeURIComponent(sessionId)}`
+  );
+}
+
+export async function getMyParentPayments(): Promise<ApiPaymentRecord[]> {
+  return apiFetch<ApiPaymentRecord[]>('/payments/parent/me');
+}
+
+export async function getMyClubPayments(): Promise<ApiPaymentRecord[]> {
+  return apiFetch<ApiPaymentRecord[]>('/payments/club/me');
+}
+

@@ -124,12 +124,12 @@ class AIService:
                     model='gemini-3.8-flash',
                     contents=prompt
                 ),
-                timeout=5.0
+                timeout=15.0
             )
             if response and response.text:
                 return response.text.strip()
         except Exception as e:
-            print(f"[AIService] Chiamata Gemini lenta o fallita ({e}). Utilizzo motore pedagogico locale rapido.")
+            print(f"[AIService] Chiamata Gemini fallita ({e}). Utilizzo motore pedagogico locale rapido.")
 
         return self._generate_fallback_recommendation(
             child_name=child_name,

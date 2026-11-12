@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User, UserRoleEnum
@@ -5,9 +6,21 @@ from app.api.deps import require_role
 from app.core.database import get_db
 from app.schemas.club import ClubCreate, ClubResponse, ClubUpdate
 from app.services.club_service import ClubService
-from typing import List
+from app.services.places_service import GooglePlacesService
+
 
 router = APIRouter()
+
+
+@router.get("/", response_model=List[ClubResponse])
+async def list_all_clubs(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRoleEnum.ADMIN))
+):
+    """Restituisce tutte le società sportive registrate (riservato all'Admin Athlos)."""
+    club_service = ClubService(db)
+    return await club_service.get_all_clubs()
+
 
 @router.post("/", response_model=ClubResponse, status_code=status.HTTP_201_CREATED)
 async def create_my_club(
@@ -75,7 +88,37 @@ async def delete_my_club(
 
     try:
         await club_service.delete_club(current_user.id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+    except ValueError as e:
+        if "non trovato" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/me/enrich", response_model=ClubResponse)
+async def enrich_current_club(
+    current_user: User = Depends(require_role(UserRoleEnum.CLUB)),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Ricarica e aggiorna da Google Places foto, orari e recensioni per il club dell'utente loggato.
+    """
+    club_service = ClubService(db)
+    club = await club_service.get_club_by_user_id(current_user.id)
+    if not club:
+        raise HTTPException(status_code=404, detail="Club non trovato")
+
+    # Chiama Google Places con nome e indirizzo salvati
+    addr_str = f"{club.address.get('street', '')}, {club.address.get('city', '')}" if club.address else ""
+    places_service = GooglePlacesService()
+    info = await places_service.fetch_club_details(club.name, addr_str)
+
+    if info:
+        club.places_data = info
+        if info.get("website_url"):
+            club.website_url = info["website_url"]
+        if info.get("rating"):
+            club.rating = info["rating"]
+        await db.commit()
+        await db.refresh(club)
+
+    return club

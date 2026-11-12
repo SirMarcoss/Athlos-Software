@@ -12,7 +12,22 @@ import {
   Phone,
   Info,
   Plus,
-  Trash2
+  Trash2,
+  CreditCard,
+  FileText,
+  Loader2,
+  Printer,
+  Download,
+  AlertCircle,
+  Clock,
+  Receipt,
+  Users,
+  Star,
+  Globe,
+  ExternalLink,
+  ArrowLeft,
+  Camera,
+  Navigation
 } from 'lucide-react';
 import {
   getToken,
@@ -27,9 +42,17 @@ import {
   getChildEvaluations,
   getChildPhysicalTests,
   autocompleteGeo,
+  createCourseCheckoutSession,
+  verifyCheckoutSessionStatus,
+  getMyParentPayments,
+  formatEuroFromCents,
+  formatBillingPeriodLabel,
+  formatPaymentStatusLabel,
   type ApiAddress,
   type ApiPhysicalTestResponse,
-  type ApiGeoSearchResult
+  type ApiGeoSearchResult,
+  type ApiPaymentRecord,
+  type ApiPlacesData
 } from './api';
 
 // === INTERFACCE ===
@@ -45,6 +68,7 @@ interface Child {
 }
 
 interface ParentProfileState {
+  id?: string;
   first_name: string;
   last_name: string;
   phone: string;
@@ -71,17 +95,194 @@ interface PsychForm {
 }
 
 interface Course {
+  id: string;
+  club_id: string;
+  club_name: string;
+  club_fiscal_code?: string;
   name: string;
+  min_age: number;
+  max_age: number;
   age_range: string;
   sport: string;
+  price_cents: number;
+  billing_period: 'trimestrale' | 'mensile' | 'annuale' | 'quota_unica';
+  max_participants: number;
+  enrolled_count: number;
+  stripe_charges_enabled: boolean;
 }
 
 interface Club {
+  id: string;
   name: string;
   address: string;
   distance: string;
+  stripe_charges_enabled: boolean;
+  fiscal_code_or_vat?: string;
+  website_url?: string | null;
+  rating?: number | null;
+  phone_number?: string;
+  email_contact?: string;
+  places_data?: ApiPlacesData | null;
   courses: Course[];
 }
+
+const DEMO_FALLBACK_CLUBS: Club[] = [
+  {
+    id: 'demo-club-1',
+    name: 'Polisportiva Etna Sport A.S.D.',
+    address: 'Via Etnea 240, Catania',
+    distance: '2.4 km',
+    stripe_charges_enabled: true,
+    fiscal_code_or_vat: '93048210874',
+    website_url: 'https://www.etnasport.it',
+    rating: 4.8,
+    phone_number: '+39 095 448822',
+    email_contact: 'segreteria@etnasport.it',
+    places_data: {
+      google_place_id: 'ChIJ_etna_sport_cat',
+      website_url: 'https://www.etnasport.it',
+      phone_number: '+39 095 448822',
+      rating: 4.8,
+      reviews_count: 118,
+      opening_hours: {
+        open_now: true,
+        weekday_descriptions: [
+          'lunedì: 08:30–21:30',
+          'martedì: 08:30–21:30',
+          'mercoledì: 08:30–21:30',
+          'giovedì: 08:30–21:30',
+          'venerdì: 08:30–21:30',
+          'sabato: 09:00–18:00',
+          'domenica: Chiuso'
+        ]
+      },
+      photos: [
+        'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1517649763962-0c623266ddc0?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?auto=format&fit=crop&w=1200&q=80'
+      ]
+    },
+    courses: [
+      {
+        id: 'demo-course-basket',
+        club_id: 'demo-club-1',
+        club_name: 'Polisportiva Etna Sport A.S.D.',
+        club_fiscal_code: '93048210874',
+        name: 'Mini-Basket Giovanile',
+        min_age: 6,
+        max_age: 11,
+        age_range: '6-11',
+        sport: 'Basket',
+        price_cents: 15000,
+        billing_period: 'trimestrale',
+        max_participants: 20,
+        enrolled_count: 14,
+        stripe_charges_enabled: true
+      },
+      {
+        id: 'demo-course-volley',
+        club_id: 'demo-club-1',
+        club_name: 'Polisportiva Etna Sport A.S.D.',
+        club_fiscal_code: '93048210874',
+        name: 'Pallavolo Avviamento',
+        min_age: 7,
+        max_age: 13,
+        age_range: '7-13',
+        sport: 'Pallavolo',
+        price_cents: 13500,
+        billing_period: 'trimestrale',
+        max_participants: 18,
+        enrolled_count: 11,
+        stripe_charges_enabled: true
+      }
+    ]
+  },
+  {
+    id: 'demo-club-2',
+    name: 'Centro Nuoto & Scherma Trinacria S.S.D.',
+    address: 'Viale Ruggero di Lauria 85, Catania',
+    distance: '4.1 km',
+    stripe_charges_enabled: true,
+    fiscal_code_or_vat: '05482910872',
+    website_url: 'https://www.trinacrianuoto.it',
+    rating: 4.9,
+    phone_number: '+39 095 7221430',
+    email_contact: 'info@trinacrianuoto.it',
+    places_data: {
+      google_place_id: 'ChIJ_trinacria_nuoto',
+      website_url: 'https://www.trinacrianuoto.it',
+      phone_number: '+39 095 7221430',
+      rating: 4.9,
+      reviews_count: 142,
+      opening_hours: {
+        open_now: true,
+        weekday_descriptions: [
+          'lunedì: 07:30–21:00',
+          'martedì: 07:30–21:00',
+          'mercoledì: 07:30–21:00',
+          'giovedì: 07:30–21:00',
+          'venerdì: 07:30–21:00',
+          'sabato: 08:30–19:00',
+          'domenica: 09:00–13:00'
+        ]
+      },
+      photos: [
+        'https://images.unsplash.com/photo-1519315901367-f34ff9154487?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1530549387789-4c1017266635?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&w=1200&q=80'
+      ]
+    },
+    courses: [
+      {
+        id: 'demo-course-nuoto',
+        club_id: 'demo-club-2',
+        club_name: 'Centro Nuoto & Scherma Trinacria S.S.D.',
+        club_fiscal_code: '05482910872',
+        name: 'Scuola Nuoto Ragazzi',
+        min_age: 5,
+        max_age: 12,
+        age_range: '5-12',
+        sport: 'Nuoto',
+        price_cents: 18000,
+        billing_period: 'trimestrale',
+        max_participants: 16,
+        enrolled_count: 12,
+        stripe_charges_enabled: true
+      },
+      {
+        id: 'demo-course-scherma',
+        club_id: 'demo-club-2',
+        club_name: 'Centro Nuoto & Scherma Trinacria S.S.D.',
+        club_fiscal_code: '05482910872',
+        name: 'Fioretto & Spada Giovani',
+        min_age: 7,
+        max_age: 13,
+        age_range: '7-13',
+        sport: 'Scherma',
+        price_cents: 16500,
+        billing_period: 'trimestrale',
+        max_participants: 12,
+        enrolled_count: 8,
+        stripe_charges_enabled: true
+      }
+    ]
+  }
+];
+
+const calculateAgeFromDob = (dob?: string): number => {
+  if (!dob) return 8;
+  const birthDate = new Date(dob);
+  if (isNaN(birthDate.getTime())) return 8;
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age >= 3 && age <= 18 ? age : 8;
+};
 
 const parseGeminiAnalysis = (text: string | undefined) => {
   if (!text) return { sportName: 'N/A', objective: null, tip: null };
@@ -126,6 +327,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
   const [nearbyClubs, setNearbyClubs] = useState<Club[]>([]);
 
   const [parentProfile, setParentProfile] = useState<ParentProfileState>({
+    id: '',
     first_name: '',
     last_name: '',
     phone: '',
@@ -138,12 +340,31 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
   });
 
   const [activeModal, setActiveModal] = useState<
-    'none' | 'referral' | 'profile' | 'analysis' | 'add-child'
+    | 'none'
+    | 'referral'
+    | 'profile'
+    | 'analysis'
+    | 'add-child'
+    | 'enroll-course'
+    | 'payments-history'
+    | 'receipt-preview'
   >('none');
   const [selectedAnalysisChildId, setSelectedAnalysisChildId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [myReferralCode, setMyReferralCode] = useState('');
   const [myReferralLink, setMyReferralLink] = useState('');
+
+  // --- STATO ISCRIZIONE CORSO E PAGAMENTI STRIPE ---
+  const [selectedCourseForEnroll, setSelectedCourseForEnroll] = useState<Course | null>(null);
+  const [selectedChildForEnrollId, setSelectedChildForEnrollId] = useState<string>('');
+  const [enrollAcceptTerms, setEnrollAcceptTerms] = useState<boolean>(true);
+  const [isCreatingCheckout, setIsCreatingCheckout] = useState<boolean>(false);
+  const [parentPayments, setParentPayments] = useState<ApiPaymentRecord[]>([]);
+  const [selectedReceiptPayment, setSelectedReceiptPayment] = useState<ApiPaymentRecord | null>(
+    null
+  );
+  // Stato Vetrina / Mini-sito Club selezionato dal genitore
+  const [selectedClubForShowcase, setSelectedClubForShowcase] = useState<Club | null>(null);
 
   // Stato nuovo figlio
   const [newChildFirstName, setNewChildFirstName] = useState('');
@@ -189,6 +410,44 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     setParentGeoResults([]);
   };
 
+  const mapBackendClubsToUi = (clubsRes: any[], coursesRes: any[]): Club[] => {
+    return clubsRes.map(cl => {
+      const chargesEnabled = cl.stripe_charges_enabled ?? true;
+      const clubCourses = coursesRes.filter(cr => cr.clubs_id === cl.id);
+      const minDistance = clubCourses.find(cr => cr.distance_km != null)?.distance_km;
+      const addrParts = [cl.address?.street, cl.address?.city].filter(Boolean);
+      return {
+        id: cl.id,
+        name: cl.name,
+        address: addrParts.join(', ') || 'Indirizzo del centro sportivo',
+        distance: minDistance != null ? `${minDistance} km` : 'Vicino a te',
+        stripe_charges_enabled: chargesEnabled,
+        website_url: cl.website_url || cl.places_data?.website_url || null,
+        rating: cl.rating ?? cl.places_data?.rating ?? null,
+        phone_number: cl.phone_number || cl.places_data?.phone_number || undefined,
+        email_contact: cl.email_contact || undefined,
+        places_data: cl.places_data || null,
+        courses: clubCourses.map(cr => {
+          return {
+            id: cr.id,
+            club_id: cl.id,
+            club_name: cl.name,
+            name: cr.name,
+            min_age: cr.min_age,
+            max_age: cr.max_age,
+            age_range: `${cr.min_age}-${cr.max_age}`,
+            sport: cr.name,
+            price_cents: cr.price_cents,
+            billing_period: cr.billing_period ?? 'trimestrale',
+            max_participants: cr.max_participants ?? 20,
+            enrolled_count: cr.enrolled_count ?? 0,
+            stripe_charges_enabled: chargesEnabled
+          };
+        })
+      };
+    });
+  };
+
   const loadClubsAndCourses = async () => {
     let clubsRes: any[] = [];
     let coursesRes: any[] = [];
@@ -205,69 +464,41 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     }
 
     if (clubsRes.length > 0) {
-      const mappedClubs: Club[] = clubsRes.map(cl => {
-        const clubCourses = coursesRes.filter(cr => cr.clubs_id === cl.id);
-        const minDistance = clubCourses.find(cr => cr.distance_km != null)?.distance_km;
-        const addrParts = [cl.address?.street, cl.address?.city].filter(Boolean);
-        return {
-          name: cl.name,
-          address: addrParts.join(', ') || 'Indirizzo del centro',
-          distance: minDistance != null ? `${minDistance} km` : 'Vicino a te',
-          courses: clubCourses.map(cr => ({
-            name: cr.name,
-            age_range: `${cr.min_age}-${cr.max_age}`,
-            sport: cr.name
-          }))
-        };
-      });
-      setNearbyClubs(mappedClubs);
+      setNearbyClubs(mapBackendClubsToUi(clubsRes, coursesRes));
+    } else {
+      setNearbyClubs(DEMO_FALLBACK_CLUBS);
     }
   };
 
   // Toast di conferma con cleanup del timer
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<'warning' | 'success'>('warning');
   const toastTimerRef = useRef<number | null>(null);
-  const showToast = (msg: string) => {
+  const stripeReturnHandledRef = useRef(false);
+  const showToast = (
+    msg: string,
+    durationMs = 3500,
+    type: 'warning' | 'success' = 'warning'
+  ) => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    setToastType(type);
     setToastMessage(msg);
-    toastTimerRef.current = window.setTimeout(() => setToastMessage(null), 3200);
+    toastTimerRef.current = window.setTimeout(() => setToastMessage(null), durationMs);
   };
 
-  // === CARICAMENTO DATI REALI DAL BACK-END FASTAPI ===
-  useEffect(() => {
-    if (!getToken()) return;
-
-    // 1. Profilo Genitore
-    getMyParentProfile()
-      .then(profile => {
-        setParentProfile({
-          first_name: profile.first_name,
-          last_name: profile.last_name,
-          phone: profile.phone_number,
-          fiscal_code: profile.fiscal_code,
-          street: profile.address?.street || '',
-          city: profile.address?.city || '',
-          province: profile.address?.province || '',
-          postal_code: profile.address?.postal_code || '',
-          extra_notes: profile.info || ''
-        });
-        setNewChildLastName(profile.last_name);
-        if (profile.referral_code) {
-          setMyReferralCode(profile.referral_code);
-          setMyReferralLink(`${window.location.origin}/?ref=${profile.referral_code}`);
+  // Ricarica pagamenti reali del genitore dal backend
+  const refreshParentPayments = () => {
+    getMyParentPayments()
+      .then(records => {
+        if (records) {
+          setParentPayments(records);
         }
       })
       .catch(() => {});
+  };
 
-    // 2. Link Referral
-    getMyReferral()
-      .then(refData => {
-        setMyReferralCode(refData.referral_code);
-        setMyReferralLink(`${window.location.origin}/?ref=${refData.referral_code}`);
-      })
-      .catch(() => {});
-
-    // 3. Figli + Valutazioni Trimestrali + Test Motori
+  // Ricarica figli, sport attuale, valutazioni trimestrali e test motori
+  const refreshChildrenAndEvaluations = () => {
     getMyChildren()
       .then(async apiChildren => {
         const mappedChildren: Child[] = apiChildren.map(c => ({
@@ -322,34 +553,105 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
         setPhysicalTestsByChild(loadedTests);
       })
       .catch(() => {});
+  };
 
-    // 4. Club Vicini e Corsi Disponibili
-    getMyNearbyClubs()
-      .then(clubsRes => {
-        if (clubsRes.length > 0) {
-          getCatalogCourses()
-            .then(coursesRes => {
-              const mappedClubs: Club[] = clubsRes.map(cl => {
-                const clubCourses = coursesRes.filter(cr => cr.clubs_id === cl.id);
-                const minDistance = clubCourses.find(cr => cr.distance_km != null)?.distance_km;
-                const addrParts = [cl.address?.street, cl.address?.city].filter(Boolean);
-                return {
-                  name: cl.name,
-                  address: addrParts.join(', ') || 'Indirizzo del centro',
-                  distance: minDistance != null ? `${minDistance} km` : 'Vicino a te',
-                  courses: clubCourses.map(cr => ({
-                    name: cr.name,
-                    age_range: `${cr.min_age}-${cr.max_age}`,
-                    sport: cr.name
-                  }))
-                };
-              });
-              setNearbyClubs(mappedClubs);
+  // === CARICAMENTO DATI REALI DAL BACK-END FASTAPI ===
+  useEffect(() => {
+    // Gestione ritorno da Stripe Checkout reale (?payment=success&session_id=...)
+    if (typeof window !== 'undefined' && !stripeReturnHandledRef.current) {
+      const params = new URLSearchParams(window.location.search);
+      const paymentStatus = params.get('payment');
+      const sessionId = params.get('session_id');
+      if (paymentStatus === 'success' || paymentStatus === 'mock_success') {
+        stripeReturnHandledRef.current = true;
+        if (sessionId) {
+          verifyCheckoutSessionStatus(sessionId)
+            .then(verifiedPayment => {
+              refreshParentPayments();
+              refreshChildrenAndEvaluations();
+              loadClubsAndCourses();
+              if (verifiedPayment.status === 'SUCCEEDED') {
+                showToast(
+                  'Pagamento confermato da Stripe! Tuo figlio è ufficialmente iscritto al corso.',
+                  6000,
+                  'success'
+                );
+              } else if (verifiedPayment.status === 'FAILED') {
+                showToast('Il pagamento non è andato a buon fine o è scaduto.', 6000);
+              } else {
+                showToast(
+                  'Pagamento in elaborazione. Controlla lo storico ricevute tra qualche istante.',
+                  6000
+                );
+              }
             })
-            .catch(() => {});
+            .catch(err => {
+              refreshParentPayments();
+              refreshChildrenAndEvaluations();
+              const msg =
+                err instanceof Error
+                  ? err.message
+                  : 'Impossibile verificare subito il pagamento. Controlla lo storico ricevute.';
+              showToast(msg, 6000);
+            })
+            .finally(() => {
+              window.history.replaceState({}, '', window.location.pathname);
+            });
+        } else {
+          showToast('Sessione di pagamento non specificata. Controlla lo storico ricevute.', 5000);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      } else if (paymentStatus === 'cancelled') {
+        stripeReturnHandledRef.current = true;
+        showToast('Pagamento annullato. Nessun addebito è stato effettuato.', 5000);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+
+    if (!getToken()) {
+      setNearbyClubs(DEMO_FALLBACK_CLUBS);
+      return;
+    }
+
+    // 1. Profilo Genitore
+    getMyParentProfile()
+      .then(profile => {
+        setParentProfile({
+          id: profile.id,
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+          phone: profile.phone_number,
+          fiscal_code: profile.fiscal_code,
+          street: profile.address?.street || '',
+          city: profile.address?.city || '',
+          province: profile.address?.province || '',
+          postal_code: profile.address?.postal_code || '',
+          extra_notes: profile.info || ''
+        });
+        setNewChildLastName(profile.last_name);
+        if (profile.referral_code) {
+          setMyReferralCode(profile.referral_code);
+          setMyReferralLink(`${window.location.origin}/?ref=${profile.referral_code}`);
         }
       })
       .catch(() => {});
+
+    // 1b. Storico Pagamenti Genitore dal backend
+    refreshParentPayments();
+
+    // 2. Link Referral
+    getMyReferral()
+      .then(refData => {
+        setMyReferralCode(refData.referral_code);
+        setMyReferralLink(`${window.location.origin}/?ref=${refData.referral_code}`);
+      })
+      .catch(() => {});
+
+    // 3. Figli + Valutazioni Trimestrali + Test Motori
+    refreshChildrenAndEvaluations();
+
+    // 4. Club Vicini e Corsi Disponibili
+    loadClubsAndCourses();
   }, []);
 
   const selectedChild = selectedAnalysisChildId
@@ -378,6 +680,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
     setIsSaving(true);
     try {
+      let newChildId = '';
       if (getToken()) {
         const createdApi = await createChild({
           first_name: newChildFirstName.trim(),
@@ -388,6 +691,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
           skills: [],
           fiscal_code: cleanFiscalCode
         });
+        newChildId = createdApi.id;
         setChildren(prev => [
           ...prev,
           {
@@ -401,8 +705,10 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
           }
         ]);
       } else {
+        const localId = `child-${crypto.randomUUID()}`;
+        newChildId = localId;
         const createdLocal: Child = {
-          id: `child-${crypto.randomUUID()}`,
+          id: localId,
           first_name: newChildFirstName.trim(),
           last_name: newChildLastName.trim(),
           date_of_birth: newChildDob,
@@ -412,10 +718,19 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
         };
         setChildren(prev => [...prev, createdLocal]);
       }
+
+      const childName = newChildFirstName.trim();
       setNewChildFirstName('');
       setNewChildFiscalCode('');
-      setActiveModal('none');
-      showToast(`${newChildFirstName.trim()} aggiunto con successo!`);
+
+      if (selectedCourseForEnroll) {
+        setSelectedChildForEnrollId(newChildId);
+        setActiveModal('enroll-course');
+        showToast(`${childName} registrato con successo! Procedi ora con l'iscrizione.`);
+      } else {
+        setActiveModal('none');
+        showToast(`${childName} aggiunto con successo!`);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Errore durante l'aggiunta del figlio";
       showToast(msg);
@@ -479,20 +794,140 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
     }
   };
 
+  // === HANDLERS ISCRIZIONE CORSO E CHECKOUT STRIPE ===
+
+  const isChildAlreadyEnrolledInCourse = (courseId: string, childId: string): boolean => {
+    return parentPayments.some(
+      p => p.course_id === courseId && p.child_id === childId && p.status === 'SUCCEEDED'
+    );
+  };
+
+  const openEnrollCourseModal = (course: Course) => {
+    setSelectedCourseForEnroll(course);
+
+    if (children.length === 0) {
+      showToast('Aggiungi prima tuo figlio per poterlo iscrivere a questo corso.');
+      setActiveModal('add-child');
+      return;
+    }
+
+    setEnrollAcceptTerms(true);
+
+    // Pre-seleziona il primo figlio compatibile per età e non ancora iscritto
+    const compatibleChild = children.find(ch => {
+      const age = calculateAgeFromDob(ch.date_of_birth);
+      const already = isChildAlreadyEnrolledInCourse(course.id, ch.id);
+      return !already && age >= course.min_age && age <= course.max_age;
+    });
+
+    setSelectedChildForEnrollId(compatibleChild ? compatibleChild.id : children[0].id);
+    setActiveModal('enroll-course');
+  };
+
+  const handleProceedToStripeCheckout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCourseForEnroll || !selectedChildForEnrollId) return;
+
+    const targetChild = children.find(c => c.id === selectedChildForEnrollId);
+    if (!targetChild) return;
+
+    const childAge = calculateAgeFromDob(targetChild.date_of_birth);
+    if (
+      childAge < selectedCourseForEnroll.min_age ||
+      childAge > selectedCourseForEnroll.max_age
+    ) {
+      showToast(
+        `L'età di ${targetChild.first_name} (${childAge} anni) non rientra nella fascia ${selectedCourseForEnroll.min_age}-${selectedCourseForEnroll.max_age} anni del corso.`
+      );
+      return;
+    }
+
+    if (isChildAlreadyEnrolledInCourse(selectedCourseForEnroll.id, targetChild.id)) {
+      showToast(`${targetChild.first_name} risulta già iscritto a questo corso.`);
+      return;
+    }
+
+    setIsCreatingCheckout(true);
+    try {
+      const apiSession = await createCourseCheckoutSession({
+        course_id: selectedCourseForEnroll.id,
+        child_id: targetChild.id
+      });
+      if (apiSession.checkout_url) {
+        window.location.href = apiSession.checkout_url;
+        return;
+      }
+      showToast('URL di pagamento Stripe non disponibile. Riprova più tardi.');
+    } catch (err) {
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Errore durante l'avvio del pagamento Stripe. Verifica i dati e riprova."
+      );
+    } finally {
+      setIsCreatingCheckout(false);
+    }
+  };
+
+  const handleDownloadReceiptHtml = (payment: ApiPaymentRecord) => {
+    const el = document.getElementById('printable-receipt');
+    if (!el) return;
+    const safeReceiptNo = (payment.receipt_number || '2026_01').replace('/', '_');
+    const safeChildName = (payment.child_name || 'Atleta').replace(/\s+/g, '_');
+    const printDoc = `<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Ricevuta_Pagamento_${safeReceiptNo}</title>
+  <style>
+    @page { size: A4 portrait; margin: 12mm 15mm; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; margin: 0; padding: 24px; background: #fff; }
+    .receipt-container { max-width: 820px; margin: 0 auto; border: 2px solid #cbd5e1; border-radius: 16px; padding: 36px; box-sizing: border-box; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; margin-bottom: 16px; }
+    th { text-align: left; background: #f8fafc; padding: 12px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; border-bottom: 2px solid #cbd5e1; }
+    td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid #e2e8f0; }
+    .no-print { display: none !important; }
+    @media print { body { padding: 0; } .receipt-container { border: none; padding: 0; } }
+  </style>
+</head>
+<body onload="window.print()">
+  <div class="receipt-container">
+    ${el.innerHTML}
+  </div>
+</body>
+</html>`;
+    const blob = new Blob([printDoc], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Ricevuta_${safeChildName}_${safeReceiptNo}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('Ricevuta scaricata! Clicca sul file per visualizzarla o salvarla in PDF.');
+  };
+
   return (
     <div className="min-h-screen bg-[#f4f8fc] font-sans pb-32 relative overflow-x-hidden">
-      {/* Notifica di conferma */}
+      {/* Notifica di avviso/conferma con priorità z-index massima (sopra ogni modale) */}
       <AnimatePresence>
         {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: -24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -24 }}
+            initial={{ opacity: 0, y: -24, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -24, scale: 0.95 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-[#1E2046] text-white px-6 py-3.5 rounded-full shadow-2xl border border-white/15 flex items-center gap-3 font-bold text-sm"
+            className={`fixed top-8 left-1/2 -translate-x-1/2 z-[99999] bg-[#1E2046] text-white px-7 py-4 rounded-2xl shadow-2xl shadow-black/50 border-2 flex items-center gap-3.5 font-bold text-sm pointer-events-auto max-w-md text-center sm:text-left ${
+              toastType === 'success' ? 'border-emerald-400' : 'border-amber-300'
+            }`}
           >
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            <span>{toastMessage}</span>
+            {toastType === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+            )}
+            <span className="leading-snug">{toastMessage}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -519,6 +954,21 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
             className="px-5 py-2.5 bg-[#E52B6D] hover:bg-[#FF4F8B] backdrop-blur-md border border-pink-400/40 rounded-full font-bold transition-colors text-sm flex items-center gap-2 shadow-lg cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Aggiungi Figlio
+          </button>
+          <button
+            onClick={() => {
+              refreshParentPayments();
+              setActiveModal('payments-history');
+            }}
+            className="px-5 py-2.5 bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/25 rounded-full font-bold transition-colors text-sm flex items-center gap-2 cursor-pointer"
+          >
+            <CreditCard className="w-4 h-4 text-emerald-300" />
+            <span>I Miei Pagamenti</span>
+            {parentPayments.filter(p => p.status === 'SUCCEEDED').length > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-emerald-400 text-[#1E2046] text-xs font-black">
+                {parentPayments.filter(p => p.status === 'SUCCEEDED').length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveModal('referral')}
@@ -556,16 +1006,531 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className={`bg-white rounded-[32px] p-8 w-full shadow-2xl relative my-8 transform-gpu ${
-                activeModal === 'analysis' ? 'max-w-4xl' : 'max-w-lg'
+              className={`bg-white rounded-[32px] p-8 w-full shadow-2xl relative my-8 max-h-[92vh] overflow-y-auto transform-gpu ${
+                activeModal === 'analysis' ||
+                activeModal === 'payments-history' ||
+                activeModal === 'receipt-preview'
+                  ? 'max-w-4xl'
+                  : 'max-w-xl'
               }`}
             >
               <button
                 onClick={() => setActiveModal('none')}
-                className="absolute top-6 right-6 text-slate-400 hover:text-[#1E2046] transition-colors cursor-pointer"
+                className="absolute top-6 right-6 text-slate-400 hover:text-[#1E2046] transition-colors cursor-pointer z-20"
               >
                 <X className="w-6 h-6" />
               </button>
+
+              {/* =================================================================
+                  MODALE 1: ISCRIVI FIGLIO AL CORSO (SCELTA FIGLIO & RIEPILOGO)
+              ================================================================= */}
+              {activeModal === 'enroll-course' && selectedCourseForEnroll && (
+                <div className="pt-2">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center font-black text-xl shadow-md shrink-0">
+                      🏅
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#E52B6D] bg-rose-50 px-2.5 py-0.5 rounded-full">
+                        Iscrizione Diretta • {selectedCourseForEnroll.club_name}
+                      </span>
+                      <h3 className="text-2xl font-black text-[#1E2046]">
+                        Iscrivi tuo figlio a {selectedCourseForEnroll.name}
+                      </h3>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleProceedToStripeCheckout} className="space-y-5">
+                    {/* Scelta del Figlio con controllo automatico dell'età */}
+                    <div>
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2 block">
+                        1. Seleziona quale figlio iscrivere (Fascia richiesta:{' '}
+                        {selectedCourseForEnroll.min_age}-{selectedCourseForEnroll.max_age} anni)
+                      </label>
+                      <div className="space-y-2.5">
+                        {children.map(child => {
+                          const age = calculateAgeFromDob(child.date_of_birth);
+                          const isCompatible =
+                            age >= selectedCourseForEnroll.min_age &&
+                            age <= selectedCourseForEnroll.max_age;
+                          const alreadyEnrolled = isChildAlreadyEnrolledInCourse(
+                            selectedCourseForEnroll.id,
+                            child.id
+                          );
+                          const isSelected = selectedChildForEnrollId === child.id;
+
+                          return (
+                            <button
+                              key={child.id}
+                              type="button"
+                              disabled={!isCompatible || alreadyEnrolled}
+                              onClick={() => setSelectedChildForEnrollId(child.id)}
+                              className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                                alreadyEnrolled
+                                  ? 'bg-emerald-50/60 border-emerald-200 opacity-75 cursor-not-allowed'
+                                  : !isCompatible
+                                    ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
+                                    : isSelected
+                                      ? 'bg-[#1E2046] text-white border-[#1E2046] shadow-lg cursor-pointer'
+                                      : 'bg-slate-50 hover:bg-sky-50 text-[#1E2046] border-slate-200 cursor-pointer'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`w-10 h-10 rounded-xl font-black flex items-center justify-center text-sm shrink-0 ${
+                                    isSelected
+                                      ? 'bg-[#E52B6D] text-white'
+                                      : 'bg-white text-[#1E2046] border border-slate-200'
+                                  }`}
+                                >
+                                  {child.first_name.charAt(0)}
+                                </div>
+                                <div>
+                                  <div className="font-black text-base flex items-center gap-2 flex-wrap">
+                                    <span>
+                                      {child.first_name} {child.last_name}
+                                    </span>
+                                    <span
+                                      className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                                        isSelected
+                                          ? 'bg-white/15 text-sky-200'
+                                          : 'bg-slate-200/70 text-slate-600'
+                                      }`}
+                                    >
+                                      {age} anni
+                                    </span>
+                                  </div>
+                                  <div
+                                    className={`text-xs font-mono mt-0.5 ${
+                                      isSelected ? 'text-sky-200' : 'text-slate-400'
+                                    }`}
+                                  >
+                                    CF: {child.fiscal_code || 'Non specificato'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div>
+                                {alreadyEnrolled ? (
+                                  <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-black">
+                                    ✓ Già Iscritto
+                                  </span>
+                                ) : !isCompatible ? (
+                                  <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-bold">
+                                    Età richiesta: {selectedCourseForEnroll.min_age}-
+                                    {selectedCourseForEnroll.max_age} anni
+                                  </span>
+                                ) : isSelected ? (
+                                  <span className="px-3 py-1 rounded-full bg-[#E52B6D] text-white text-xs font-black">
+                                    Selezionato
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-bold text-slate-400">
+                                    Clicca per scegliere
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Riepilogo Transazione Cliente -> Club Sportivo */}
+                    <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-3">
+                      <div className="flex items-center justify-between text-xs font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 pb-2.5">
+                        <span>Riepilogo Iscrizione</span>
+                        <span className="text-emerald-600 flex items-center gap-1 font-bold">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Pagamento Diretto al Club
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500 font-medium">Associazione / Società Sportiva:</span>
+                        <span className="font-black text-[#1E2046]">
+                          {selectedCourseForEnroll.club_name}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500 font-medium">Corso e Frequenza:</span>
+                        <span className="font-bold text-[#1E2046]">
+                          {selectedCourseForEnroll.name} (
+                          {formatBillingPeriodLabel(selectedCourseForEnroll.billing_period)})
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500 font-medium">Posti liberi nel corso:</span>
+                        <span className="font-bold text-emerald-600">
+                          {Math.max(
+                            0,
+                            selectedCourseForEnroll.max_participants -
+                              selectedCourseForEnroll.enrolled_count
+                          )}{' '}
+                          liberi su {selectedCourseForEnroll.max_participants}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500 font-medium">
+                          Intestazione Ricevuta:
+                        </span>
+                        <span className="font-mono font-bold text-xs text-slate-700">
+                          CF: {parentProfile.fiscal_code || 'Da profilo genitore'}
+                        </span>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-black text-slate-400 uppercase block">
+                            Totale Quota Iscrizione
+                          </span>
+                        </div>
+                        <span className="text-3xl font-black text-[#E52B6D]">
+                          {formatEuroFromCents(selectedCourseForEnroll.price_cents)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Blocco temporaneo posto (Hold 15 min) */}
+                    <div className="p-3.5 rounded-xl bg-sky-50 border border-sky-200/80 flex items-center gap-3 text-xs text-sky-900 font-medium">
+                      <Clock className="w-4 h-4 text-sky-600 shrink-0" />
+                      <span>
+                        Il posto per tuo figlio viene <strong>riservato per 15 minuti</strong> per consentirti di completare la procedura.
+                      </span>
+                    </div>
+
+                    <label className="flex items-start gap-2.5 text-xs text-slate-600 font-medium cursor-pointer">
+                      <input
+                        type="checkbox"
+                        required
+                        checked={enrollAcceptTerms}
+                        onChange={e => setEnrollAcceptTerms(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 accent-[#E52B6D] rounded"
+                      />
+                      <span>
+                        Confermo l'iscrizione di mio figlio presso{' '}
+                        <strong>{selectedCourseForEnroll.club_name}</strong> e richiedo l'emissione automatica della ricevuta di pagamento.
+                      </span>
+                    </label>
+
+                    <div className="space-y-2">
+                      <button
+                        type="submit"
+                        disabled={isCreatingCheckout || !selectedChildForEnrollId}
+                        className="w-full py-4 bg-[#1E2046] hover:bg-[#E52B6D] disabled:opacity-50 transition-colors text-white rounded-2xl font-black text-base shadow-xl flex items-center justify-center gap-2.5 cursor-pointer"
+                      >
+                        {isCreatingCheckout ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <CreditCard className="w-5 h-5" />
+                        )}
+                        <span>
+                          Procedi al Pagamento ({formatEuroFromCents(selectedCourseForEnroll.price_cents)})
+                        </span>
+                      </button>
+                      <p className="text-center text-xs text-slate-400 font-medium">
+                        Puoi pagare con Carta di Credito, Debito, Bancomat, Apple Pay o Google Pay
+                      </p>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* =================================================================
+                  MODALE 2: STORICO PAGAMENTI & RICEVUTE
+              ================================================================= */}
+              {activeModal === 'payments-history' && (
+                <div className="pt-2 space-y-6">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#E52B6D] bg-rose-50 px-3 py-1 rounded-full">
+                      Iscrizioni & Ricevute
+                    </span>
+                    <h3 className="text-2xl sm:text-3xl font-black text-[#1E2046] mt-2">
+                      I Tuoi Pagamenti e Ricevute
+                    </h3>
+                    <p className="text-slate-500 text-sm font-medium mt-1">
+                      Visualizza lo storico dei pagamenti e scarica le ricevute rilasciate dai centri sportivi.
+                    </p>
+                  </div>
+
+                  {parentPayments.length > 0 ? (
+                    <div className="space-y-3">
+                      {parentPayments.map(payment => (
+                        <div
+                          key={payment.id}
+                          className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                  payment.status === 'SUCCEEDED'
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : payment.status === 'PENDING'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : payment.status === 'REFUNDED'
+                                        ? 'bg-purple-100 text-purple-700'
+                                        : 'bg-rose-100 text-rose-700'
+                                }`}
+                              >
+                                {formatPaymentStatusLabel(payment.status)}
+                              </span>
+                              <span className="font-black text-[#1E2046] text-base">
+                                {payment.course_name}
+                              </span>
+                              <span className="text-xs font-bold text-slate-500">
+                                • {payment.club_name}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-500 font-medium">
+                              Atleta: <strong>{payment.child_name}</strong> • Data:{' '}
+                              {new Date(payment.created_at).toLocaleDateString('it-IT')}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="text-right">
+                              <div className="text-lg font-black text-[#1E2046]">
+                                {formatEuroFromCents(payment.amount_cents)}
+                              </div>
+                              <div className="text-[10px] font-bold text-slate-400 uppercase">
+                                {formatBillingPeriodLabel(payment.billing_period)}
+                              </div>
+                            </div>
+
+                            {payment.status === 'SUCCEEDED' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedReceiptPayment(payment);
+                                  setActiveModal('receipt-preview');
+                                }}
+                                className="px-3.5 py-2 rounded-xl bg-white hover:bg-sky-50 text-[#1E2046] border border-slate-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-[#E52B6D]" />
+                                Vedi Ricevuta
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <CreditCard className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                      <h4 className="font-bold text-[#1E2046]">Nessun pagamento effettuato</h4>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Scegli un corso nella sezione "Club Vicino a Te" qui sotto per iscrivere tuo figlio.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* =================================================================
+                  MODALE 4: ANTEPRIMA, DOWNLOAD E STAMPA RICEVUTA UFFICIALE
+              ================================================================= */}
+              {activeModal === 'receipt-preview' && selectedReceiptPayment && (
+                <div className="pt-2 space-y-6">
+                  {/* DOCUMENTO RICEVUTA UFFICIALE (ISOLATO E FORMATTATO PER STAMPA A4) */}
+                  <div
+                    id="printable-receipt"
+                    className="p-8 sm:p-12 rounded-2xl border-2 border-slate-300 bg-white text-slate-900 space-y-6 shadow-sm print:p-0 print:border-none print:shadow-none"
+                  >
+                    {/* TESTATA ENTE SPORTIVO & NUMERAZIONE QUIETANZA */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-6 pb-6 border-b-2 border-slate-300">
+                      <div className="flex items-start gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-[#1E2046] text-white flex items-center justify-center font-black text-2xl shrink-0 print:border print:border-slate-400">
+                          {selectedReceiptPayment.club_name.charAt(0)}
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block">
+                            Associazione Sportiva Dilettantistica • Ente non commerciale
+                          </span>
+                          <h2 className="text-xl sm:text-2xl font-black text-[#1E2046] mt-0.5 tracking-tight leading-tight">
+                            {selectedReceiptPayment.club_name}
+                          </h2>
+                          {selectedReceiptPayment.club_fiscal_code && (
+                            <p className="text-xs font-mono font-bold text-slate-600 mt-1">
+                              Codice Fiscale / P.IVA: {selectedReceiptPayment.club_fiscal_code}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Affiliata ad Organismo Sportivo riconosciuto dal CONI
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="border-2 border-slate-300 rounded-xl p-4 bg-slate-50 text-right min-w-[220px] shrink-0 print:bg-white">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                          RICEVUTA DI PAGAMENTO
+                        </div>
+                        <div className="text-xl font-mono font-black text-[#1E2046] mt-0.5">
+                          N° {selectedReceiptPayment.receipt_number}
+                        </div>
+                        <div className="text-xs text-slate-600 mt-1 font-medium">
+                          Data: {new Date(selectedReceiptPayment.created_at).toLocaleDateString('it-IT')}
+                        </div>
+                        <div className="inline-block mt-2 px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
+                          SALDATO • QUIETANZATO
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* OGGETTO UFFICIALE */}
+                    <div className="py-2">
+                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">
+                        Oggetto del documento
+                      </div>
+                      <p className="text-sm font-bold text-[#1E2046]">
+                        Attestazione di versamento quota di partecipazione alle attività sportive giovanili per la stagione sportiva in corso.
+                      </p>
+                    </div>
+
+                    {/* RIQUADRI ANAGRAFICI (PAGANTE E MINORE ISCRITTO) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div className="p-4 rounded-xl border border-slate-300 bg-slate-50/70 print:bg-white">
+                        <span className="font-black text-slate-500 uppercase text-[10px] block mb-1.5">
+                          Soggetto Pagante (Genitore / Tutore)
+                        </span>
+                        <div className="font-bold text-[#1E2046] text-sm">
+                          {selectedReceiptPayment.parent_name ||
+                            `${parentProfile.first_name} ${parentProfile.last_name}`}
+                        </div>
+                        <div className="font-mono font-bold text-slate-700 mt-1">
+                          Codice Fiscale: {selectedReceiptPayment.parent_fiscal_code || parentProfile.fiscal_code}
+                        </div>
+                        <div className="text-slate-500 text-[11px] mt-0.5">
+                          Qualifica: Esercente la potestà genitoriale
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-xl border border-slate-300 bg-slate-50/70 print:bg-white">
+                        <span className="font-black text-slate-500 uppercase text-[10px] block mb-1.5">
+                          Atleta Minore Praticante
+                        </span>
+                        <div className="font-bold text-[#1E2046] text-sm">
+                          {selectedReceiptPayment.child_name}
+                        </div>
+                        <div className="font-mono font-bold text-slate-700 mt-1">
+                          Codice Fiscale: {selectedReceiptPayment.child_fiscal_code}
+                        </div>
+                        <div className="text-slate-500 text-[11px] mt-0.5">
+                          Attività: Pratica sportiva giovanile
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* TABELLA CONTABILE DETTAGLIO QUOTA */}
+                    <div className="border border-slate-300 rounded-xl overflow-hidden mt-4">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 border-b border-slate-300 text-slate-600 uppercase font-black tracking-wider text-[11px]">
+                            <th className="p-3.5">Descrizione Prestazione</th>
+                            <th className="p-3.5 text-center">Frequenza</th>
+                            <th className="p-3.5 text-center">Metodo Pagamento</th>
+                            <th className="p-3.5 text-right">Quota Versata</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-slate-200">
+                            <td className="p-3.5 font-bold text-[#1E2046]">
+                              Quota iscrizione corso: {selectedReceiptPayment.course_name}
+                              <span className="block text-[11px] font-normal text-slate-500 mt-0.5">
+                                Iscrizione istituzionale alle attività sportive del club
+                              </span>
+                            </td>
+                            <td className="p-3.5 text-center font-semibold text-slate-700">
+                              {formatBillingPeriodLabel(selectedReceiptPayment.billing_period)}
+                            </td>
+                            <td className="p-3.5 text-center font-medium text-slate-600">
+                              Elettronico tracciabile (Carta)
+                            </td>
+                            <td className="p-3.5 text-right font-black text-base text-[#1E2046]">
+                              {formatEuroFromCents(selectedReceiptPayment.amount_cents)}
+                            </td>
+                          </tr>
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-slate-50 font-black">
+                            <td colSpan={3} className="p-3.5 text-right text-xs uppercase tracking-wider text-slate-600">
+                              Totale Riscossa a Saldo:
+                            </td>
+                            <td className="p-3.5 text-right text-lg text-[#1E2046] font-black">
+                              {formatEuroFromCents(selectedReceiptPayment.amount_cents)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {/* CLAUSOLA CONTABILE E FISCALE DI LEGGE */}
+                    <p className="text-[11px] text-slate-500 leading-relaxed mt-3">
+                      Operazione istituzionale non soggetta ad IVA ai sensi dell'art. 148 del D.P.R. 917/1986 (TUIR) e dell'art. 4 del D.P.R. 633/1972. Pagamento tracciabile eseguito a saldo tramite circuito di pagamento elettronico registrato.
+                    </p>
+
+                    {/* DATI DI TRANSAZIONE E TRACCIABILITÀ */}
+                    <div className="pt-3 border-t border-slate-200 flex flex-wrap justify-between items-center text-[11px] text-slate-400 font-mono gap-2">
+                      <span>ID Transazione: #{selectedReceiptPayment.id}</span>
+                      <span>Data e Ora Contabile: {new Date(selectedReceiptPayment.created_at).toLocaleString('it-IT')}</span>
+                    </div>
+
+                    {/* TIMBRO E FIRMA PER QUIETANZA */}
+                    <div className="pt-8 border-t-2 border-dashed border-slate-300 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
+                      <div className="border border-slate-300 rounded-xl p-3 bg-slate-50 text-center text-[10px] text-slate-600 min-w-[220px] print:bg-white">
+                        <div className="font-bold uppercase tracking-wider mb-1 text-slate-500">
+                          Timbro Associazione Sportiva
+                        </div>
+                        <div className="font-mono font-black text-[#1E2046] text-xs">
+                          {selectedReceiptPayment.club_name}
+                        </div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">
+                          Quietanza Emessa Digitalmente via Athlos
+                        </div>
+                      </div>
+
+                      <div className="text-right sm:min-w-[240px]">
+                        <div className="w-56 border-b border-slate-400 mb-1.5 ml-auto"></div>
+                        <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
+                          Firma del Legale Rappresentante
+                        </span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          Per quietanza liberatoria di avvenuto pagamento
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* BARRA AZIONI (NON STAMPATA GRAZIE A NO-PRINT) */}
+                  <div className="flex flex-wrap justify-between items-center gap-3 pt-2 no-print">
+                    <button
+                      type="button"
+                      onClick={() => setActiveModal('payments-history')}
+                      className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm cursor-pointer"
+                    >
+                      ← Torna allo storico
+                    </button>
+                    <div className="flex flex-wrap gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadReceiptHtml(selectedReceiptPayment)}
+                        className="px-5 py-2.5 rounded-xl bg-white hover:bg-sky-50 border border-slate-300 text-[#1E2046] font-bold text-sm flex items-center gap-2 cursor-pointer shadow-sm transition-colors"
+                      >
+                        <Download className="w-4 h-4 text-[#E52B6D]" /> Scarica Ricevuta
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="px-6 py-2.5 rounded-xl bg-[#1E2046] hover:bg-[#E52B6D] text-white font-black text-sm flex items-center gap-2 cursor-pointer shadow-md transition-colors"
+                      >
+                        <Printer className="w-4 h-4" /> Stampa / Salva in PDF
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {activeModal === 'referral' && (
                 <div className="text-center pt-4">
@@ -595,6 +1560,20 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
               {activeModal === 'add-child' && (
                 <div className="pt-2">
+                  {selectedCourseForEnroll && (
+                    <div className="mb-6 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 flex items-start gap-3 shadow-sm">
+                      <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-sm font-black text-amber-900">
+                          Aggiungi prima tuo figlio per poterlo iscrivere a {selectedCourseForEnroll.name}
+                        </h4>
+                        <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                          Non hai ancora registrato nessun atleta nel tuo profilo. Inserisci i dati anagrafici qui sotto: una volta salvato, proseguirai subito e in automatico con l'iscrizione al corso presso <strong>{selectedCourseForEnroll.club_name}</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <h3 className="text-2xl font-black text-[#1E2046] mb-1">Aggiungi un Figlio</h3>
                   <p className="text-slate-400 text-sm font-medium mb-6">
                     Inserisci i dati del tuo piccolo atleta per monitorarne il percorso.
@@ -1269,58 +2248,472 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
       {/* SEZIONE: ESPLORA E ISCRIVI (CLUB LIMITROFI) */}
       <section className="mt-20">
-        <div className="flex justify-between items-end mb-8">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-8">
           <div>
             <h2 className="text-3xl font-black text-[#1E2046] tracking-tight">Club Vicino a Te</h2>
             <p className="text-slate-500 font-medium mt-1">
-              Scopri dove iscrivere i tuoi figli per esplorare nuovi sport.
+              Esplora i corsi disponibili, verifica i posti liberi e iscrivi subito tuo figlio.
             </p>
           </div>
+          {parentPayments.length > 0 && (
+            <button
+              onClick={() => setActiveModal('payments-history')}
+              className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-[#1E2046] rounded-xl font-bold text-xs shadow-sm transition-colors cursor-pointer flex items-center gap-2 self-start sm:self-auto"
+            >
+              <Receipt className="w-4 h-4 text-[#E52B6D]" />
+              I Miei Pagamenti ({parentPayments.filter((p) => p.status === 'SUCCEEDED').length})
+            </button>
+          )}
         </div>
 
-        {nearbyClubs.length > 0 ? (
+        {selectedClubForShowcase ? (
+          /* ==========================================================================
+             MINI-SITO / VETRINA DETTAGLIATA DEL CLUB ("CHI SIAMO", FOTO & ORARI)
+             Evita l'uscita dalla piattaforma e aumenta la fiducia dei genitori
+             ========================================================================== */
+          <div className="bg-white rounded-[28px] border border-slate-200 overflow-hidden shadow-xl animate-in fade-in duration-200">
+            {/* Barra superiore di navigazione */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <button
+                onClick={() => setSelectedClubForShowcase(null)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-[#1E2046] shadow-sm transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4 text-[#E52B6D]" /> Torna all'elenco dei centri sportivi
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Centro Convenzionato Ufficiale
+                </span>
+                <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-full">
+                  {selectedClubForShowcase.distance} da casa tua
+                </span>
+              </div>
+            </div>
+
+            {/* Hero Cover con Foto Reale Google Places & Dati Principali */}
+            <div className="relative h-64 sm:h-80 w-full overflow-hidden bg-slate-900">
+              <img
+                src={
+                  selectedClubForShowcase.places_data?.photos?.[0] ||
+                  'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1400&q=80'
+                }
+                alt={selectedClubForShowcase.name}
+                className="w-full h-full object-cover opacity-80"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#1E2046] via-[#1E2046]/50 to-transparent" />
+              <div className="absolute bottom-6 left-6 right-6 flex flex-col sm:flex-row justify-between sm:items-end gap-4 text-white">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    {selectedClubForShowcase.rating && (
+                      <span className="bg-amber-400 text-slate-900 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                        <Star className="w-3.5 h-3.5 fill-slate-900" />
+                        {selectedClubForShowcase.rating.toFixed(1)} / 5.0 (
+                        {selectedClubForShowcase.places_data?.reviews_count || '100+'} recensioni Google)
+                      </span>
+                    )}
+                    {selectedClubForShowcase.places_data?.opening_hours?.open_now != null && (
+                      <span
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                          selectedClubForShowcase.places_data.opening_hours.open_now
+                            ? 'bg-emerald-500/90 text-white'
+                            : 'bg-slate-700/90 text-slate-200'
+                        }`}
+                      >
+                        {selectedClubForShowcase.places_data.opening_hours.open_now
+                          ? '● Aperto ora'
+                          : '○ Chiuso al momento'}
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+                    {selectedClubForShowcase.name}
+                  </h2>
+                  <p className="text-slate-200 text-xs sm:text-sm flex items-center gap-2 mt-1">
+                    <MapPin className="w-4 h-4 text-[#FF4F8B] shrink-0" />
+                    {selectedClubForShowcase.address}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {selectedClubForShowcase.website_url && (
+                    <a
+                      href={selectedClubForShowcase.website_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
+                    >
+                      <Globe className="w-4 h-4" /> Sito Ufficiale <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                  {selectedClubForShowcase.phone_number && (
+                    <a
+                      href={`tel:${selectedClubForShowcase.phone_number}`}
+                      className="px-4 py-2 bg-white text-[#1E2046] hover:bg-slate-100 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors"
+                    >
+                      <Phone className="w-4 h-4 text-[#E52B6D]" /> {selectedClubForShowcase.phone_number}
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Corpo Vetrina: Galleria, Corsi e Orari Ufficiali */}
+            <div className="p-6 sm:p-8 space-y-8">
+              {/* Photo Gallery Struttura (Campi, Spogliatoi, Palestre da Google) */}
+              {selectedClubForShowcase.places_data?.photos &&
+                selectedClubForShowcase.places_data.photos.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-black text-[#1E2046] uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-[#E52B6D]" /> Foto della Struttura & Campi (
+                      {selectedClubForShowcase.places_data.photos.length} immagini ufficiali)
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {selectedClubForShowcase.places_data.photos.map((photoUrl, pIdx) => (
+                        <div
+                          key={pIdx}
+                          className="group relative h-40 sm:h-48 rounded-2xl overflow-hidden bg-slate-100 shadow-sm border border-slate-200"
+                        >
+                          <img
+                            src={photoUrl}
+                            alt={`${selectedClubForShowcase.name} foto ${pIdx + 1}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* 3. Sezione Corsi Disponibili + Sidebar Orari & Posizione */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Corsi Attivi del Club */}
+                <div className="lg:col-span-2">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-black text-[#1E2046] flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-[#E52B6D]" /> Corsi Disponibili & Iscrizione Diretta
+                    </h3>
+                    <span className="text-xs font-bold text-slate-400">
+                      {selectedClubForShowcase.courses.length} corsi attivi
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    {selectedClubForShowcase.courses.map((course, cIdx) => {
+                      const spotsLeft = Math.max(0, course.max_participants - course.enrolled_count);
+                      const isFull = spotsLeft <= 0;
+                      const enrolledChildrenInCourse = children.filter((ch) =>
+                        isChildAlreadyEnrolledInCourse(course.id, ch.id)
+                      );
+
+                      return (
+                        <div
+                          key={course.id || cIdx}
+                          className="bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:border-[#E52B6D]/40 transition-colors flex flex-col gap-3"
+                        >
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <p className="font-black text-[#1E2046] text-base leading-snug">
+                                {course.name}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <span className="text-xs text-slate-500 font-semibold">
+                                  Fascia d'età: {course.age_range} anni
+                                </span>
+                                <span className="text-slate-300">•</span>
+                                <span
+                                  className={`text-[11px] font-bold flex items-center gap-1 ${
+                                    isFull
+                                      ? 'text-rose-600'
+                                      : spotsLeft <= 3
+                                        ? 'text-amber-600'
+                                        : 'text-emerald-600'
+                                  }`}
+                                >
+                                  <Users className="w-3 h-3" />
+                                  {isFull
+                                    ? 'Posti Esauriti'
+                                    : `${spotsLeft} ${spotsLeft === 1 ? 'posto libero' : 'posti liberi'}`}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="block font-black text-[#1E2046] text-lg leading-none">
+                                {formatEuroFromCents(course.price_cents)}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                {formatBillingPeriodLabel(course.billing_period)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {enrolledChildrenInCourse.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-200/60">
+                              {enrolledChildrenInCourse.map((ch) => (
+                                <span
+                                  key={ch.id}
+                                  className="inline-flex items-center gap-1 bg-emerald-100/80 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full"
+                                >
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  {ch.first_name} iscritto/a
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          <button
+                            onClick={() => openEnrollCourseModal(course)}
+                            disabled={isFull}
+                            className={`w-full py-3 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
+                              isFull
+                                ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                                : 'bg-[#1E2046] hover:bg-[#E52B6D] text-white shadow-sm cursor-pointer'
+                            }`}
+                          >
+                            {isFull ? (
+                              <>Corso al Completo ({course.enrolled_count}/{course.max_participants})</>
+                            ) : (
+                              <>
+                                <CreditCard className="w-4 h-4" /> Iscrivi tuo figlio con Carta o Apple Pay
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Sidebar: Orari di Apertura & Mappa Google */}
+                <div className="space-y-6">
+                  {/* Orari settimanali */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-[#E52B6D]" /> Orari di Apertura Centro
+                    </h4>
+                    {selectedClubForShowcase.places_data?.opening_hours?.weekday_descriptions?.length ? (
+                      <ul className="space-y-2 text-xs">
+                        {selectedClubForShowcase.places_data.opening_hours.weekday_descriptions.map(
+                          (desc, dIdx) => (
+                            <li
+                              key={dIdx}
+                              className="flex justify-between py-1.5 border-b border-slate-200/60 last:border-0 text-slate-700 font-medium"
+                            >
+                              {desc}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-slate-500">
+                        Orari standard segreteria e corsi: Lunedì – Sabato 08:30 – 21:00
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Posizione & Navigatore */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Navigation className="w-4 h-4 text-[#E52B6D]" /> Posizione & Mappe
+                    </h4>
+                    <p className="text-xs text-slate-600 mb-4 flex items-start gap-1.5">
+                      <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                      {selectedClubForShowcase.address}
+                    </p>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        `${selectedClubForShowcase.name} ${selectedClubForShowcase.address}`
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 border border-slate-200 text-[#1E2046] rounded-xl font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4 text-[#E52B6D]" /> Apri in Google Maps
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : nearbyClubs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {nearbyClubs.map((club, i) => (
               <div
-                key={i}
-                className="bg-white rounded-[24px] border border-slate-200 p-6 hover:shadow-xl hover:shadow-[#E52B6D]/10 transition-shadow duration-300 flex flex-col"
+                key={club.id || i}
+                className="bg-white rounded-[24px] border border-slate-200 overflow-hidden hover:shadow-xl hover:shadow-[#E52B6D]/10 transition-shadow duration-300 flex flex-col"
               >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    {i === 0 && (
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#E52B6D] bg-sky-100 px-3 py-1 rounded-full mb-3 inline-block">
-                        PIÙ VICINO (1° SCELTA)
+                {/* Cover Immagine Google Places (se presente) */}
+                {club.places_data?.photos?.[0] && (
+                  <div className="relative h-44 w-full overflow-hidden bg-slate-100">
+                    <img
+                      src={club.places_data.photos[0]}
+                      alt={club.name}
+                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300 cursor-pointer"
+                      onClick={() => setSelectedClubForShowcase(club)}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
+                    
+                    <div className="absolute top-3 left-3 right-3 flex justify-between items-center">
+                      {i === 0 ? (
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white bg-[#E52B6D] px-2.5 py-1 rounded-full shadow-md">
+                          PIÙ VICINO (1° SCELTA)
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      <span className="bg-white/90 backdrop-blur text-[#1E2046] font-black text-xs px-2.5 py-1 rounded-full shadow-sm">
+                        {club.distance}
                       </span>
-                    )}
-                    <h3 className="text-xl font-bold text-[#1E2046] leading-tight">{club.name}</h3>
+                    </div>
+
+                    <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center text-white">
+                      {club.rating ? (
+                        <span className="bg-amber-400 text-slate-900 text-[11px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                          <Star className="w-3 h-3 fill-slate-900" />
+                          {club.rating.toFixed(1)} ({club.places_data?.reviews_count || '100+'})
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      {club.places_data?.opening_hours?.open_now != null && (
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            club.places_data.opening_hours.open_now
+                              ? 'bg-emerald-500/90 text-white'
+                              : 'bg-slate-700/80 text-slate-200'
+                          }`}
+                        >
+                          {club.places_data.opening_hours.open_now ? 'Aperto' : 'Chiuso'}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span className="bg-slate-100 text-[#1E2046] font-black text-sm px-3 py-1 rounded-full whitespace-nowrap">
-                    {club.distance}
-                  </span>
-                </div>
+                )}
 
-                <p className="text-slate-500 text-sm flex items-center gap-2 mb-6">
-                  <MapPin className="w-4 h-4 text-slate-400" /> {club.address}
-                </p>
-
-                <div className="flex-1">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                    Corsi Disponibili
-                  </h4>
-                  <div className="space-y-3">
-                    {club.courses.map((course, cIdx) => (
-                      <div
-                        key={cIdx}
-                        className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex justify-between items-center hover:border-[#E52B6D] transition-colors"
-                      >
-                        <div>
-                          <p className="font-bold text-[#1E2046] text-sm">{course.name}</p>
-                          <p className="text-xs text-slate-400 font-medium mt-0.5">
-                            Età: {course.age_range} anni
-                          </p>
-                        </div>
+                <div className="p-6 flex flex-col flex-1">
+                  {!club.places_data?.photos?.[0] && (
+                    <div className="flex justify-between items-start gap-2 mb-3">
+                      <div>
+                        {i === 0 && (
+                          <span className="text-[10px] font-black uppercase tracking-widest text-[#E52B6D] bg-sky-100 px-2.5 py-1 rounded-full inline-block mb-2">
+                            PIÙ VICINO (1° SCELTA)
+                          </span>
+                        )}
+                        <h3 className="text-xl font-bold text-[#1E2046] leading-tight">{club.name}</h3>
                       </div>
-                    ))}
+                      <span className="bg-slate-100 text-[#1E2046] font-black text-sm px-3 py-1 rounded-full whitespace-nowrap shrink-0">
+                        {club.distance}
+                      </span>
+                    </div>
+                  )}
+
+                  {club.places_data?.photos?.[0] && (
+                    <h3 className="text-xl font-bold text-[#1E2046] leading-tight mb-2">{club.name}</h3>
+                  )}
+
+                  <p className="text-slate-500 text-sm flex items-center gap-2 mb-4">
+                    <MapPin className="w-4 h-4 text-slate-400 shrink-0" /> {club.address}
+                  </p>
+
+                  {/* Pulsante Esplora Vetrina e Foto Struttura */}
+                  <button
+                    onClick={() => setSelectedClubForShowcase(club)}
+                    className="w-full mb-5 py-2.5 px-3 bg-slate-50 hover:bg-[#E52B6D]/10 hover:text-[#E52B6D] border border-slate-200 text-[#1E2046] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-[#E52B6D]" /> Scopri Struttura, Foto & Orari
+                  </button>
+
+                  <div className="flex-1">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+                      <span>Corsi & Quote Iscrizione</span>
+                      <span className="text-[10px] text-slate-400 font-semibold">
+                        {club.courses.length} corsi
+                      </span>
+                    </h4>
+                    <div className="space-y-3">
+                      {club.courses.map((course, cIdx) => {
+                        const spotsLeft = Math.max(0, course.max_participants - course.enrolled_count);
+                        const isFull = spotsLeft <= 0;
+                        const enrolledChildrenInCourse = children.filter((ch) =>
+                          isChildAlreadyEnrolledInCourse(course.id, ch.id)
+                        );
+
+                        return (
+                          <div
+                            key={course.id || cIdx}
+                            className="bg-slate-50 border border-slate-100 rounded-2xl p-4 hover:border-[#E52B6D]/40 transition-colors flex flex-col gap-3"
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <div>
+                                <p className="font-black text-[#1E2046] text-sm leading-snug">
+                                  {course.name}
+                                </p>
+                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                  <span className="text-xs text-slate-500 font-semibold">
+                                    Età: {course.age_range} anni
+                                  </span>
+                                  <span className="text-slate-300">•</span>
+                                  <span
+                                    className={`text-[11px] font-bold flex items-center gap-1 ${
+                                      isFull
+                                        ? 'text-rose-600'
+                                        : spotsLeft <= 3
+                                          ? 'text-amber-600'
+                                          : 'text-emerald-600'
+                                    }`}
+                                  >
+                                    <Users className="w-3 h-3" />
+                                    {isFull
+                                      ? 'Posti Esauriti'
+                                      : `${spotsLeft} ${spotsLeft === 1 ? 'posto libero' : 'posti liberi'}`}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="block font-black text-[#1E2046] text-base leading-none">
+                                  {formatEuroFromCents(course.price_cents)}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                  {formatBillingPeriodLabel(course.billing_period)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {enrolledChildrenInCourse.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-200/60">
+                                {enrolledChildrenInCourse.map((ch) => (
+                                  <span
+                                    key={ch.id}
+                                    className="inline-flex items-center gap-1 bg-emerald-100/80 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    {ch.first_name} iscritto/a
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <button
+                              onClick={() => openEnrollCourseModal(course)}
+                              disabled={isFull}
+                              className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
+                                isFull
+                                  ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                                  : 'bg-[#1E2046] hover:bg-[#E52B6D] text-white shadow-sm cursor-pointer'
+                              }`}
+                            >
+                              {isFull ? (
+                                <>Corso al Completo ({course.enrolled_count}/{course.max_participants})</>
+                              ) : (
+                                <>
+                                  <CreditCard className="w-3.5 h-3.5" /> Iscrivi tuo figlio con Carta o Apple Pay
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1353,7 +2746,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
             </p>
           </div>
         )}
-        </section>
+      </section>
       </main>
     </div>
   );

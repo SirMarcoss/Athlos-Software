@@ -2,7 +2,7 @@ from pydantic.main import BaseModel
 from pydantic.fields import Field
 from pydantic.networks import EmailStr
 from pydantic.config import ConfigDict
-from typing import Optional
+from typing import Optional, Any
 from uuid import UUID
 
 
@@ -28,6 +28,11 @@ class ClubUpdate(BaseModel):
 class ClubResponse(ClubCreate):
     id : UUID
     user_id : UUID
+    places_data : Optional[dict[str, Any]] = None
+    website_url: Optional[str] = None
+    rating: Optional[float] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
     # questo JSON nasce da un oggetto del database SQLAlchemy, leggilo correttamente

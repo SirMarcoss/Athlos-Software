@@ -8,7 +8,6 @@ import {
   Mail,
   Plus,
   Trash2,
-  Edit3,
   Activity,
   Users,
   Sparkles,
@@ -19,17 +18,21 @@ import {
   Play,
   ClipboardCheck,
   Search,
-  Loader2
+  Loader2,
+  CreditCard,
+  ShieldCheck,
+  RefreshCw,
+  FileText,
+  Star,
+  Camera
 } from 'lucide-react';
 import {
   getMyClubProfile,
+  enrichMyClub,
   updateMyClubProfile,
   createClubProfile,
   deleteMyClubProfile,
   getMyClubCourses,
-  createClubCourse,
-  updateClubCourse,
-  deleteClubCourse,
   submitEvaluationSession,
   sendEvaluationEmail,
   getCourseEvaluations,
@@ -39,7 +42,12 @@ import {
   getCourseAthletes,
   enrollAthleteInCourse,
   unenrollAthleteFromCourse,
-  type ApiEvaluationSessionCreate
+  getMyClubPayments,
+  formatEuroFromCents,
+  formatBillingPeriodLabel,
+  formatPaymentStatusLabel,
+  type ApiEvaluationSessionCreate,
+  type ApiPaymentRecord
 } from './api';
 
 // === INTERFACCE ALLINEATE AL BACK-END ===
@@ -63,6 +71,9 @@ interface ClubProfile {
   logo_url?: string;
   latitude?: number;
   longitude?: number;
+  website_url?: string;
+  rating?: number;
+  places_data?: any;
 }
 
 interface GeoSearchResult {
@@ -132,6 +143,9 @@ interface ClubCourse {
   sport_category: string;
   min_age: number;
   max_age: number;
+  price_cents: number;
+  max_participants: number;
+  billing_period: 'trimestrale' | 'mensile' | 'annuale' | 'quota_unica';
   motor_tests: CourseMotorTest[];
   athletes: Athlete[];
 }
@@ -218,13 +232,16 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   const [childPhysicalTests, setChildPhysicalTests] = useState<Record<string, PhysicalTestItem[]>>({});
   const [evaluations, setEvaluations] = useState<Record<string, EvaluationSessionRecord>>({});
 
-  // Navigazione principale tra le 3 sezioni
-  const [activeTab, setActiveTab] = useState<'courses' | 'motor-tests' | 'psych-form'>('courses');
+  // Navigazione principale tra le 4 sezioni (inclusa Pagamenti & Stripe)
+  const [activeTab, setActiveTab] = useState<'courses' | 'motor-tests' | 'psych-form' | 'payments'>('courses');
 
   // Modali
   const [activeModal, setActiveModal] = useState<
-    'none' | 'profile' | 'course-form' | 'analysis' | 'add-athlete'
+    'none' | 'profile' | 'analysis' | 'add-athlete'
   >('none');
+
+  // --- PAGAMENTI E ISCRIZIONI CLUB ---
+  const [clubPayments, setClubPayments] = useState<ApiPaymentRecord[]>([]);
 
   // Messaggio di conferma rapido (Toast)
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -275,14 +292,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   const [profileForm, setProfileForm] = useState<ClubProfile>(DEFAULT_EMPTY_CLUB);
   const [geoResults, setGeoResults] = useState<GeoSearchResult[]>([]);
   const [confirmDeleteClub, setConfirmDeleteClub] = useState(false);
-
-  // --- STATO MODALE CREA / MODIFICA CORSO ---
-  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
-  const [courseName, setCourseName] = useState('');
-  const [courseSportCategory, setCourseSportCategory] = useState('Basket');
-  const [courseMinAge, setCourseMinAge] = useState(6);
-  const [courseMaxAge, setCourseMaxAge] = useState(10);
-  const [courseFormError, setCourseFormError] = useState<string | null>(null);
 
   // --- STATO MODALE AGGIUNGI BAMBINO ---
   const [targetCourseForAthlete, setTargetCourseForAthlete] = useState<string | null>(null);
@@ -336,13 +345,26 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
             },
             logo_url: apiClub.logo_url || undefined,
             latitude: apiClub.latitude ?? undefined,
-            longitude: apiClub.longitude ?? undefined
+            longitude: apiClub.longitude ?? undefined,
+            website_url: apiClub.website_url || undefined,
+            rating: apiClub.rating ?? undefined,
+            places_data: apiClub.places_data || undefined
           };
           setClub(loadedClub);
           setProfileForm(loadedClub);
         }
       } catch (err) {
         console.warn('Profilo club non trovato o errore:', err);
+      }
+
+      // 1b. Pagamenti del club dal backend
+      try {
+        const remotePayments = await getMyClubPayments();
+        if (isMounted && remotePayments) {
+          setClubPayments(remotePayments);
+        }
+      } catch {
+        // nessun fallback locale
       }
 
       // 2. Corsi del Club e Valutazioni salvate
@@ -435,6 +457,9 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               sport_category: savedSportCat,
               min_age: ac.min_age,
               max_age: ac.max_age,
+              price_cents: ac.price_cents,
+              max_participants: ac.max_participants ?? 20,
+              billing_period: ac.billing_period ?? 'trimestrale',
               motor_tests: savedMotorTests,
               athletes: enrolledAthletes
             });
@@ -483,6 +508,34 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
     loadBackendData();
     return () => {
       isMounted = false;
+    };
+  }, []);
+
+  // --- SINCRONIZZAZIONE AUTOMATICA REAL-TIME DELLE TRANSAZIONI ---
+  const refreshClubPayments = () => {
+    getMyClubPayments()
+      .then(remote => {
+        if (remote) setClubPayments(remote);
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    // Ri-sincronizza subito non appena l'utente torna sulla finestra
+    const handleFocus = () => {
+      refreshClubPayments();
+    };
+
+    // Polling periodico in background ogni 10 secondi per tenere aggiornati i KPI in tempo reale
+    const timer = window.setInterval(refreshClubPayments, 10000);
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
     };
   }, []);
 
@@ -868,16 +921,59 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       };
 
       try {
-        await updateMyClubProfile(payload);
+        const updated = await updateMyClubProfile(payload);
+        if (updated) {
+          setClub(prev => ({
+            ...prev,
+            ...profileForm,
+            places_data: updated.places_data || prev.places_data,
+            website_url: updated.website_url || prev.website_url,
+            rating: updated.rating ?? prev.rating
+          }));
+        } else {
+          setClub(profileForm);
+        }
       } catch {
-        await createClubProfile(payload);
+        const created = await createClubProfile(payload);
+        if (created) {
+          setClub(prev => ({
+            ...prev,
+            ...profileForm,
+            places_data: created.places_data || prev.places_data,
+            website_url: created.website_url || prev.website_url,
+            rating: created.rating ?? prev.rating
+          }));
+        } else {
+          setClub(profileForm);
+        }
       }
 
-      setClub(profileForm);
       setActiveModal('none');
       showToast('Dati del centro sportivo salvati sul server!');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Errore nel salvataggio del profilo');
+    }
+  };
+
+  const [isEnrichingPlaces, setIsEnrichingPlaces] = useState(false);
+
+  const handleEnrichClub = async () => {
+    setIsEnrichingPlaces(true);
+    try {
+      const updated = await enrichMyClub();
+      if (updated) {
+        setClub(prev => ({
+          ...prev,
+          website_url: updated.website_url || prev.website_url,
+          rating: updated.rating ?? prev.rating,
+          places_data: updated.places_data || prev.places_data
+        }));
+        showToast('Foto, orari e recensioni sincronizzati con successo da Google Maps!');
+      }
+    } catch {
+      showToast('Nessuna scheda Google Maps trovata per questo nome e indirizzo.');
+    } finally {
+      setIsEnrichingPlaces(false);
     }
   };
 
@@ -889,107 +985,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
       console.warn('Errore durante cancellazione profilo:', err);
     } finally {
       onLogout();
-    }
-  };
-
-  const openCreateCourseModal = () => {
-    setEditingCourseId(null);
-    setCourseName('');
-    setCourseSportCategory('Basket');
-    setCourseMinAge(6);
-    setCourseMaxAge(10);
-    setCourseFormError(null);
-    setActiveModal('course-form');
-  };
-
-  const openEditCourseModal = (course: ClubCourse) => {
-    setEditingCourseId(course.id);
-    setCourseName(course.name);
-    setCourseSportCategory(course.sport_category);
-    setCourseMinAge(course.min_age);
-    setCourseMaxAge(course.max_age);
-    setCourseFormError(null);
-    setActiveModal('course-form');
-  };
-
-  const handleSaveCourse = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCourseFormError(null);
-
-    if (!courseName.trim()) {
-      setCourseFormError('Inserisci il nome del corso.');
-      return;
-    }
-    if (courseMinAge < 5 || courseMaxAge > 13 || courseMinAge > courseMaxAge) {
-      setCourseFormError("L'età deve essere compresa tra 5 e 13 anni.");
-      return;
-    }
-
-    try {
-      if (editingCourseId) {
-        const updated = await updateClubCourse(editingCourseId, {
-          name: courseName.trim(),
-          min_age: courseMinAge,
-          max_age: courseMaxAge
-        });
-        setCourses(prev =>
-          prev.map(c =>
-            c.id === editingCourseId
-              ? {
-                  ...c,
-                  name: updated.name,
-                  sport_category: courseSportCategory,
-                  min_age: updated.min_age,
-                  max_age: updated.max_age
-                }
-              : c
-          )
-        );
-        showToast(`Corso "${courseName.trim()}" modificato nel database!`);
-      } else {
-        const created = await createClubCourse({
-          name: courseName.trim(),
-          min_age: courseMinAge,
-          max_age: courseMaxAge
-        });
-        const newCourse: ClubCourse = {
-          id: created.id,
-          clubs_id: created.clubs_id,
-          name: created.name,
-          sport_category: courseSportCategory,
-          min_age: created.min_age,
-          max_age: created.max_age,
-          motor_tests: [],
-          athletes: []
-        };
-        setCourses(prev => [...prev, newCourse]);
-        showToast(`Corso "${newCourse.name}" creato nel database!`);
-      }
-      setActiveModal('none');
-    } catch (err) {
-      setCourseFormError(
-        err instanceof Error ? err.message : 'Errore durante il salvataggio del corso'
-      );
-    }
-  };
-
-  const handleDeleteCourse = async (courseId: string, name: string) => {
-    try {
-      await deleteClubCourse(courseId);
-      const remaining = courses.filter(c => c.id !== courseId);
-      setCourses(remaining);
-      if (motorCourseId === courseId) {
-        setMotorCourseId(remaining[0]?.id || '');
-        setSelectedMotorTestId(remaining[0]?.motor_tests[0]?.id || '');
-        setBatchScores({});
-      }
-      if (psychCourseId === courseId) {
-        setPsychCourseId(remaining[0]?.id || '');
-        setPsychChildId(remaining[0]?.athletes[0]?.id || '');
-      }
-      showToast(`Corso "${name}" rimosso dal database.`);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Errore nella rimozione del corso');
     }
   };
 
@@ -1078,18 +1073,19 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
   ) => {
     try {
       await unenrollAthleteFromCourse(courseId, athleteId);
+      setCourses(prev =>
+        prev.map(c =>
+          c.id === courseId
+            ? { ...c, athletes: c.athletes.filter(a => a.id !== athleteId) }
+            : c
+        )
+      );
       showToast(`${athleteName} rimosso dal corso.`);
-    } catch {
-      showToast(`${athleteName} rimosso dal corso.`);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : `Impossibile rimuovere ${athleteName} dal corso.`
+      );
     }
-
-    setCourses(prev =>
-      prev.map(c =>
-        c.id === courseId
-          ? { ...c, athletes: c.athletes.filter(a => a.id !== athleteId) }
-          : c
-      )
-    );
   };
 
   return (
@@ -1128,13 +1124,20 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           </p>
         </button>
 
-        <div className="flex flex-wrap gap-3 sm:gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          {/* Badge Iscrizioni & Incassi */}
           <button
-            onClick={openCreateCourseModal}
-            className="px-5 py-2.5 bg-[#E52B6D] hover:bg-[#FF4F8B] backdrop-blur-md border border-pink-400/40 rounded-full font-bold transition-colors text-sm flex items-center gap-2 shadow-lg cursor-pointer"
+            onClick={() => {
+              setActiveTab('payments');
+              refreshClubPayments();
+            }}
+            className="px-4 py-2.5 rounded-full font-bold text-xs flex items-center gap-2 border backdrop-blur-md transition-all cursor-pointer bg-white/10 hover:bg-white/20 border-white/25 text-white"
           >
-            <Plus className="w-4 h-4" /> Nuovo Corso
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <CreditCard className="w-4 h-4 text-emerald-300" />
+            <span>Iscrizioni & Incassi</span>
           </button>
+
           <button
             onClick={() => {
               setProfileForm(club);
@@ -1163,11 +1166,11 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               Il Tuo Centro Sportivo
             </h2>
             <p className="text-sky-100 text-lg font-medium">
-              Gestisci i corsi, crea i test motori per ogni disciplina e compila la scheda di fine trimestre.
+              Gestisci i corsi, ricevi le iscrizioni con pagamento Stripe e compila i passaporti AI.
             </p>
           </div>
 
-          {/* Menu delle 3 Sezioni */}
+          {/* Menu delle 4 Sezioni */}
           <div className="bg-white/10 backdrop-blur-md p-1.5 rounded-2xl border border-white/20 flex flex-nowrap items-center shrink-0 overflow-x-auto whitespace-nowrap gap-1.5">
             <button
               onClick={() => setActiveTab('courses')}
@@ -1202,6 +1205,20 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
               <ClipboardCheck className="w-4 h-4 text-[#E52B6D]" />
               Form Fine Trimestre
             </button>
+            <button
+              onClick={() => {
+                setActiveTab('payments');
+                refreshClubPayments();
+              }}
+              className={`px-5 py-3 rounded-xl font-black text-sm transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === 'payments'
+                  ? 'bg-white text-[#1E2046] shadow-lg'
+                  : 'text-white hover:bg-white/10'
+              }`}
+            >
+              <CreditCard className="w-4 h-4 text-[#E52B6D]" />
+              Iscrizioni & Incassi
+            </button>
           </div>
         </div>
 
@@ -1222,16 +1239,10 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                   <div className="w-16 h-16 rounded-2xl bg-sky-50 text-[#E52B6D] flex items-center justify-center mx-auto mb-4 font-black text-2xl">
                     🏆
                   </div>
-                  <h3 className="text-2xl font-black text-[#1E2046] mb-2">Nessun corso creato</h3>
-                  <p className="text-slate-500 mb-6 text-sm">
-                    Non hai ancora creato nessun corso. Inizia subito creando il tuo primo corso per aggiungere i bambini e registrare le loro prove.
+                  <h3 className="text-2xl font-black text-[#1E2046] mb-2">Nessun corso assegnato</h3>
+                  <p className="text-slate-500 text-sm leading-relaxed">
+                    Non ci sono ancora corsi attivi associati alla tua struttura. L'attivazione dei corsi e la configurazione delle tariffe convenzionate vengono gestite direttamente dall'amministrazione centrale Athlos. Contatta il team Athlos per configurare il tuo primo corso.
                   </p>
-                  <button
-                    onClick={openCreateCourseModal}
-                    className="px-6 py-3 bg-[#E52B6D] hover:bg-[#FF4F8B] text-white rounded-full font-bold text-sm shadow-md transition-colors cursor-pointer inline-flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" /> Crea il tuo primo Corso
-                  </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1252,7 +1263,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
 
                     <div className="relative z-10">
                       {/* Intestazione Corso */}
-                      <div className="flex items-start justify-between gap-4 mb-6">
+                      <div className="flex items-start justify-between gap-4 mb-5">
                         <div className="flex items-center gap-4">
                           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center font-black text-2xl shadow-lg shrink-0">
                             {getSportEmoji(course.sport_category || course.name)}
@@ -1261,6 +1272,10 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="bg-sky-100 text-[#E52B6D] px-3 py-1 rounded-full text-xs font-black uppercase tracking-wide">
                                 {course.sport_category} • {course.min_age}-{course.max_age} anni
+                              </span>
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-xs font-black">
+                                {formatEuroFromCents(course.price_cents)} •{' '}
+                                {formatBillingPeriodLabel(course.billing_period)}
                               </span>
                               <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-bold">
                                 {course.motor_tests.length} test configurati
@@ -1273,20 +1288,56 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => openEditCourseModal(course)}
-                            title="Modifica Corso"
-                            className="p-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 text-slate-500 hover:text-[#1E2046] border border-slate-200/80 transition-colors cursor-pointer"
+                          <span
+                            title="Corso e tariffe gestiti dall'Amministrazione Athlos"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-50 text-[#1E2046] border border-sky-100 text-[11px] font-bold"
                           >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCourse(course.id, course.name)}
-                            title="Elimina Corso"
-                            className="p-2.5 rounded-xl bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200/80 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                            <ShieldCheck className="w-3.5 h-3.5 text-[#E52B6D]" /> Gestito da Athlos
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Barra Capienza / Disponibilità Posti (Anti-Overbooking) */}
+                      <div className="mb-5 bg-slate-50 rounded-2xl px-4 py-3 border border-slate-100 flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex justify-between text-xs font-bold mb-1.5">
+                            <span className="text-slate-500">
+                              Posti occupati:{' '}
+                              <strong className="text-[#1E2046]">
+                                {course.athletes.length} / {course.max_participants || 20}
+                              </strong>
+                            </span>
+                            <span
+                              className={
+                                course.athletes.length >= (course.max_participants || 20)
+                                  ? 'text-rose-600 font-black'
+                                  : 'text-emerald-600 font-black'
+                              }
+                            >
+                              {Math.max(
+                                0,
+                                (course.max_participants || 20) - course.athletes.length
+                              )}{' '}
+                              posti liberi
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                course.athletes.length >= (course.max_participants || 20)
+                                  ? 'bg-rose-500'
+                                  : 'bg-gradient-to-r from-[#1E2046] to-[#E52B6D]'
+                              }`}
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  Math.round(
+                                    (course.athletes.length / (course.max_participants || 20)) * 100
+                                  )
+                                )}%`
+                              }}
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -1301,7 +1352,7 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                             onClick={() => openAddAthleteModal(course.id)}
                             className="text-xs font-black text-[#E52B6D] hover:text-[#1E2046] flex items-center gap-1 transition-colors cursor-pointer"
                           >
-                            <UserPlus className="w-3.5 h-3.5" /> + Aggiungi Bambino
+                            <UserPlus className="w-3.5 h-3.5" /> + Iscrizione Segreteria
                           </button>
                         </div>
 
@@ -2260,6 +2311,260 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
           )}
         </motion.div>
           )}
+
+          {/* =====================================================================
+              SEZIONE 4: PAGAMENTI & STRIPE CONNECT (CLIENTE ➔ CLUB SPORTIVO)
+          ===================================================================== */}
+          {activeTab === 'payments' && (
+            <motion.div
+              key="tab-payments"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="space-y-8"
+            >
+              {/* PANNELLO 1: GESTIONE INCASSI & LIQUIDAZIONI ATHLOS */}
+              <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-[#E52B6D]/10 border border-sky-50">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+                  <div className="flex items-start gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E2046] to-[#E52B6D] text-white flex items-center justify-center shrink-0 shadow-lg">
+                      <CreditCard className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-700">
+                          ● Raccolta Quote Gestita da Athlos
+                        </span>
+                      </div>
+                      <h3 className="text-2xl sm:text-3xl font-black text-[#1E2046] mt-2">
+                        Iscrizioni & Incassi
+                      </h3>
+                      <p className="text-slate-500 text-sm font-medium mt-1">
+                        Le famiglie pagano le quote online direttamente ad <strong className="text-[#1E2046]">Athlos</strong>. Athlos raccoglie tutti i versamenti e gestisce le iscrizioni. Le liquidazioni delle quote al tuo centro sportivo avvengono al di fuori della piattaforma tramite accordi commerciali.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dettagli Informativi */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">
+                      Centro Sportivo
+                    </span>
+                    <div className="text-base font-black text-[#1E2046] mt-1">
+                      {club.name}
+                    </div>
+                    <div className="text-xs text-slate-500 font-medium mt-1">
+                      {club.address?.city || 'Centro affiliato Athlos'}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">
+                      Modalità di Incasso Famiglie
+                    </span>
+                    <div className="text-base font-black text-emerald-600 mt-1 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4" /> Pagamento Diretto Athlos
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      Quote versate con Carta o Apple Pay e rilascio automatico della ricevuta.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">
+                      Liquidazione Quote
+                    </span>
+                    <div className="text-base font-black text-[#1E2046] mt-1">
+                      Esterna alla Piattaforma
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      I trasferimenti delle quote maturate al centro avvengono al di fuori del software.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* PANNELLO 2: KPI INCASSI E STATO DELLE ISCRIZIONI */}
+              {(() => {
+                const succeededPayments = clubPayments.filter(p => p.status === 'SUCCEEDED');
+                const pendingPayments = clubPayments.filter(
+                  p => p.status === 'PENDING' || p.status === 'DRAFT'
+                );
+                const refundedPayments = clubPayments.filter(p => p.status === 'REFUNDED');
+                const totalGrossCents = succeededPayments.reduce(
+                  (acc, item) => acc + item.amount_cents,
+                  0
+                );
+
+                return (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                      <div className="bg-white rounded-3xl p-6 border border-sky-50 shadow-lg">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          Incasso Totale Gestito da Athlos
+                        </span>
+                        <div className="text-3xl font-black text-[#1E2046] mt-2">
+                          {formatEuroFromCents(totalGrossCents)}
+                        </div>
+                        <p className="text-xs text-emerald-600 font-bold mt-1">
+                          Quote raccolte per i tuoi corsi
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-3xl p-6 border border-sky-50 shadow-lg">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          Iscrizioni Confermate
+                        </span>
+                        <div className="text-3xl font-black text-emerald-600 mt-2">
+                          {succeededPayments.length}
+                        </div>
+                        <p className="text-xs text-slate-400 font-medium mt-1">
+                          Atleti iscritti e registrati
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-3xl p-6 border border-sky-50 shadow-lg">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          Iscrizioni in Corso
+                        </span>
+                        <div className="text-3xl font-black text-amber-500 mt-2">
+                          {pendingPayments.length}
+                        </div>
+                        <p className="text-xs text-slate-400 font-medium mt-1">
+                          Posti riservati per 15 min
+                        </p>
+                      </div>
+
+                      <div className="bg-white rounded-3xl p-6 border border-sky-50 shadow-lg">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          Rimborsi Gestiti
+                        </span>
+                        <div className="text-3xl font-black text-rose-500 mt-2">
+                          {refundedPayments.length}
+                        </div>
+                        <p className="text-xs text-slate-400 font-medium mt-1">
+                          Quote riaccreditate
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* REGISTRO TRANSAZIONI E RIMBORSI */}
+                    <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-[#E52B6D]/10 border border-sky-50">
+                      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                        <div>
+                          <h3 className="text-2xl font-black text-[#1E2046]">
+                            Registro Iscrizioni & Quote Versate
+                          </h3>
+                          <p className="text-slate-500 text-sm font-medium mt-0.5">
+                            Elenco in tempo reale di tutte le quote iscrizione ricevute tramite Athlos e ricevute fiscali.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            refreshClubPayments();
+                            showToast('Registro transazioni aggiornato!');
+                          }}
+                          className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#1E2046] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" /> Aggiorna
+                        </button>
+                      </div>
+
+                      {clubPayments.length > 0 ? (
+                        <div className="space-y-3">
+                          {clubPayments.map(payment => (
+                            <div
+                              key={payment.id}
+                              className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                            >
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
+                                      payment.status === 'SUCCEEDED'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : payment.status === 'PENDING'
+                                          ? 'bg-amber-100 text-amber-800'
+                                          : payment.status === 'REFUNDED'
+                                            ? 'bg-purple-100 text-purple-700'
+                                            : 'bg-rose-100 text-rose-700'
+                                    }`}
+                                  >
+                                    {formatPaymentStatusLabel(payment.status)}
+                                  </span>
+                                  <span className="font-black text-[#1E2046] text-base">
+                                    {payment.child_name}
+                                  </span>
+                                  <span className="text-xs font-mono font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                    CF Atleta: {payment.child_fiscal_code}
+                                  </span>
+                                  <span className="text-xs font-bold text-[#E52B6D] bg-rose-50 px-2.5 py-0.5 rounded-full">
+                                    Corso: {payment.course_name}
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-medium pt-1">
+                                  <span>
+                                    Genitore: <strong>{payment.parent_name || 'Famiglia'}</strong>{' '}
+                                    {payment.parent_fiscal_code
+                                      ? `(CF: ${payment.parent_fiscal_code})`
+                                      : ''}
+                                  </span>
+                                  <span>•</span>
+                                  <span>
+                                    Data: {new Date(payment.created_at).toLocaleString('it-IT')}
+                                  </span>
+                                  {payment.receipt_number && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="font-mono font-bold text-slate-700">
+                                        Ricevuta #{payment.receipt_number}
+                                      </span>
+                                    </>
+                                  )}
+                                  <span>•</span>
+                                  <span className="text-slate-500 font-medium">
+                                    Metodo: Carta / Wallet
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-4 shrink-0">
+                                <div className="text-right">
+                                  <div className="text-xl font-black text-[#1E2046]">
+                                    {formatEuroFromCents(payment.amount_cents)}
+                                  </div>
+                                  <div className="text-[11px] font-bold text-slate-400 uppercase">
+                                    {formatBillingPeriodLabel(payment.billing_period)}
+                                  </div>
+                                </div>
+
+
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                          <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                          <h4 className="font-black text-[#1E2046] text-base">
+                            Nessun pagamento ancora registrato
+                          </h4>
+                          <p className="text-xs text-slate-400 font-medium max-w-md mx-auto mt-1">
+                            Non appena un genitore iscriverà il proprio figlio a uno dei tuoi corsi dalla sua Area Famiglia, vedrai comparire qui la transazione Stripe e la ricevuta fiscale.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
@@ -2486,6 +2791,55 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                       </div>
                     </div>
 
+                    {/* Vetrina & Integrazione Automatica Google Maps */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-[#1E2046] text-white flex items-center justify-center">
+                            <Camera className="w-4 h-4 text-[#FF4F8B]" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-[#1E2046] uppercase tracking-wider">
+                              Vetrina & Foto Google Maps
+                            </h4>
+                            <p className="text-[11px] text-slate-500">
+                              {club?.places_data?.photos?.length ? (
+                                <>
+                                  <span className="font-bold text-emerald-600">● Sincronizzato:</span>{' '}
+                                  {club.places_data.photos.length} foto e orari rilevati
+                                </>
+                              ) : (
+                                'Nessuna foto sincronizzata al momento'
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {club?.rating && (
+                          <span className="bg-amber-100 text-amber-800 text-xs font-black px-2.5 py-1 rounded-full flex items-center gap-1">
+                            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                            {club.rating.toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleEnrichClub}
+                        disabled={isEnrichingPlaces}
+                        className="w-full py-2.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-[#1E2046] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-60"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 text-[#E52B6D] ${
+                            isEnrichingPlaces ? 'animate-spin' : ''
+                          }`}
+                        />
+                        {isEnrichingPlaces
+                          ? 'Sincronizzazione in corso con Google Places...'
+                          : 'Sincronizza Foto, Orari & Rating da Google Maps'}
+                      </button>
+                    </div>
+
                     <button
                       type="submit"
                       className="w-full py-4 mt-2 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer"
@@ -2526,98 +2880,6 @@ export default function ClubDashboard({ onLogout }: { onLogout: () => void }) {
                         </div>
                       )}
                     </div>
-                  </form>
-                </div>
-              )}
-
-              {/* MODALE CREA / MODIFICA CORSO */}
-              {activeModal === 'course-form' && (
-                <div className="pt-2">
-                  <h3 className="text-2xl font-black text-[#1E2046] mb-1">
-                    {editingCourseId ? 'Modifica Corso' : 'Nuovo Corso'}
-                  </h3>
-                  <p className="text-slate-400 text-sm font-medium mb-6">
-                    Inserisci il nome del corso, lo sport e la fascia d'età dei bambini.
-                  </p>
-
-                  {courseFormError && (
-                    <div className="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-bold">
-                      {courseFormError}
-                    </div>
-                  )}
-
-                  <form className="space-y-4" onSubmit={handleSaveCourse}>
-                    <div>
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                        Nome del Corso
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Es. Corso Basket, Pallavolo Pulcini..."
-                        value={courseName}
-                        onChange={e => setCourseName(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-medium text-[#1E2046]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                        Sport
-                      </label>
-                      <select
-                        value={courseSportCategory}
-                        onChange={e => setCourseSportCategory(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-bold text-[#1E2046]"
-                      >
-                        <option value="Basket">🏀 Basket</option>
-                        <option value="Pallavolo">🏐 Pallavolo</option>
-                        <option value="Calcio">⚽ Calcio</option>
-                        <option value="Scherma">🤺 Scherma</option>
-                        <option value="Nuoto">🏊 Nuoto</option>
-                        <option value="Ginnastica">🤸 Ginnastica</option>
-                        <option value="Judo">🥋 Judo / Arti Marziali</option>
-                        <option value="Tennis">🎾 Tennis</option>
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                          Età Minima (5-13 anni)
-                        </label>
-                        <input
-                          type="number"
-                          min={5}
-                          max={13}
-                          required
-                          value={courseMinAge}
-                          onChange={e => setCourseMinAge(Number(e.target.value))}
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046] text-lg"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                          Età Massima (5-13 anni)
-                        </label>
-                        <input
-                          type="number"
-                          min={5}
-                          max={13}
-                          required
-                          value={courseMaxAge}
-                          onChange={e => setCourseMaxAge(Number(e.target.value))}
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#E52B6D] font-black text-[#1E2046] text-lg"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-4 mt-4 bg-[#E52B6D] hover:bg-[#1E2046] transition-colors text-white rounded-xl font-bold text-lg cursor-pointer"
-                    >
-                      {editingCourseId ? 'Salva Corso' : 'Crea Corso'}
-                    </button>
                   </form>
                 </div>
               )}

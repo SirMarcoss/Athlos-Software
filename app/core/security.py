@@ -9,8 +9,8 @@ from app.core.config import settings
 # --- NUOVA GESTIONE BCRYPT (Senza passlib) ---
 
 def hash_password(password: str) -> str:
-    # 1. Convertiamo in byte
-    pwd_bytes = password.encode('utf-8')
+    # 1. Convertiamo in byte e tronchiamo a 72 byte per il limite intrinseco di bcrypt
+    pwd_bytes = password.encode('utf-8')[:72]
     # 2. Creiamo il "sale" (salt) crittografico e hash
     salt = bcrypt.gensalt()
     hashed_bytes = bcrypt.hashpw(pwd_bytes, salt)
@@ -18,8 +18,8 @@ def hash_password(password: str) -> str:
     return hashed_bytes.decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    # 1. Convertiamo entrambe in byte
-    plain_bytes = plain_password.encode('utf-8')
+    # 1. Convertiamo in byte con troncamento sicuro a 72 byte
+    plain_bytes = plain_password.encode('utf-8')[:72]
     hashed_bytes = hashed_password.encode('utf-8')
     # 2. bcrypt fa il confronto sicuro
     return bcrypt.checkpw(plain_bytes, hashed_bytes)

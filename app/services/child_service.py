@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.sql.functions import func
 from app.models.child import Child
 from app.models.course import Course, CourseEnrollment
+from app.models.payment import Payment, PaymentStatusEnum
 from app.schemas.child import ChildCreate, ChildUpdate
 import uuid
 
@@ -89,6 +90,16 @@ class ChildService:
             raise ValueError("Bambino non trovato o non autorizzato")
         # 2. Estrai solo i campi inviati (ignora quelli che il frontend non ha mandato)
         update_data = child_in.model_dump(exclude_unset=True)
+
+        # Controllo unicità Codice Fiscale se modificato
+        if "fiscal_code" in update_data and update_data["fiscal_code"]:
+            clean_cf = update_data["fiscal_code"].strip().upper()
+            update_data["fiscal_code"] = clean_cf
+            stmt_cf = select(Child).where(Child.fiscal_code == clean_cf, Child.id != child_id)
+            existing_cf = (await self.db.execute(stmt_cf)).scalars().first()
+            if existing_cf:
+                raise ValueError("Un altro atleta con questo Codice Fiscale è già registrato.")
+
         # 3. Aggiorna dinamicamente i campi dell'oggetto SQLAlchemy
         for key, value in update_data.items():
             setattr(db_child, key, value)  # È come scrivere db_child.name = value, ma dinamico!
@@ -99,13 +110,23 @@ class ChildService:
 
 
     async def delete_child(self, child_id: uuid.UUID, parent_id: uuid.UUID) -> None:
-        """Elimina un bambino dal database."""
+        """Elimina un bambino dal database verificando l'assenza di pagamenti confermati."""
 
         stmt = select(Child).where(Child.id == child_id).where(Child.parent_id == parent_id)
         result = await self.db.execute(stmt)
         child = result.scalars().first()
         if not child:
             raise ValueError("Bambino non trovato")
+
+        # Controlla pagamenti associati
+        stmt_payments = select(Payment).where(Payment.child_id == child_id)
+        payments = (await self.db.execute(stmt_payments)).scalars().all()
+        if any(p.status == PaymentStatusEnum.SUCCEEDED for p in payments):
+            raise ValueError("Impossibile eliminare l'atleta: sono presenti pagamenti/ricevute confermate nello storico contabile.")
+
+        # Elimina eventuali pagamenti pendenti o falliti
+        for p in payments:
+            await self.db.delete(p)
 
         await self.db.delete(child)
         await self.db.commit()
