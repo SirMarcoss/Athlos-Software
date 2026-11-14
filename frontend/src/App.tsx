@@ -2202,8 +2202,11 @@ const nearbyClubs = useMemo(() => {
             </a>
           </div>
 
-          <p className="text-slate-300 font-medium text-sm max-w-2xl mx-auto leading-relaxed">
-            © 2026 Athlos — Piattaforma ideata, ingegnerizzata, strutturata e deployata da <strong className="text-white font-bold">Marco Mazzone</strong>, studente di Computer Engineering.
+          <p
+            style={{ fontFamily: "'Outfit', sans-serif" }}
+            className="text-slate-200 font-medium text-sm sm:text-base tracking-[0.02em] max-w-3xl mx-auto leading-relaxed"
+          >
+            © 2026 Athlos — Progettata e sviluppata da <strong className="text-white font-bold">Marco Mazzone</strong> • Software Developer
           </p>
         </div>
       </footer>
