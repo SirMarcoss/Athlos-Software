@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.sql.functions import func
 from app.models.child import Child
+from app.models.club import Club
 from app.models.course import Course, CourseEnrollment
 from app.models.payment import Payment, PaymentStatusEnum
 from app.schemas.child import ChildCreate, ChildUpdate
@@ -35,6 +36,9 @@ class ChildService:
         self.db.add(db_child)
         await self.db.commit()
         await self.db.refresh(db_child)
+        course_id, _, club_name = await self._get_active_enrollment_info(db_child.id)
+        setattr(db_child, "enrolled_course_id", course_id)
+        setattr(db_child, "enrolled_club_name", club_name)
         return db_child
 
 
@@ -46,29 +50,47 @@ class ChildService:
         return child.scalars().first()
 
 
+    async def _get_active_enrollment_info(
+        self, child_id: uuid.UUID
+    ) -> tuple[uuid.UUID | None, str | None, str | None]:
+        """Restituisce (course_id, course_name, club_name) dell'iscrizione attiva più recente."""
+        stmt_course = (
+            select(Course.id, Course.name, Club.name)
+            .join(CourseEnrollment, CourseEnrollment.course_id == Course.id)
+            .join(Club, Course.clubs_id == Club.id)
+            .where(CourseEnrollment.child_id == child_id)
+            .order_by(CourseEnrollment.enrolled_at.desc())
+            .limit(1)
+        )
+        res_course = await self.db.execute(stmt_course)
+        row = res_course.first()
+        if not row:
+            return None, None, None
+        return row[0], row[1], row[2]
+
     async def get_children_by_parent(self, parent_id: uuid.UUID) -> list[Child]:
-        """Restituisce i figli dato un parent_id e sincronizza lo sport con eventuali iscrizioni attive ai corsi."""
+        """Restituisce i figli dato un parent_id e sincronizza lo sport e l'iscrizione attiva ai corsi."""
 
         stmt = select(Child).where(Child.parent_id == parent_id)
         res = await self.db.execute(stmt)
         children_list = list(res.scalars().all())
 
         updated = False
+        enrollment_meta: dict[uuid.UUID, tuple[uuid.UUID | None, str | None]] = {}
         for c in children_list:
-            stmt_course = (
-                select(Course.name)
-                .join(CourseEnrollment, CourseEnrollment.course_id == Course.id)
-                .where(CourseEnrollment.child_id == c.id)
-                .order_by(CourseEnrollment.enrolled_at.desc())
-            )
-            res_course = await self.db.execute(stmt_course)
-            enrolled_course_name = res_course.scalars().first()
+            course_id, enrolled_course_name, club_name = await self._get_active_enrollment_info(c.id)
+            enrollment_meta[c.id] = (course_id, club_name)
             if enrolled_course_name and c.sport != enrolled_course_name:
                 c.sport = enrolled_course_name
                 updated = True
 
         if updated:
             await self.db.commit()
+
+        for c in children_list:
+            course_id, club_name = enrollment_meta.get(c.id, (None, None))
+            setattr(c, "enrolled_course_id", course_id)
+            setattr(c, "enrolled_club_name", club_name)
 
         return children_list
 
@@ -106,6 +128,9 @@ class ChildService:
 
         await self.db.commit()
         await self.db.refresh(db_child)
+        course_id, _, club_name = await self._get_active_enrollment_info(db_child.id)
+        setattr(db_child, "enrolled_course_id", course_id)
+        setattr(db_child, "enrolled_club_name", club_name)
         return db_child
 
 

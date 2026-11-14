@@ -80,6 +80,8 @@ export interface ApiChildCreate {
 export interface ApiChildResponse extends ApiChildCreate {
   id: string;
   parent_id: string;
+  enrolled_course_id?: string | null;
+  enrolled_club_name?: string | null;
 }
 
 export interface ApiClubCreate {

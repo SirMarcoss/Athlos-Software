@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timezone, timedelta
 import stripe
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from app.core.config import settings
 from app.models.payment import Payment, PaymentStatusEnum
 from app.models.course import Course, CourseEnrollment
@@ -112,48 +112,48 @@ class PaymentService:
         # --- 7. CREAZIONE DELLA SESSIONE STRIPE CHECKOUT ---
         # Chiediamo alle API di Stripe di predisporre una pagina di pagamento sicura:
         # Stripe ci restituirà un link (checkout_url) a cui reindirizzeremo il browser del genitore.
-        if settings.STRIPE_SECRET_KEY:
-            session = await stripe.checkout.Session.create_async(
+        if not settings.STRIPE_SECRET_KEY:
+            raise ValueError("Pagamenti Stripe non configurati sul server (STRIPE_SECRET_KEY mancante)")
 
-                # Modalità "payment": pagamento una tantum (a differenza di "subscription" per abbonamenti ricorrenti)
-                mode="payment",
+        session = await stripe.checkout.Session.create_async(
 
-                expires_at=int((datetime.now(timezone.utc) + timedelta(minutes=30)).timestamp()),
+            # Modalità "payment": pagamento una tantum (a differenza di "subscription" per abbonamenti ricorrenti)
+            mode="payment",
 
-                # Dettagli del prodotto che il genitore visualizzerà nel riepilogo d'ordine di Stripe
-                line_items=[{
-                    "price_data": {
-                        "currency": "eur",
-                        "product_data": {
-                            "name": f"Iscrizione Corso: {course.name} ({child.first_name} {child.last_name})"
-                        },
-                        # DUAL-PRICING: Il genitore paga esattamente `parent_amount` (es. 9500 centesimi = 95,00 €).
-                        # Il prezzo riservato al club (90€) rimane totalmente invisibile a Stripe e al genitore.
-                        "unit_amount": parent_amount,
+            expires_at=int((datetime.now(timezone.utc) + timedelta(minutes=30)).timestamp()),
+
+            # Dettagli del prodotto che il genitore visualizzerà nel riepilogo d'ordine di Stripe
+            line_items=[{
+                "price_data": {
+                    "currency": "eur",
+                    "product_data": {
+                        "name": f"Iscrizione Corso: {course.name} ({child.first_name} {child.last_name})"
                     },
-                    "quantity": 1,
-                }],
-
-                # METADATA: ID applicativi che inviamo a Stripe. Stripe li memorizza e ce li rispedirà indietro
-                # nel Webhook asincrono non appena la banca confermerà l'addebito. In questo modo sapremo con certezza
-                # millimetrica quale corso e quale bambino attivare, senza dipendere dallo stato volatile del browser.
-                metadata={
-                    "course_id": str(course_id),
-                    "child_id": str(child_id),
-                    "parent_id": str(parent_id),
+                    # DUAL-PRICING: Il genitore paga esattamente `parent_amount` (es. 9500 centesimi = 95,00 €).
+                    # Il prezzo riservato al club (90€) rimane totalmente invisibile a Stripe e al genitore.
+                    "unit_amount": parent_amount,
                 },
+                "quantity": 1,
+            }],
 
-                # URL a cui Stripe reindirizza il genitore dopo il pagamento riuscito.
-                # {CHECKOUT_SESSION_ID} è una variabile speciale di Stripe: verrà sostituita in automatico con il vero ID di sessione.
-                success_url=f"{settings.FRONTEND_URL}/?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
+            # METADATA: ID applicativi che inviamo a Stripe. Stripe li memorizza e ce li rispedirà indietro
+            # nel Webhook asincrono non appena la banca confermerà l'addebito. In questo modo sapremo con certezza
+            # millimetrica quale corso e quale bambino attivare, senza dipendere dallo stato volatile del browser.
+            metadata={
+                "course_id": str(course_id),
+                "child_id": str(child_id),
+                "parent_id": str(parent_id),
+            },
 
-                # URL a cui Stripe rimanda se il genitore clicca su "Annulla e torna al sito"
-                cancel_url=f"{settings.FRONTEND_URL}/?payment=cancelled",
-            )
-            session_id = session.id
-            checkout_url = session.url
-            if not settings.STRIPE_SECRET_KEY:
-                raise ValueError("Pagamenti Stripe non configurati sul server (STRIPE_SECRET_KEY mancante)")
+            # URL a cui Stripe reindirizza il genitore dopo il pagamento riuscito.
+            # {CHECKOUT_SESSION_ID} è una variabile speciale di Stripe: verrà sostituita in automatico con il vero ID di sessione.
+            success_url=f"{settings.FRONTEND_URL}/?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
+
+            # URL a cui Stripe rimanda se il genitore clicca su "Annulla e torna al sito"
+            cancel_url=f"{settings.FRONTEND_URL}/?payment=cancelled",
+        )
+        session_id = session.id
+        checkout_url = session.url
 
         payment = Payment(
             parent_id=parent_id,
@@ -201,6 +201,16 @@ class PaymentService:
         payment.completed_at = datetime.now(timezone.utc)
         if payment_intent_id is not None:
             payment.stripe_payment_intent_id = payment_intent_id
+
+        # 4. REGOLA UN SOLO CORSO ATTIVO PER ATLETA:
+        # Rimuove eventuali iscrizioni precedenti ad altri corsi/club solo ORA che il pagamento
+        # è stato confermato da Stripe (evitando disiscrizioni premature in caso di checkout annullato).
+        await self.db.execute(
+            delete(CourseEnrollment).where(
+                CourseEnrollment.child_id == payment.child_id,
+                CourseEnrollment.course_id != payment.course_id,
+            )
+        )
 
         stmt_course_enrollment = select(CourseEnrollment).where(CourseEnrollment.course_id == payment.course_id).where(
             CourseEnrollment.child_id == payment.child_id
@@ -260,8 +270,9 @@ class PaymentService:
             raise ValueError(f"Firma Webhook Stripe non valida o payload manomesso: {e}")
 
         # 3. ESTRAZIONE DEL TIPO DI EVENTO E DEI DATI DELLA SESSIONE:
-        event_type = event["type"]
-        session_data = event["data"]["object"]
+        event_dict = event.to_dict() if hasattr(event, "to_dict") else event
+        event_type = event_dict["type"]
+        session_data = event_dict["data"]["object"]
 
         # 4. SMISTAMENTO EVENTI (State Machine del Pagamento):
         #    CASO A: La banca ha confermato l'addebito (95€ incassati da Athlos).
@@ -318,6 +329,8 @@ class PaymentService:
         payment, course, club, child = row
 
         if payment.status == PaymentStatusEnum.PENDING:
+            if not settings.STRIPE_SECRET_KEY:
+                raise ValueError("Pagamenti Stripe non configurati sul server (STRIPE_SECRET_KEY mancante)")
             try:
                 session_obj = await stripe.checkout.Session.retrieve_async(session_id)
                 if session_obj and getattr(session_obj, "payment_status", None) == "paid":

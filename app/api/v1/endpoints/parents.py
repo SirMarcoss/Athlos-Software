@@ -97,7 +97,7 @@ async def get_my_referral(
         raise HTTPException(status_code=404, detail="Codice referral non trovato")
 
     # Restituiamo direttamente un link comodo da copiare
-    referral_link = f"https://athlos.it/register?ref={parent.referral_code}"
+    referral_link = f"https://athlos.team/register?ref={parent.referral_code}"
     return {"referral_code": parent.referral_code, "link": referral_link}
 
 

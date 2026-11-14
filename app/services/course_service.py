@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from app.models.course import Course, CourseEnrollment
 from app.models.child import Child
 from app.models.club import Club
@@ -214,7 +214,15 @@ class CourseService:
         if res_check.scalars().first():
             raise ValueError(f"{child.first_name} {child.last_name} è già iscritto a questo corso")
 
-        # 6. Creazione dell'iscrizione e aggiornamento dello sport praticato dal bambino
+        # 6. Rimuove eventuali iscrizioni precedenti ad altri corsi (un solo corso attivo alla volta)
+        await self.db.execute(
+            delete(CourseEnrollment).where(
+                CourseEnrollment.child_id == child_id,
+                CourseEnrollment.course_id != course_id,
+            )
+        )
+
+        # 7. Creazione dell'iscrizione e aggiornamento dello sport praticato dal bambino
         enrollment = CourseEnrollment(
             course_id=course_id,
             child_id=child_id

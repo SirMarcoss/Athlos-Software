@@ -65,6 +65,8 @@ interface Child {
   sport: string;
   fiscal_code?: string;
   skills?: string[];
+  enrolled_course_id?: string | null;
+  enrolled_club_name?: string | null;
 }
 
 interface ParentProfileState {
@@ -509,7 +511,9 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
           gender: c.gender,
           sport: c.sport,
           fiscal_code: c.fiscal_code,
-          skills: c.skills
+          skills: c.skills,
+          enrolled_course_id: c.enrolled_course_id ?? null,
+          enrolled_club_name: c.enrolled_club_name ?? null
         }));
         setChildren(mappedChildren);
 
@@ -797,9 +801,9 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
   // === HANDLERS ISCRIZIONE CORSO E CHECKOUT STRIPE ===
 
   const isChildAlreadyEnrolledInCourse = (courseId: string, childId: string): boolean => {
-    return parentPayments.some(
-      p => p.course_id === courseId && p.child_id === childId && p.status === 'SUCCEEDED'
-    );
+    const targetChild = children.find(ch => ch.id === childId);
+    if (!targetChild) return false;
+    return targetChild.enrolled_course_id === courseId;
   };
 
   const openEnrollCourseModal = (course: Course) => {
@@ -1201,6 +1205,29 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                       </span>
                     </div>
 
+                    {(() => {
+                      const selectedChildObj = children.find(c => c.id === selectedChildForEnrollId);
+                      if (
+                        selectedChildObj?.enrolled_course_id &&
+                        selectedChildObj.enrolled_course_id !== selectedCourseForEnroll.id
+                      ) {
+                        return (
+                          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3 text-xs text-amber-900 font-medium">
+                            <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                            <span>
+                              <strong>Cambio iscrizione:</strong> {selectedChildObj.first_name} è attualmente iscritto/a a{' '}
+                              <strong>
+                                {selectedChildObj.sport}
+                                {selectedChildObj.enrolled_club_name ? ` (${selectedChildObj.enrolled_club_name})` : ''}
+                              </strong>
+                              . Completando il pagamento passerà automaticamente al nuovo corso e verrà disiscritto/a dal precedente.
+                            </span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     <label className="flex items-start gap-2.5 text-xs text-slate-600 font-medium cursor-pointer">
                       <input
                         type="checkbox"
@@ -1542,7 +1569,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
 
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between mb-4">
                     <span className="font-mono font-bold text-[#E52B6D] truncate">
-                      athlos.it/register?ref={myReferralCode}
+                      athlos.team/register?ref={myReferralCode}
                     </span>
                     <button
                       onClick={copyToClipboard}
@@ -2119,6 +2146,7 @@ export default function ParentDashboard({ onLogout }: { onLogout: () => void }) 
                         ) : (
                           <span className="bg-sky-100 text-[#E52B6D] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
                             {child.sport}
+                            {child.enrolled_club_name ? ` • ${child.enrolled_club_name}` : ''}
                           </span>
                         )}
                         {child.fiscal_code && (

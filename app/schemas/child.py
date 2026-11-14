@@ -33,6 +33,10 @@ class ChildUpdate(BaseModel):
 class ChildResponse(ChildCreate):
     id : UUID
     parent_id : UUID
+    enrolled_course_id: Optional[UUID] = None
+    enrolled_club_name: Optional[str] = None
+    # rima di questa modifica, il frontend (ParentDashboard.tsx) non sapeva a quale corso fosse attualmente iscritto
+    # il figlio: lo deduceva dallo storico pagamenti. più pagamenti --> figlio iscritto a più corsi --> Didn't work before
 
     model_config = ConfigDict(from_attributes=True)
 
